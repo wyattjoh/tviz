@@ -11,12 +11,26 @@
  * The selected API Call lives here because the strip, the grid, the legend and
  * the Scrubber all read it.
  */
-import { type ReactNode, useCallback, useState } from "react";
-import type { Session } from "./domain/context.ts";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type Category,
+  cumulativeItems,
+  type MessageKind,
+  type Session,
+} from "./domain/context.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
 import { ContextLegend } from "./ui/ContextLegend.tsx";
 import { DropZone } from "./ui/DropZone.tsx";
+import {
+  ALL_SHOWN,
+  type GridFilters,
+  toggleCategory,
+  toggleMessageKind,
+  withColourByKind,
+} from "./ui/filters.ts";
 import { formatTokens } from "./ui/format.ts";
+import { buildCells } from "./ui/grid.ts";
+import { Inspector } from "./ui/Inspector.tsx";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { Scrubber } from "./ui/Scrubber.tsx";
 import { SessionHeader } from "./ui/SessionHeader.tsx";
@@ -100,8 +114,45 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
   // The last API Call answers "where did it end up?", which is the question a
   // finished Session is usually opened with.
   const [callIndex, setCallIndex] = useState(session.calls.length - 1);
+  const [filters, setFilters] = useState<GridFilters>(ALL_SHOWN);
+  // Cells are addressed by index rather than held as objects: an index stays
+  // meaningful when the Scrubber moves and the Cell at that position is rebuilt,
+  // so a pinned Cell keeps answering "what is in this part of the window?"
+  // across API Calls instead of going stale.
+  const [inspectedIndex, setInspectedIndex] = useState<number | undefined>(undefined);
+  const [pinnedIndex, setPinnedIndex] = useState<number | undefined>(undefined);
+
+  // The layout is built here rather than inside the grid because the Inspector
+  // in the rail reads the same Cells. It ignores the filters by design: hiding
+  // is a paint-time decision, so no filter can move a Cell (ADR-0006).
+  const cells = useMemo(
+    () => buildCells(cumulativeItems(session.calls, callIndex), session.windowSize),
+    [session.calls, callIndex, session.windowSize],
+  );
+
+  const onToggleCategory = useCallback(
+    (category: Category) => setFilters((current) => toggleCategory(current, category)),
+    [],
+  );
+  const onToggleMessageKind = useCallback(
+    (kind: MessageKind) => setFilters((current) => toggleMessageKind(current, kind)),
+    [],
+  );
+  const onColourByKind = useCallback(
+    (colourByKind: boolean) => setFilters((current) => withColourByKind(current, colourByKind)),
+    [],
+  );
+  // Clicking the pinned Cell again releases it, so the rail can be handed back
+  // to whatever the pointer is over.
+  const onPin = useCallback(
+    (index: number) => setPinnedIndex((current) => (current === index ? undefined : index)),
+    [],
+  );
+
   const snapshot = session.calls[callIndex];
   if (snapshot === undefined) return null;
+
+  const shownIndex = inspectedIndex ?? pinnedIndex;
 
   return (
     <div className="grid h-full min-h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-ui-canvas font-mono text-[13px]">
@@ -111,9 +162,13 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px]">
         <main aria-label="Context grid" className="min-h-0 border-r border-ui-border">
           <ContextGrid
-            calls={session.calls}
-            callIndex={callIndex}
+            cells={cells}
             windowSize={session.windowSize}
+            measuredTotal={snapshot.measuredTotal}
+            filters={filters}
+            pinnedIndex={pinnedIndex}
+            onInspect={setInspectedIndex}
+            onPin={onPin}
           />
         </main>
 
@@ -122,15 +177,24 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
           className="min-h-0 space-y-3 overflow-y-auto bg-ui-sunken p-3"
         >
           <RailPanel title="Categories">
-            <ContextLegend snapshot={snapshot} windowSize={session.windowSize} />
+            <ContextLegend
+              snapshot={snapshot}
+              windowSize={session.windowSize}
+              filters={filters}
+              onToggleCategory={onToggleCategory}
+              onToggleMessageKind={onToggleMessageKind}
+              onColourByKind={onColourByKind}
+            />
           </RailPanel>
 
           {/* The Inspector docks here rather than following the pointer as a
               tooltip; the panel holds its place until it is filled. */}
           <RailPanel title="Inspector">
-            <p className="text-[11px] leading-snug text-ui-text-faint">
-              The items filling a Cell will be listed here.
-            </p>
+            <Inspector
+              cell={shownIndex === undefined ? undefined : cells[shownIndex]}
+              filters={filters}
+              pinned={shownIndex !== undefined && shownIndex === pinnedIndex}
+            />
           </RailPanel>
 
           <RailPanel title="Transcript">

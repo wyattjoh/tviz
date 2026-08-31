@@ -47,7 +47,7 @@ bun alchemy deploy --yes [--stage prod]   # remote write: explicit confirmation 
 src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
 src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
-src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Scrubber; grid layout, formatting, theme token maps
+src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Inspector, Scrubber; grid layout, filters, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
 scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators

@@ -171,20 +171,107 @@ describe("parseTranscript", () => {
     expect(first.byCategory.messages).toBe(first.byKind.reminder);
   });
 
-  it("splits Messages into User, Assistant, Tool Result and Reminder", () => {
-    const session = parseSession([
-      Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
-      Fixture.userMessage(4_000),
-      Fixture.reminderMessage(4_000),
-      Fixture.toolResult(4_000),
-      Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 14_000 }, textCharacters: 4_000 }),
-      Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 16_000 } }),
-    ]);
+  describe("Message Kind mapping", () => {
+    it("splits Messages into User, Assistant, Tool Result and Reminder", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.userMessage(4_000),
+        Fixture.reminderMessage(4_000),
+        Fixture.toolResult(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 14_000 }, textCharacters: 4_000 }),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 16_000 } }),
+      ]);
 
-    const last = session.calls.at(-1) as ContextSnapshot;
-    for (const kind of MESSAGE_KIND_ORDER) {
-      expect(last.byKind[kind]).toBeGreaterThan(0);
-    }
+      const last = session.calls.at(-1) as ContextSnapshot;
+      for (const kind of MESSAGE_KIND_ORDER) {
+        expect.soft(last.byKind[kind], `no tokens landed on ${kind}`).toBeGreaterThan(0);
+      }
+      // Every Message Kind sums to the Messages Category, and no other Category
+      // picked up a Kind.
+      expect(kindTotal(last)).toBe(last.byCategory.messages);
+    });
+
+    it("reads a user text block as User and a tool result as Tool result", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.userMessage(4_000),
+        Fixture.toolResult(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["User message", "user"],
+        ["Tool result", "toolResult"],
+      ]);
+    });
+
+    it("reads a user text block wrapping a system reminder as Reminder, not User", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.reminderMessage(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["System reminder", "reminder"],
+      ]);
+      expect(second.byKind.user).toBe(0);
+    });
+
+    it("reads an attachment the parser has no Category for as a Reminder", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.otherAttachment("hook_success", 4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => entry.kind)).toEqual(["reminder"]);
+    });
+
+    it("charges assistant output to the API Call after the one that produced it", () => {
+      const session = parseSession([
+        // The text and the tool use are output of call 1 and input to call 2:
+        // they are not in the context call 1 was made with.
+        Fixture.assistantMessage({
+          id: "m1",
+          usage: { cacheRead: 10_000 },
+          textCharacters: 4_000,
+          toolUse: "Read",
+        }),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const [first, second] = session.calls;
+      if (first === undefined || second === undefined) throw new Error("expected two API Calls");
+      expect(first.byKind.assistant).toBe(0);
+      expect(labels(first)).not.toContain("Assistant message");
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["Assistant message", "assistant"],
+        ["Tool use: Read", "assistant"],
+      ]);
+      expect(second.byKind.assistant).toBe(10_000);
+    });
+
+    it("leaves thinking out of every Message Kind, because it is never re-sent", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({
+          id: "m1",
+          usage: { cacheRead: 10_000 },
+          thinkingCharacters: 40_000,
+          textCharacters: 4_000,
+        }),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      // Only the text survives; the thinking block would otherwise have taken
+      // ten times its share of the delta.
+      expect(second.added.map((entry) => entry.label)).toEqual(["Assistant message"]);
+      expect(second.byKind.assistant).toBe(10_000);
+    });
   });
 
   it("counts unknown Record types and malformed lines instead of failing", () => {

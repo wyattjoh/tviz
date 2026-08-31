@@ -4,12 +4,27 @@
  *
  * Cells keep their physical size, so the number of columns comes from the width
  * of the grid pane and the pane scrolls when the block outgrows it.
+ *
+ * The layout arrives already built (`buildCells`), which is what keeps
+ * filtering honest: filters reach the Cell's *colour* and nothing else, so a
+ * hidden Category or Message Kind blanks its Cells in place and no Cell can
+ * move. Hovering, focusing or clicking a Cell is reported upwards by index —
+ * the Inspector lives in the right rail, not on the pointer.
  */
-import { useCallback, useMemo, useState } from "react";
-import { CATEGORY_LABELS, type ContextSnapshot, cumulativeItems } from "../domain/context.ts";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
+import { CATEGORY_LABELS, MESSAGE_KIND_LABELS } from "../domain/context.ts";
+import type { GridFilters } from "./filters.ts";
+import { isCellHidden } from "./filters.ts";
 import { formatTokens } from "./format.ts";
-import { buildCells, type Cell, CELL_TOKENS } from "./grid.ts";
-import { CATEGORY_FILL_CLASS, FREE_FILL_CLASS } from "./theme.ts";
+import { type Cell, CELL_TOKENS } from "./grid.ts";
+import { cellFillClass } from "./theme.ts";
 
 /**
  * Physical size of a Cell, in pixels. Constant across Sessions and Context
@@ -71,13 +86,33 @@ const useColumnCount = (): readonly [(node: HTMLElement | null) => void, number]
 
 /**
  * Hover text for a Cell: what fills it, which tokens of the window it covers,
- * and the items reaching into it.
+ * the items reaching into it, and whether a filter is blanking it.
  */
-const describeCell = (cell: Cell): string => {
+const describeCell = (cell: Cell, filters: GridFilters): string => {
   const range = `${formatTokens(cell.start)}–${formatTokens(cell.end)}`;
   if (cell.fill === "free") return `Free · ${range}`;
+  const category =
+    filters.colourByKind && cell.kind !== undefined
+      ? `${CATEGORY_LABELS[cell.fill]} · ${MESSAGE_KIND_LABELS[cell.kind]}`
+      : CATEGORY_LABELS[cell.fill];
   const items = cell.items.map((item) => item.label).join(", ");
-  return `${CATEGORY_LABELS[cell.fill]} · ${range} · ${items}`;
+  const hidden = isCellHidden(cell, filters) ? " · hidden" : "";
+  return `${category} · ${range} · ${items}${hidden}`;
+};
+
+/**
+ * Reads the Cell a delegated pointer or focus event landed on.
+ *
+ * The handlers sit on the container rather than on every Cell: a 1M window is
+ * 1,000 Cells, and one listener beats 4,000 closures re-created on every step
+ * of the Scrubber.
+ */
+const cellIndexOf = (target: EventTarget): number | undefined => {
+  if (!(target instanceof HTMLElement)) return undefined;
+  const raw = target.dataset["cellIndex"];
+  if (raw === undefined) return undefined;
+  const index = Number.parseInt(raw, 10);
+  return Number.isNaN(index) ? undefined : index;
 };
 
 /**
@@ -85,34 +120,109 @@ const describeCell = (cell: Cell): string => {
  */
 export type ContextGridProps = {
   /**
-   * Context Snapshots of the Session, in transcript order. The grid needs the
-   * calls before the selected one to rebuild its cumulative items, which the
-   * parser does not store per call.
+   * The Cells of the selected API Call, already laid out by `buildCells`.
    */
-  readonly calls: readonly ContextSnapshot[];
+  readonly cells: readonly Cell[];
   /**
-   * Which API Call to draw.
-   */
-  readonly callIndex: number;
-  /**
-   * The Context Window used as the grid's denominator.
+   * The Context Window used as the grid's denominator, for the summary label.
    */
   readonly windowSize: number;
+  /**
+   * Measured Tokens of the selected API Call, for the summary label.
+   */
+  readonly measuredTotal: number;
+  /**
+   * Which Categories and Message Kinds are blanked, and how Messages Cells are
+   * coloured.
+   */
+  readonly filters: GridFilters;
+  /**
+   * The pinned Cell, whose Inspector entry survives the pointer leaving.
+   */
+  readonly pinnedIndex: number | undefined;
+  /**
+   * Called with the Cell the pointer or keyboard focus is on, and with
+   * `undefined` when it leaves the grid.
+   */
+  readonly onInspect: (index: number | undefined) => void;
+  /**
+   * Called when a Cell is clicked, to pin it or to unpin it again.
+   */
+  readonly onPin: (index: number) => void;
 };
 
 /**
  * Draws one Context Snapshot as a grid of Cells.
  */
-export const ContextGrid = ({ calls, callIndex, windowSize }: ContextGridProps) => {
+export const ContextGrid = ({
+  cells,
+  windowSize,
+  measuredTotal,
+  filters,
+  pinnedIndex,
+  onInspect,
+  onPin,
+}: ContextGridProps) => {
   const [paneRef, columns] = useColumnCount();
-  // The Scrubber re-renders this on every step, and the layout is the same for
-  // the same Context Snapshot.
-  const cells = useMemo(
-    () => buildCells(cumulativeItems(calls, callIndex), windowSize),
-    [calls, callIndex, windowSize],
+  const blockRef = useRef<HTMLDivElement>(null);
+  // Roving tabindex: one Cell of the grid is in the tab order and the arrow
+  // keys move between Cells. A window of 1,000 Cells would otherwise be 1,000
+  // tab stops between the grid and the rail.
+  const [focusIndex, setFocusIndex] = useState(0);
+  // Switching the Context Window override shortens the grid, and a tab stop
+  // past the end would leave the grid unreachable by keyboard.
+  const tabStop = Math.min(focusIndex, cells.length - 1);
+
+  const focusCell = useCallback((index: number) => {
+    setFocusIndex(index);
+    const node = blockRef.current?.children[index];
+    if (node instanceof HTMLElement) node.focus();
+  }, []);
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      const from = cellIndexOf(event.target);
+      if (from === undefined) return;
+      const step =
+        event.key === "ArrowRight"
+          ? 1
+          : event.key === "ArrowLeft"
+            ? -1
+            : event.key === "ArrowDown"
+              ? columns
+              : event.key === "ArrowUp"
+                ? -columns
+                : undefined;
+      const to =
+        step !== undefined
+          ? from + step
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? cells.length - 1
+              : undefined;
+      if (to === undefined) return;
+      event.preventDefault();
+      focusCell(Math.max(0, Math.min(cells.length - 1, to)));
+    },
+    [cells.length, columns, focusCell],
   );
-  const snapshot = calls[callIndex];
-  if (snapshot === undefined) return null;
+
+  const inspectFrom = useCallback(
+    (event: SyntheticEvent) => {
+      const index = cellIndexOf(event.target);
+      if (index !== undefined) onInspect(index);
+    },
+    [onInspect],
+  );
+
+  const onClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const index = cellIndexOf(event.target);
+      if (index !== undefined) onPin(index);
+    },
+    [onPin],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -126,32 +236,47 @@ export const ContextGrid = ({ calls, callIndex, windowSize }: ContextGridProps) 
         style={{ scrollbarGutter: "stable" }}
       >
         <div
+          ref={blockRef}
           className="grid w-fit"
           style={{
             gridTemplateColumns: `repeat(${columns}, ${CELL_SIZE_PX}px)`,
             gap: `${CELL_GAP_PX}px`,
           }}
-          role="img"
-          aria-label={`Context grid: ${formatTokens(snapshot.measuredTotal)} of ${formatTokens(
+          role="group"
+          aria-label={`Context grid: ${formatTokens(measuredTotal)} of ${formatTokens(
             windowSize,
           )} tokens used`}
+          onMouseOver={inspectFrom}
+          onFocus={inspectFrom}
+          onMouseLeave={() => onInspect(undefined)}
+          onClick={onClick}
+          onKeyDown={onKeyDown}
         >
-          {cells.map((cell) => (
-            <div
-              key={cell.index}
-              className={`rounded-[2px] ${
-                cell.fill === "free" ? FREE_FILL_CLASS : CATEGORY_FILL_CLASS[cell.fill]
-              }`}
-              style={{ width: CELL_SIZE_PX, height: CELL_SIZE_PX }}
-              title={describeCell(cell)}
-            />
-          ))}
+          {cells.map((cell) => {
+            const label = describeCell(cell, filters);
+            return (
+              <button
+                type="button"
+                key={cell.index}
+                data-cell-index={cell.index}
+                tabIndex={cell.index === tabStop ? 0 : -1}
+                aria-pressed={cell.index === pinnedIndex}
+                aria-label={label}
+                className={`cursor-pointer rounded-[2px] outline-offset-2 ${cellFillClass(
+                  cell,
+                  filters,
+                )} ${cell.index === pinnedIndex ? "outline-2 outline-ui-focus" : ""}`}
+                style={{ width: CELL_SIZE_PX, height: CELL_SIZE_PX }}
+                title={label}
+              />
+            );
+          })}
         </div>
       </div>
 
       <p className="border-t border-ui-border px-5 py-2 text-[11px] text-ui-text-faint">
         {cells.length} cells × {formatTokens(CELL_TOKENS)} tokens, in the order they entered the
-        context
+        context · click a cell to pin it in the Inspector
       </p>
     </div>
   );

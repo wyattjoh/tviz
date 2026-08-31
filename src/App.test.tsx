@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
 import * as Fixture from "./fixtures/transcript.ts";
@@ -51,15 +51,38 @@ const drop = (file: File): void => {
   fireEvent.drop(target, { dataTransfer: { files: fileListOf(file) } });
 };
 
+/**
+ * The grid block, which is a group rather than an image now that its Cells are
+ * buttons that can be hovered, focused and pinned.
+ */
+const contextGrid = (): HTMLElement => screen.getByRole("group", { name: /^Context grid/ });
+
+const findContextGrid = (): Promise<HTMLElement> =>
+  screen.findByRole("group", { name: /^Context grid/ });
+
+const queryContextGrid = (): HTMLElement | null =>
+  screen.queryByRole("group", { name: /^Context grid/ });
+
 const cellTitles = (): readonly string[] =>
-  Array.from(document.querySelectorAll("[title]"), (cell) => cell.getAttribute("title") ?? "");
+  Array.from(contextGrid().children, (cell) => cell.getAttribute("title") ?? "");
+
+const cellAt = (index: number): HTMLElement => {
+  const cell = contextGrid().children[index];
+  if (!(cell instanceof HTMLElement)) throw new Error(`the grid has no Cell ${index}`);
+  return cell;
+};
+
+const cellFill = (index: number): string =>
+  cellAt(index)
+    .className.split(" ")
+    .find((name) => name.startsWith("bg-")) ?? "(none)";
 
 describe("App", () => {
   it("renders the grid and legend for the last API Call of a dropped transcript", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
 
-    const grid = await screen.findByRole("img");
+    const grid = await findContextGrid();
     expect(grid.getAttribute("aria-label")).toBe("Context grid: 45.0k of 200.0k tokens used");
     expect(grid.childElementCount).toBe(200);
 
@@ -73,7 +96,7 @@ describe("App", () => {
   it("lays a loaded Session out in the four Workbench regions", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     // 1 — menu bar, with the File menu Sessions will be opened from.
     const menuBar = screen.getByRole("banner", { name: "tviz" });
@@ -85,7 +108,7 @@ describe("App", () => {
     expect(strip.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
 
     // 3 — grid pane on the flexible left, scrolling under its own column count.
-    const grid = screen.getByRole("img");
+    const grid = contextGrid();
     const pane = screen.getByRole("main", { name: "Context grid" });
     expect(pane.contains(grid)).toBe(true);
     expect(grid.parentElement?.className).toContain("overflow-auto");
@@ -105,7 +128,7 @@ describe("App", () => {
   it("opens and closes the File menu the Session list will fill", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     const file = screen.getByRole("button", { name: "File" });
     expect(file.getAttribute("aria-expanded")).toBe("false");
@@ -122,7 +145,7 @@ describe("App", () => {
   it("lays Cells out in the order items entered the context", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     // System is the front of every request, and the Skill listing that arrived
     // before the first API Call sits directly behind it — Categories are not
@@ -136,7 +159,7 @@ describe("App", () => {
   it("gives every Category the legend lists at least one Cell", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     // Custom agents (375 tokens) and MCP (175) are each smaller than a Cell, so
     // they lose every majority vote; the one-Cell floor still gives them the
@@ -155,7 +178,7 @@ describe("App", () => {
   it("reads legend totals from the Context Snapshot, not from the Cell layout", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     // Both Categories hold a single Cell — 1,000 tokens of grid — while the
     // legend reports their exact totals. Proportions are read from the legend,
@@ -175,7 +198,7 @@ describe("App", () => {
   it("does not claim a Subagent Session count nobody measured", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     expect(screen.queryByText(/subagent sessions/)).toBeNull();
   });
@@ -186,7 +209,7 @@ describe("App", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe("empty.jsonl is empty.");
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(queryContextGrid()).toBeNull();
   });
 
   it("shows the parser's message in an alert when the file is not a transcript", async () => {
@@ -200,12 +223,12 @@ describe("App", () => {
   it("returns to the drop zone when the Session is cleared", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
-    await screen.findByRole("img");
+    await findContextGrid();
 
     fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
     expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(queryContextGrid()).toBeNull();
   });
 
   describe("stepping through the Session with the Scrubber", () => {
@@ -228,11 +251,11 @@ describe("App", () => {
     const openStepped = async (): Promise<HTMLInputElement> => {
       render(<App />);
       drop(transcriptFile("stepped.jsonl", steppedTranscript()));
-      await screen.findByRole("img");
+      await findContextGrid();
       return screen.getByLabelText("API call") as HTMLInputElement;
     };
 
-    const gridLabel = (): string => screen.getByRole("img").getAttribute("aria-label") ?? "";
+    const gridLabel = (): string => contextGrid().getAttribute("aria-label") ?? "";
 
     it("opens on the last API Call", async () => {
       const range = await openStepped();
@@ -293,7 +316,7 @@ describe("App", () => {
           ]),
         ),
       );
-      await screen.findByRole("img");
+      await findContextGrid();
 
       const range = screen.getByLabelText("API call") as HTMLInputElement;
       fireEvent.click(screen.getByLabelText("First call"));
@@ -319,6 +342,136 @@ describe("App", () => {
 
       fireEvent.keyDown(range, { key: "ArrowLeft" });
       expect(screen.queryByText("· compaction")).toBeNull();
+    });
+  });
+
+  describe("filtering the grid from the legend", () => {
+    const open = async (): Promise<HTMLElement> => {
+      render(<App />);
+      drop(transcriptFile("session-a.jsonl", transcript()));
+      await findContextGrid();
+      return screen.getByRole("complementary", { name: "Legend and Inspector" });
+    };
+
+    /**
+     * A legend filter row, looked up inside the rail: a Cell's accessible name
+     * starts with its Category too, so the whole document is ambiguous.
+     */
+    const row = (rail: HTMLElement, name: RegExp): HTMLElement =>
+      within(rail).getByRole("button", { name });
+
+    const firstCellOf = (label: string): number =>
+      cellTitles().findIndex((title) => title.startsWith(`${label} ·`));
+
+    /**
+     * The last Cell anything reaches into. In this fixture that is the tool
+     * result: it entered the context last and is the largest item in it.
+     */
+    const lastFilledCell = (): number =>
+      cellTitles().findIndex((title) => title.startsWith("Free ·")) - 1;
+
+    it("blanks a Category's Cells in place, moving no Cell and changing no total", async () => {
+      const rail = await open();
+      const before = cellTitles();
+      const skills = firstCellOf("Skills");
+      const legendBefore = row(rail, /^Skills/).textContent;
+      expect(skills).toBeGreaterThanOrEqual(0);
+      expect(cellFill(skills)).toBe("bg-cat-skills");
+
+      fireEvent.click(row(rail, /^Skills/));
+
+      expect(cellFill(skills)).toBe("bg-cell-hidden");
+      // Every Cell still covers the token range it covered, so the proportions
+      // are still read against the whole window (ADR-0006).
+      expect(cellTitles().map((title) => title.replace(" · hidden", ""))).toEqual(before);
+      expect(row(rail, /^Skills/).textContent).toBe(legendBefore);
+      expect(row(rail, /^Skills/).getAttribute("aria-pressed")).toBe("false");
+
+      fireEvent.click(row(rail, /^Skills/));
+      expect(cellFill(skills)).toBe("bg-cat-skills");
+    });
+
+    it("blanks a Message Kind's Cells in place, leaving the Category and the totals alone", async () => {
+      const rail = await open();
+      const before = cellTitles();
+      const toolResult = lastFilledCell();
+      const legendBefore = row(rail, /^Tool result/).textContent;
+      expect(cellTitles()[toolResult]).toContain("Tool result");
+      expect(cellFill(toolResult)).toBe("bg-cat-messages");
+
+      fireEvent.click(row(rail, /^Tool result/));
+
+      expect(cellFill(toolResult)).toBe("bg-cell-hidden");
+      expect(cellTitles().map((title) => title.replace(" · hidden", ""))).toEqual(before);
+      expect(row(rail, /^Tool result/).textContent).toBe(legendBefore);
+      // Hiding a Kind leaves the Messages Category itself shown.
+      expect(row(rail, /^Messages/).getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("recolours Messages Cells with the Kind accents, leaving the Categories alone", async () => {
+      await open();
+      const toolResult = lastFilledCell();
+      const skills = firstCellOf("Skills");
+      expect(cellFill(toolResult)).toBe("bg-cat-messages");
+
+      fireEvent.click(screen.getByLabelText("Colour Messages by kind"));
+
+      expect(cellFill(toolResult)).toBe("bg-kind-tool-result");
+      expect(cellTitles()[toolResult]).toContain("Messages · Tool result ·");
+      expect(cellFill(skills)).toBe("bg-cat-skills");
+    });
+
+    it("says System is derived rather than logged", async () => {
+      await open();
+      expect(screen.getByText(/system prompt \+ built-in tools \+ root CLAUDE\.md/)).toBeDefined();
+      expect(screen.getByText(/not logged; derived/)).toBeDefined();
+    });
+  });
+
+  describe("inspecting a Cell in the right rail", () => {
+    const open = async (): Promise<HTMLElement> => {
+      render(<App />);
+      drop(transcriptFile("session-a.jsonl", transcript()));
+      await findContextGrid();
+      return screen.getByRole("complementary", { name: "Legend and Inspector" });
+    };
+
+    it("lists the items overlapping a hovered Cell", async () => {
+      const rail = await open();
+      expect(rail.textContent).toContain("Hover a Cell");
+
+      const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
+      fireEvent.mouseOver(cellAt(skills));
+
+      expect(rail.textContent).toContain("Skills");
+      expect(rail.textContent).toContain("Skill listing");
+      expect(rail.textContent).toContain(`cell ${skills + 1}`);
+    });
+
+    it("calls an empty Cell free rather than listing items for it", async () => {
+      const rail = await open();
+
+      const free = cellTitles().findIndex((title) => title.startsWith("Free ·"));
+      fireEvent.mouseOver(cellAt(free));
+
+      expect(rail.textContent).toContain("free — nothing has reached this part");
+    });
+
+    it("pins a clicked Cell so its items survive the pointer leaving the grid", async () => {
+      const rail = await open();
+      const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
+
+      fireEvent.click(cellAt(skills));
+      fireEvent.mouseLeave(contextGrid());
+
+      expect(rail.textContent).toContain("Skill listing");
+      expect(rail.textContent).toContain("pinned");
+      expect(cellAt(skills).getAttribute("aria-pressed")).toBe("true");
+
+      // Clicking the pinned Cell again hands the rail back.
+      fireEvent.click(cellAt(skills));
+      fireEvent.mouseLeave(contextGrid());
+      expect(rail.textContent).toContain("Hover a Cell");
     });
   });
 });

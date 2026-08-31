@@ -10,7 +10,12 @@
  * size, and the grid always spans the whole window with free Cells past the
  * measured total.
  */
-import { CATEGORY_ORDER, type Category, type ContextItem } from "../domain/context.ts";
+import {
+  CATEGORY_ORDER,
+  type Category,
+  type ContextItem,
+  type MessageKind,
+} from "../domain/context.ts";
 
 /**
  * The tokens one Cell stands for. Fixed, so Cells are comparable across
@@ -44,6 +49,15 @@ export type Cell = {
    * The Category colouring the Cell, or `free` when nothing reaches it.
    */
   readonly fill: CellFill;
+  /**
+   * The Message Kind holding most of this Cell's range, set only when `fill` is
+   * `messages`.
+   *
+   * Carried by the layout rather than resolved at paint time so that "colour by
+   * kind" and hiding a Message Kind read the same value, and so that both stay
+   * pure functions of a Cell.
+   */
+  readonly kind: MessageKind | undefined;
   /**
    * The items overlapping this Cell's range, largest overlap first. Empty for a
    * free Cell.
@@ -146,6 +160,33 @@ const majorityCategory = (byCategory: ReadonlyMap<Category, number>): Category |
 };
 
 /**
+ * Picks the Message Kind that owns most of a Cell's range, among the Messages
+ * items reaching into it.
+ *
+ * Resolved from the same overlaps the Category majority is, and by the same
+ * rule: a tie goes to the Kind that entered the context first. Undefined when
+ * no Messages item reaches the Cell, which is every Cell of every other
+ * Category.
+ */
+const majorityMessageKind = (overlaps: readonly Overlap[]): MessageKind | undefined => {
+  const byKind = new Map<MessageKind, number>();
+  for (const { item, overlap } of overlaps) {
+    if (item.category !== "messages" || item.kind === undefined) continue;
+    byKind.set(item.kind, (byKind.get(item.kind) ?? 0) + overlap);
+  }
+
+  let winner: MessageKind | undefined;
+  let best = 0;
+  for (const [kind, tokens] of byKind) {
+    if (tokens > best) {
+      best = tokens;
+      winner = kind;
+    }
+  }
+  return winner;
+};
+
+/**
  * What one Cell holds, as the one-Cell floor needs to see it.
  */
 type CellClaims = {
@@ -158,6 +199,11 @@ type CellClaims = {
    * reach at least one more Cell.
    */
   readonly open: ReadonlySet<Category>;
+  /**
+   * The Message Kind holding most of this Cell's range, so that a Cell the
+   * floor hands to Messages still knows which Kind colours it.
+   */
+  readonly kind: MessageKind | undefined;
 };
 
 /**
@@ -220,7 +266,13 @@ const applyCategoryFloor = (cells: Cell[], claims: readonly CellClaims[]): void 
     if (target === undefined || cell === undefined || cell.fill === "free") return;
     cellsHeld.set(cell.fill, (cellsHeld.get(cell.fill) ?? 0) - 1);
     cellsHeld.set(category, 1);
-    cells[target] = { ...cell, fill: category };
+    cells[target] = {
+      ...cell,
+      fill: category,
+      // Only a Messages Cell carries a Message Kind, so a Cell changing hands
+      // either picks up that Cell's majority Kind or gives its own up.
+      kind: category === "messages" ? claims[target]?.kind : undefined,
+    };
   };
 
   /**
@@ -281,10 +333,11 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
     }
 
     const byCategory = tokensByCategory(overlaps);
-    claims.push({ byCategory, open });
+    const kind = majorityMessageKind(overlaps);
+    claims.push({ byCategory, open, kind });
     const fill = majorityCategory(byCategory);
     if (fill === undefined) {
-      cells.push({ index, start, end, fill: "free", items: [] });
+      cells.push({ index, start, end, fill: "free", kind: undefined, items: [] });
       continue;
     }
 
@@ -293,6 +346,7 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
       start,
       end,
       fill,
+      kind: fill === "messages" ? kind : undefined,
       // Biggest contributor first, so a hover list reads as "mostly this".
       // `sort` is stable, so equal overlaps keep their context order.
       items: [...overlaps]

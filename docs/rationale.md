@@ -89,6 +89,15 @@ as growth at the frontier instead of a re-flow on every call. The cost is that C
 colours interleave and proportions are read from the legend — but a lone green cell in a
 field of blue is a skill that loaded mid-session, which the grouped layout threw away.
 
+**A docked inspector, not a tooltip.** Hovering a cell answers "what is actually in there",
+and the answer is a list — a skill listing, three tool results, a reminder, with tokens each.
+A tooltip that disappears when the pointer moves can't be read down, compared against the
+next cell, or kept while you scrub. So the inspector has a permanent home in the right rail
+under the legend, and clicking a cell pins it there. Message kinds get the same treatment as
+categories: they hide in place and they can recolour the Messages cells, because "how much of
+this session is tool output" is the question people actually arrive with, and blanking rather
+than removing keeps the answer readable against the same window.
+
 **Effect v4 for the parser only.** `Schema` gives lenient decoding of a format with ~20
 record types where unknown types must be skipped and counted rather than throw, and
 `Effect.gen` structures the parse-and-aggregate pipeline. No Layers, no Services: the parser
@@ -142,9 +151,10 @@ a dozen agents that never shared a context window.
 - **Subagent context windows.** `<session>/subagents/agent-*.jsonl` files are entirely
   separate context windows. tviz counts them today; nesting them under the parent session is
   the most obviously missing thing.
-- **Item-level drilldown.** Hover currently shows a cell's category and token range. Carrying
-  per-item provenance through the worker boundary would let it answer the better question —
-  _which_ tool result ate 40k tokens.
+- **Provenance for an item.** The inspector names the items in a cell and their tokens, but
+  not where they came from: linking one back to the API call that added it, and to the
+  transcript record behind it, is the next question after "_which_ tool result ate 40k
+  tokens".
 - **Small multiples.** A folder of sessions rendered as a wall of grids, to compare how
   differently structured sessions fill up; plus a per-call growth chart.
 - **Calibration.** Paste a real `/context` output and solve for the split of the System

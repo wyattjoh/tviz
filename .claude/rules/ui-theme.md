@@ -37,6 +37,20 @@ Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in pla
 never removes them, so legend totals never change when a Category or Message Kind is
 hidden.
 
+## Filtering and the Inspector
+
+`buildCells` takes **no filters**: the layout is built in `App` and handed to both
+`ContextGrid` and `Inspector`, and `src/ui/filters.ts` only ever reaches a Cell's colour
+through `cellFillClass`. That is the seam that makes "blank in place" structural rather
+than a promise — no filter can move a Cell, and legend totals come from the Context
+Snapshot rather than from the Cells. Keep it that way: a filter argument on `buildCells`
+would reintroduce the re-flow.
+
+The Inspector is docked in the rail, not a tooltip. Cells are addressed upwards by
+**index**, not as objects, so a pinned Cell keeps meaning something when the Scrubber
+rebuilds the layout. Grid Cells are buttons on a roving tabindex under a `role="group"`
+block — a 1M window is 1,000 Cells and must not be 1,000 tab stops.
+
 The Scrubber is a stacked-area chart of Category totals over every API Call, dragged to
 scrub, with transport controls, a 0.5x-4x speed control and a range input for keyboard
 stepping; compactions are dashed rules on the chart. Its geometry lives in

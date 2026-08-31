@@ -200,6 +200,65 @@ describe("buildCells", () => {
     expect(cells[1]?.items).toHaveLength(1);
   });
 
+  describe("Message Kinds", () => {
+    it("carries the Message Kind holding most of a Messages Cell", () => {
+      const cells = buildCells(
+        [item("messages", 700, "user"), item("messages", 300, "toolResult")],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(cells[0]?.fill).toBe("messages");
+      expect(cells[0]?.kind).toBe("user");
+    });
+
+    it("gives a tied Cell to the Message Kind that entered the context first", () => {
+      const cells = buildCells(
+        [item("messages", 500, "assistant"), item("messages", 500, "toolResult")],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(cells[0]?.kind).toBe("assistant");
+    });
+
+    it("leaves every other Category's Cells without a Kind", () => {
+      const cells = buildCells(
+        [item("system", 1_000), item("skills", 1_000)],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(cells[0]?.kind).toBeUndefined();
+      expect(cells[1]?.kind).toBeUndefined();
+      // Free space has no Kind either.
+      expect(cells[2]?.fill).toBe("free");
+      expect(cells[2]?.kind).toBeUndefined();
+    });
+
+    it("ignores the Messages items in a Cell another Category won", () => {
+      const cells = buildCells(
+        [item("skills", 800), item("messages", 200, "reminder")],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(cells[0]?.fill).toBe("skills");
+      expect(cells[0]?.kind).toBeUndefined();
+    });
+
+    it("hands a Cell's Kind over with the Cell when the one-Cell floor moves it", () => {
+      // Messages is 200 tokens — smaller than a Cell — so it loses every
+      // majority vote and only reaches the grid through the floor. The Cell it
+      // is granted must arrive with the Kind that covers it, or "colour by
+      // kind" would leave the grant uncoloured.
+      const cells = buildCells(
+        [item("system", 3_000), item("messages", 200, "toolResult"), item("skills", 3_000)],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      const granted = cells.find((cell) => cell.fill === "messages");
+      expect(granted).toBeDefined();
+      expect(granted?.kind).toBe("toolResult");
+    });
+  });
+
   describe("stepping through a Session", () => {
     it("only fills Cells at the frontier when the next API Call is not a compaction", () => {
       const session = compactedSession();
