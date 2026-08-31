@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
 import * as Fixture from "./fixtures/transcript.ts";
@@ -66,6 +66,27 @@ const dropMany = (entries: readonly { readonly file: File; readonly path?: strin
   const target = screen.getByText("drop a .jsonl transcript").closest("section");
   if (target === null) throw new Error("the drop zone has no drop target");
   fireEvent.drop(target, {
+    dataTransfer: { files: fileListOf(...entries.map((entry) => entry.file)) },
+  });
+};
+
+/**
+ * Drops several files (and, with a `path`, whole folders) onto the *loaded*
+ * Workbench rather than the empty state's drop zone — the loaded Workbench
+ * is a drop target of its own once a Session is open (`App.tsx`'s root),
+ * which is exactly what a second folder drop lands on.
+ */
+const dropManyOntoWorkbench = (
+  entries: readonly { readonly file: File; readonly path?: string }[],
+): void => {
+  for (const entry of entries) {
+    if (entry.path !== undefined) {
+      Object.defineProperty(entry.file, "webkitRelativePath", { value: entry.path });
+    }
+  }
+  const workbench = screen.getByRole("banner", { name: "tviz" }).closest("div");
+  if (workbench === null) throw new Error("the Workbench has no root element");
+  fireEvent.drop(workbench, {
     dataTransfer: { files: fileListOf(...entries.map((entry) => entry.file)) },
   });
 };
@@ -254,12 +275,12 @@ describe("App", () => {
     expect(queryContextGrid()).toBeNull();
   });
 
-  it("returns to the drop zone when the Session is cleared", async () => {
+  it("returns to the drop zone when the only open Session is closed", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    fireEvent.click(screen.getByRole("button", { name: "clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
 
     expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
     expect(queryContextGrid()).toBeNull();
@@ -620,6 +641,84 @@ describe("App", () => {
       );
     });
 
+    it("closes only the Session on screen, leaving the rest open in the File menu", async () => {
+      render(<App />);
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000d1");
+      const fileA = transcriptFile("session-a.jsonl", transcript());
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000d2");
+      const fileB = transcriptFile("session-b.jsonl", transcript());
+      Fixture.setFixtureSessionId(undefined);
+
+      dropMany([{ file: fileA }, { file: fileB }]);
+      await findContextGrid();
+      expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
+        "session-a.jsonl",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "close" }));
+
+      // Still on the Workbench — session-b.jsonl took the vacated slot —
+      // rather than dropped back to the empty state with an open Session
+      // still parsed and waiting in the File menu.
+      await findContextGrid();
+      expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
+        "session-b.jsonl",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      expect(screen.queryByText("session-a.jsonl")).toBeNull();
+      expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+    });
+
+    it("adds a second drop onto the loaded Workbench instead of losing it to the browser's default file-drop", async () => {
+      render(<App />);
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000e1");
+      const fileA = transcriptFile("session-a.jsonl", transcript());
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000e2");
+      const fileB = transcriptFile("session-b.jsonl", transcript());
+      Fixture.setFixtureSessionId(undefined);
+
+      drop(fileA);
+      await findContextGrid();
+
+      // The drop target this time is the loaded Workbench itself, not the
+      // (now unmounted) empty-state drop zone.
+      dropManyOntoWorkbench([{ file: fileB }]);
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      expect(screen.getByRole("button", { name: /session-a\.jsonl/ })).toBeDefined();
+      // Collecting the drop's entries is async even for a flat file list, so
+      // the second row arrives a tick after the drop event itself.
+      expect(await screen.findByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+    });
+
+    it("counts a Subagent Session sidecar once even when the same folder is dropped twice", async () => {
+      render(<App />);
+      const parentId = "00000000-0000-4000-8000-0000000000f1";
+      Fixture.setFixtureSessionId(parentId);
+      const parent = transcriptFile(`${parentId}.jsonl`, transcript());
+      const sidecarA = transcriptFile("agent-1.jsonl", transcript());
+      const sidecarB = transcriptFile("agent-2.jsonl", transcript());
+      Fixture.setFixtureSessionId(undefined);
+
+      const entries = [
+        { file: parent, path: `project/${parentId}.jsonl` },
+        { file: sidecarA, path: `project/${parentId}/subagents/agent-1.jsonl` },
+        { file: sidecarB, path: `project/${parentId}/subagents/agent-2.jsonl` },
+      ];
+      dropMany(entries);
+      await findContextGrid();
+      expect(await screen.findByText("2 subagent sessions")).toBeDefined();
+
+      // The same folder, dropped again — a real folder drop the user repeats
+      // rather than a new one, this time landing on the loaded Workbench
+      // instead of the (now unmounted) empty-state drop zone — must not add
+      // to the count a second time.
+      dropManyOntoWorkbench(entries);
+      await waitFor(() => expect(screen.getByText("2 subagent sessions")).toBeDefined());
+      expect(screen.queryByText("4 subagent sessions")).toBeNull();
+    });
+
     it("changes the grid denominator and the legend percentages immediately on a Context Window override", async () => {
       render(<App />);
       drop(transcriptFile("session-a.jsonl", transcript()));
@@ -657,7 +756,9 @@ describe("App", () => {
       await findContextGrid();
 
       fireEvent.click(screen.getByRole("button", { name: "File" }));
-      expect(screen.getByText(/parsing 1 file/)).toBeDefined();
+      // Scoped to the menu's own row: the always-mounted live region
+      // (`[aria-live]`, covered in `MenuBar.test.tsx`) says the same thing.
+      expect(screen.getByText(/parsing 1 file/, { selector: "div" })).toBeDefined();
     });
 
     it("surfaces a failure for one file without blocking the rest, per file rather than globally", async () => {

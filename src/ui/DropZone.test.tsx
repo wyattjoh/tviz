@@ -58,7 +58,7 @@ describe("DropZone", () => {
     render(
       <DropZone
         onFiles={vi.fn()}
-        pending={[{ path: "session-c.jsonl", fileName: "session-c.jsonl" }]}
+        pending={[{ id: "1", path: "session-c.jsonl", fileName: "session-c.jsonl" }]}
         errors={[]}
       />,
     );
@@ -71,8 +71,8 @@ describe("DropZone", () => {
       <DropZone
         onFiles={vi.fn()}
         pending={[
-          { path: "a.jsonl", fileName: "a.jsonl" },
-          { path: "b.jsonl", fileName: "b.jsonl" },
+          { id: "1", path: "a.jsonl", fileName: "a.jsonl" },
+          { id: "2", path: "b.jsonl", fileName: "b.jsonl" },
         ]}
         errors={[]}
       />,
@@ -87,8 +87,14 @@ describe("DropZone", () => {
         onFiles={vi.fn()}
         pending={[]}
         errors={[
-          { path: "empty.jsonl", fileName: "empty.jsonl", message: "empty.jsonl is empty." },
           {
+            id: "1",
+            path: "empty.jsonl",
+            fileName: "empty.jsonl",
+            message: "empty.jsonl is empty.",
+          },
+          {
+            id: "2",
             path: "notes.txt",
             fileName: "notes.txt",
             message:

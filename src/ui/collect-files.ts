@@ -26,11 +26,16 @@ export type PathedFile = {
  *
  * `subagent` is never parsed (ADR: Subagent Sessions own a separate Context
  * Window; MVP counts only) — `parentId` is the directory name enclosing
- * `subagents/`, which is the Session id the count belongs to.
+ * `subagents/`, which is the Session id the count belongs to. `sidecarId` is
+ * the path from `subagents/` on down (e.g. `subagents/agent-1.jsonl`): the
+ * same sidecar dropped through a different ancestor — the whole project
+ * folder one time, just the Session's own folder the next — carries a
+ * different `path` but the same `sidecarId`, which is what a caller wanting
+ * to dedupe repeat drops needs to key on.
  */
 export type ClassifiedEntry =
   | { readonly kind: "transcript"; readonly file: File; readonly path: string }
-  | { readonly kind: "subagent"; readonly parentId: string }
+  | { readonly kind: "subagent"; readonly parentId: string; readonly sidecarId: string }
   | { readonly kind: "ignored" };
 
 const JSONL_EXTENSION = /\.jsonl$/i;
@@ -41,6 +46,12 @@ const JSONL_EXTENSION = /\.jsonl$/i;
  * always ignored; a `.jsonl` file under a `subagents/` directory is a
  * Subagent Session sidecar, counted on the directory enclosing `subagents/`;
  * every other `.jsonl` file is a transcript to parse.
+ *
+ * A `subagents/` directory dropped as the root of the gesture itself (no
+ * enclosing Session directory in `path` to read a `parentId` from) has
+ * nothing to attribute a count to, so it is ignored rather than falling
+ * through to the transcript branch — a Subagent Session transcript must
+ * never be parsed and listed as its own Session.
  */
 export const classifyEntry = (entry: PathedFile): ClassifiedEntry => {
   const segments = entry.path.split("/").filter((segment) => segment.length > 0);
@@ -52,9 +63,11 @@ export const classifyEntry = (entry: PathedFile): ClassifiedEntry => {
   }
 
   const subagentsIndex = segments.findIndex((segment) => segment.toLowerCase() === "subagents");
-  if (subagentsIndex > 0) {
+  if (subagentsIndex >= 0) {
     const parentId = segments[subagentsIndex - 1];
-    if (parentId !== undefined) return { kind: "subagent", parentId };
+    if (parentId === undefined) return { kind: "ignored" };
+    const sidecarId = segments.slice(subagentsIndex).join("/");
+    return { kind: "subagent", parentId, sidecarId };
   }
 
   return { kind: "transcript", file: entry.file, path: entry.path };
@@ -69,32 +82,38 @@ export type PartitionedEntries = {
    */
   readonly transcripts: readonly PathedFile[];
   /**
-   * Subagent Session counts discovered, keyed by the parent Session id
-   * (the directory enclosing `subagents/`). Additive: callers merge this into
-   * whatever counts they already hold.
+   * Subagent Session sidecars discovered, keyed by the parent Session id
+   * (the directory enclosing `subagents/`) and holding each sidecar's
+   * {@link ClassifiedEntry.sidecarId}. A caller merges this into whatever
+   * sidecars it already holds by unioning the sets — never by adding sizes —
+   * so the same sidecar counted twice (the same folder dropped again, or a
+   * subdirectory re-dropped after its parent folder) still counts once.
    */
-  readonly subagentCounts: ReadonlyMap<string, number>;
+  readonly subagentPaths: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 /**
  * Splits a batch of dropped or picked entries into transcripts to parse and
- * Subagent Session counts, silently dropping everything else (non-`.jsonl`
- * files, `tool-results/` contents, Subagent `.meta.json` sidecars).
+ * Subagent Session sidecars, silently dropping everything else (non-`.jsonl`
+ * files, `tool-results/` contents, Subagent `.meta.json` sidecars, and a
+ * `subagents/` directory dropped with no parent to attribute it to).
  */
 export const partitionEntries = (entries: readonly PathedFile[]): PartitionedEntries => {
   const transcripts: PathedFile[] = [];
-  const subagentCounts = new Map<string, number>();
+  const subagentPaths = new Map<string, Set<string>>();
 
   for (const entry of entries) {
     const classified = classifyEntry(entry);
     if (classified.kind === "transcript") {
       transcripts.push({ file: classified.file, path: classified.path });
     } else if (classified.kind === "subagent") {
-      subagentCounts.set(classified.parentId, (subagentCounts.get(classified.parentId) ?? 0) + 1);
+      const sidecars = subagentPaths.get(classified.parentId) ?? new Set<string>();
+      sidecars.add(classified.sidecarId);
+      subagentPaths.set(classified.parentId, sidecars);
     }
   }
 
-  return { transcripts, subagentCounts };
+  return { transcripts, subagentPaths };
 };
 
 /**

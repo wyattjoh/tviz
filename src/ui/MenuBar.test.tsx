@@ -107,18 +107,22 @@ describe("MenuBar", () => {
   });
 
   it("shows how many files are still parsing", () => {
-    render(<MenuBar {...baseProps({ pending: [{ path: "a.jsonl", fileName: "a.jsonl" }] })} />);
+    render(
+      <MenuBar {...baseProps({ pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }] })} />,
+    );
 
     openMenu();
-    expect(screen.getByText(/parsing 1 file/)).toBeDefined();
+    // Scoped to the menu's own row: the always-mounted live region
+    // (`[aria-live]`, covered separately below) says the same thing.
+    expect(screen.getByText(/parsing 1 file/, { selector: "div" })).toBeDefined();
   });
 
   it("keeps the File button's accessible name plain even with a pending or failed count badge", () => {
     render(
       <MenuBar
         {...baseProps({
-          pending: [{ path: "a.jsonl", fileName: "a.jsonl" }],
-          errors: [{ path: "b.jsonl", fileName: "b.jsonl", message: "b.jsonl is empty." }],
+          pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }],
+          errors: [{ id: "2", path: "b.jsonl", fileName: "b.jsonl", message: "b.jsonl is empty." }],
         })}
       />,
     );
@@ -132,7 +136,9 @@ describe("MenuBar", () => {
     render(
       <MenuBar
         {...baseProps({
-          errors: [{ path: "bad.jsonl", fileName: "bad.jsonl", message: "bad.jsonl is empty." }],
+          errors: [
+            { id: "1", path: "bad.jsonl", fileName: "bad.jsonl", message: "bad.jsonl is empty." },
+          ],
         })}
       />,
     );
@@ -167,5 +173,74 @@ describe("MenuBar", () => {
     fireEvent.change(screen.getByLabelText("Open files…"), { target: { files: fileListOf(file) } });
 
     expect(onFiles).toHaveBeenCalledWith([{ file, path: "session-a.jsonl" }]);
+  });
+
+  it("forwards folders picked from Open folder… to the caller, reading webkitRelativePath", () => {
+    const onFiles = vi.fn();
+    render(<MenuBar {...baseProps({ onFiles })} />);
+
+    openMenu();
+    const input = screen.getByLabelText("Open folder…") as HTMLInputElement;
+    // The folder picker's directory attribute is applied through an untyped
+    // spread (`webkitdirectory` is not in `lib.dom`), so a regression that
+    // drops it would still typecheck — only this assertion catches it.
+    expect(input.hasAttribute("webkitdirectory")).toBe(true);
+
+    const file = transcriptFile("session-a.jsonl", "{}\n");
+    Object.defineProperty(file, "webkitRelativePath", { value: "project/session-a.jsonl" });
+    fireEvent.change(input, { target: { files: fileListOf(file) } });
+
+    expect(onFiles).toHaveBeenCalledWith([{ file, path: "project/session-a.jsonl" }]);
+  });
+
+  it("does not advertise a keyboard shortcut nothing in the app implements", () => {
+    render(<MenuBar {...baseProps()} />);
+
+    openMenu();
+    // No `metaKey`/`ctrlKey` handler exists anywhere in the app; a hint here
+    // would send a reviewer at the browser's own ⌘O/⌘W instead.
+    expect(screen.queryByText("⌘O")).toBeNull();
+    expect(screen.queryByText("⇧⌘O")).toBeNull();
+    expect(screen.queryByText("⌘W")).toBeNull();
+  });
+
+  it("announces parsing progress and failures to a screen reader even while the menu is closed", () => {
+    const { rerender } = render(
+      <MenuBar {...baseProps({ pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }] })} />,
+    );
+
+    // The menu is closed (`openMenu` was never called), so only an
+    // always-mounted live region — not the menu's own rows — can carry this.
+    expect(screen.getByRole("button", { name: "File" }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    expect(screen.getByText(/parsing 1 file/, { selector: "[aria-live]" })).toBeDefined();
+
+    rerender(
+      <MenuBar
+        {...baseProps({
+          errors: [{ id: "1", path: "b.jsonl", fileName: "b.jsonl", message: "b.jsonl is empty." }],
+        })}
+      />,
+    );
+    expect(screen.getByText(/1 file failed to parse/, { selector: "[aria-live]" })).toBeDefined();
+  });
+
+  it("gives each error row a stable key even when two failures share a path", () => {
+    // Two entries with the same `path` (the same file dropped twice) must
+    // not collide on a shared React key — each carries its own `id`.
+    render(
+      <MenuBar
+        {...baseProps({
+          errors: [
+            { id: "1", path: "dup.jsonl", fileName: "dup.jsonl", message: "dup.jsonl is empty." },
+            { id: "2", path: "dup.jsonl", fileName: "dup.jsonl", message: "dup.jsonl is empty." },
+          ],
+        })}
+      />,
+    );
+
+    openMenu();
+    expect(screen.getAllByRole("alert")).toHaveLength(2);
   });
 });

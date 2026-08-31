@@ -23,6 +23,7 @@ import {
   peakMeasuredTotal,
   type Session,
 } from "./domain/context.ts";
+import { collectDataTransferEntries, type PathedFile } from "./ui/collect-files.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
 import { ContextLegend } from "./ui/ContextLegend.tsx";
 import { DropZone } from "./ui/DropZone.tsx";
@@ -63,6 +64,7 @@ const App = () => {
     onSelectSession: loader.selectSession,
     onCloseAll: loader.closeAll,
   };
+  const onCloseSession = loader.closeSession;
 
   if (selectedSession === undefined) {
     return (
@@ -83,6 +85,8 @@ const App = () => {
       windowChoice={windowChoice}
       onWindowChoiceChange={setWindowChoice}
       menuBarProps={menuBarProps}
+      onFiles={loader.addEntries}
+      onCloseSession={onCloseSession}
     />
   );
 };
@@ -92,6 +96,17 @@ type LoadedSessionProps = {
   readonly windowChoice: WindowChoice;
   readonly onWindowChoiceChange: (choice: WindowChoice) => void;
   readonly menuBarProps: MenuBarProps;
+  /**
+   * Queues dropped or picked entries the same way the empty state's
+   * `DropZone` does — the Workbench itself is a drop target once a Session is
+   * loaded, so a second transcript or folder adds to what is open instead of
+   * the browser's default file-drop navigating the tab away from it.
+   */
+  readonly onFiles: (entries: readonly PathedFile[]) => void;
+  /**
+   * Closes one Session, leaving the rest of the loaded Sessions open.
+   */
+  readonly onCloseSession: (id: string) => void;
 };
 
 /**
@@ -122,6 +137,8 @@ const LoadedSession = ({
   windowChoice,
   onWindowChoiceChange,
   menuBarProps,
+  onFiles,
+  onCloseSession,
 }: LoadedSessionProps) => {
   // The last API Call answers "where did it end up?", which is the question a
   // finished Session is usually opened with.
@@ -133,6 +150,9 @@ const LoadedSession = ({
   // across API Calls instead of going stale.
   const [inspectedIndex, setInspectedIndex] = useState<number | undefined>(undefined);
   const [pinnedIndex, setPinnedIndex] = useState<number | undefined>(undefined);
+  // Purely visual, and never load-bearing: the drop is handled regardless of
+  // whether this is showing when it lands.
+  const [isDropOver, setIsDropOver] = useState(false);
 
   const windowSize = effectiveWindowSize(session, windowChoice);
 
@@ -169,7 +189,26 @@ const LoadedSession = ({
   const shownIndex = inspectedIndex ?? pinnedIndex;
 
   return (
-    <div className="grid h-full min-h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-ui-canvas font-mono text-[13px]">
+    <div
+      // A Session loaded is not the end of the drop path: the empty state's
+      // `DropZone` is unmounted once one is, so without a handler here the
+      // browser's own file-drop behaviour (navigating the tab to the file)
+      // takes over and every open Session, plus the Scrubber and filter
+      // state, is lost.
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDropOver(true);
+      }}
+      onDragLeave={() => setIsDropOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDropOver(false);
+        collectDataTransferEntries(event.dataTransfer).then(onFiles);
+      }}
+      className={`grid h-full min-h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-ui-canvas font-mono text-[13px] ${
+        isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
+      }`}
+    >
       <MenuBar {...menuBarProps} />
       <SessionHeader
         session={session}
@@ -177,7 +216,7 @@ const LoadedSession = ({
         windowSize={windowSize}
         windowChoice={windowChoice}
         onWindowChoiceChange={onWindowChoiceChange}
-        onClear={menuBarProps.onCloseAll}
+        onClose={() => onCloseSession(session.id)}
       />
 
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px]">

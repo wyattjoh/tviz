@@ -23,7 +23,36 @@ describe("classifyEntry", () => {
     expect(classifyEntry({ file: jsonlFile("agent-1.jsonl"), path })).toEqual({
       kind: "subagent",
       parentId: "session-a",
+      sidecarId: "subagents/agent-1.jsonl",
     });
+  });
+
+  it("gives the same sidecarId regardless of how much ancestor path precedes it", () => {
+    // The same sidecar, dropped once as part of the whole project folder and
+    // once as part of just the Session's own folder, carries a different
+    // `path` (a different amount of the drop's root survives) but the same
+    // `sidecarId` — what a caller dedupes repeat drops on.
+    const viaProject = classifyEntry({
+      file: jsonlFile("agent-1.jsonl"),
+      path: "project/session-a/subagents/agent-1.jsonl",
+    });
+    const viaSessionFolder = classifyEntry({
+      file: jsonlFile("agent-1.jsonl"),
+      path: "session-a/subagents/agent-1.jsonl",
+    });
+    expect(viaProject.kind).toBe("subagent");
+    expect(viaSessionFolder.kind).toBe("subagent");
+    expect(viaProject).toEqual(viaSessionFolder);
+  });
+
+  it("ignores a subagents-rooted drop with no enclosing Session directory to attribute it to", () => {
+    // Dragging the `subagents/` directory itself onto the page, rather than
+    // the Session's folder or the project folder above it — `fullPath` then
+    // starts at `subagents/`, with nothing ahead of it to read a parentId
+    // from. It must not fall through to the transcript branch and be parsed
+    // and listed as its own Session.
+    const path = "subagents/agent-1.jsonl";
+    expect(classifyEntry({ file: jsonlFile("agent-1.jsonl"), path })).toEqual({ kind: "ignored" });
   });
 
   it("ignores a Subagent Session's .meta.json sidecar", () => {
@@ -63,7 +92,23 @@ describe("partitionEntries", () => {
       "project/session-a.jsonl",
       "project/session-b.jsonl",
     ]);
-    expect(partition.subagentCounts).toEqual(new Map([["session-a", 2]]));
+    expect(partition.subagentPaths).toEqual(
+      new Map([["session-a", new Set(["subagents/agent-1.jsonl", "subagents/agent-2.jsonl"])]]),
+    );
+  });
+
+  it("dedupes a sidecar seen twice in the same batch by its sidecarId, not its path", () => {
+    // The same file appearing under two different roots in one batch — a
+    // project folder and, nested inside it, the Session's own folder dropped
+    // a second time alongside it — must count once.
+    const partition = partitionEntries([
+      { file: jsonlFile("agent-1.jsonl"), path: "project/session-a/subagents/agent-1.jsonl" },
+      { file: jsonlFile("agent-1.jsonl"), path: "session-a/subagents/agent-1.jsonl" },
+    ]);
+
+    expect(partition.subagentPaths).toEqual(
+      new Map([["session-a", new Set(["subagents/agent-1.jsonl"])]]),
+    );
   });
 });
 

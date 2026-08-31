@@ -117,7 +117,7 @@ export const DropZone = ({ onFiles, pending, errors }: DropZoneProps) => {
           {errors.length === 0 ? null : (
             <ul className="mt-6 space-y-1 text-left text-xs">
               {errors.map((entry) => (
-                <li key={entry.path} role="alert" className="text-ui-danger">
+                <li key={entry.id} role="alert" className="text-ui-danger">
                   {entry.message}
                 </li>
               ))}

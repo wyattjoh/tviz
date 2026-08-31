@@ -34,9 +34,12 @@ export type SessionHeaderProps = {
    */
   readonly onWindowChoiceChange: (choice: WindowChoice) => void;
   /**
-   * Closes every open Session and returns to the drop zone.
+   * Closes this Session — and only this one. With several Sessions open the
+   * File menu still shows the rest; the drop zone only comes back once none
+   * are left. Closing every Session at once is "Close all sessions" in the
+   * File menu, a separate, explicit action.
    */
-  readonly onClear: () => void;
+  readonly onClose: () => void;
 };
 
 const windowChoiceLabel = (choice: WindowChoice): string =>
@@ -52,7 +55,7 @@ export const SessionHeader = ({
   windowSize,
   windowChoice,
   onWindowChoiceChange,
-  onClear,
+  onClose,
 }: SessionHeaderProps) => (
   <section
     aria-label="Session"
@@ -115,10 +118,11 @@ export const SessionHeader = ({
       </div>
       <button
         type="button"
-        onClick={onClear}
+        onClick={onClose}
+        title="Close this Session"
         className="rounded px-2 py-0.5 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
       >
-        clear
+        close
       </button>
     </div>
   </section>

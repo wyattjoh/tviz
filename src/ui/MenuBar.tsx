@@ -196,18 +196,30 @@ const FileMenu = ({
           </span>
         )}
       </button>
+      {/* The badges above are `aria-hidden` and only ever visible once the
+          menu is open, so this always-mounted live region is what tells a
+          screen-reader user a folder drop is still parsing or that files
+          failed — independent of whether the menu happens to be open. */}
+      <span aria-live="polite" className="sr-only">
+        {pending.length === 0
+          ? ""
+          : `parsing ${pending.length} file${pending.length === 1 ? "" : "s"}…`}
+        {errors.length === 0
+          ? ""
+          : ` ${errors.length} file${errors.length === 1 ? "" : "s"} failed to parse.`}
+      </span>
       {!open ? null : (
         <div className="absolute top-full left-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
           <PickerMenuItem
             label="Open files…"
-            hint="⌘O"
+            hint={undefined}
             directory={false}
             onFiles={onFiles}
             onPicked={close}
           />
           <PickerMenuItem
             label="Open folder…"
-            hint="⇧⌘O"
+            hint={undefined}
             directory={true}
             onFiles={onFiles}
             onPicked={close}
@@ -245,7 +257,7 @@ const FileMenu = ({
                 Failed
               </div>
               {errors.map((entry) => (
-                <div key={entry.path} role="alert" className="px-3 py-1.5 text-xs text-ui-danger">
+                <div key={entry.id} role="alert" className="px-3 py-1.5 text-xs text-ui-danger">
                   {entry.fileName}
                 </div>
               ))}
@@ -254,7 +266,7 @@ const FileMenu = ({
           <div className="my-1 border-t border-ui-border" />
           <MenuItem
             label="Close all sessions"
-            hint="⌘W"
+            hint={undefined}
             checked={undefined}
             disabled={sessions.length === 0}
             onClick={
