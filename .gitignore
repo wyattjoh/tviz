@@ -25,3 +25,6 @@ dist-ssr
 
 # Agent scratch space / local issue tracker
 .scratch/
+
+# Alchemy local state
+.alchemy/
