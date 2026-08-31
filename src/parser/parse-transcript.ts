@@ -447,6 +447,9 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
         measuredTotal,
         byCategory: { ...cumulativeByCategory },
         byKind: { ...cumulativeByKind },
+        // Only this call's items. The cumulative sequence the grid needs is
+        // `cumulativeItems(calls, index)`: storing a copy per call would make
+        // the Session quadratic in size and in postMessage cost.
         added,
         reset: isReset,
       });

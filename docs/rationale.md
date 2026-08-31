@@ -83,8 +83,11 @@ same code path as a dropped file (ADR-0002).
 the picture Claude Code users already have in their heads from `/context`, and because cells
 are a fixed number of tokens, two sessions and two points in time are directly comparable by
 eye. Filtering hides cells in place rather than re-flowing the grid, so toggling a category
-doesn't silently rescale everything you were comparing against (ADR-0006). Familiarity and
-comparability beat density here.
+doesn't silently rescale everything you were comparing against (ADR-0006). Cells are also
+append-only rather than grouped by Category, so stepping the Scrubber through a Session reads
+as growth at the frontier instead of a re-flow on every call. The cost is that Category
+colours interleave and proportions are read from the legend — but a lone green cell in a
+field of blue is a skill that loaded mid-session, which the grouped layout threw away.
 
 **Effect v4 for the parser only.** `Schema` gives lenient decoding of a format with ~20
 record types where unknown types must be skipped and counted rather than throw, and

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   CATEGORY_ORDER,
+  type ContextItem,
   type ContextSnapshot,
+  cumulativeItems,
   MESSAGE_KIND_ORDER,
   type Session,
 } from "../domain/context.ts";
@@ -26,6 +28,12 @@ const kindTotal = (snapshot: ContextSnapshot): number =>
 
 const labels = (snapshot: ContextSnapshot): readonly string[] =>
   snapshot.added.map((item) => item.label);
+
+const itemsOf = (session: Session, index: number): readonly ContextItem[] =>
+  cumulativeItems(session.calls, index);
+
+const itemTotal = (session: Session, index: number): number =>
+  itemsOf(session, index).reduce((sum, item) => sum + item.tokens, 0);
 
 beforeEach(() => {
   Fixture.resetFixtureSequence();
@@ -213,6 +221,111 @@ describe("parseTranscript", () => {
     if (outcome.ok) return;
     expect(outcome.reason).toBe("notATranscript");
     expect(outcome.message).toContain("notes.jsonl");
+  });
+
+  describe("Context Snapshot items", () => {
+    it("carries every item in the window, in the order it entered, summing to the measured total", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.nestedMemory(4_000),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+      ]);
+
+      const first = session.calls[0] as ContextSnapshot;
+      expect(itemsOf(session, 0).map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "memoryFiles",
+        "messages",
+      ]);
+      expect(itemTotal(session, 0)).toBe(first.measuredTotal);
+    });
+
+    it("extends the previous API Call's items rather than re-ordering them", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(20_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 55_000 } }),
+        // A Skill loading mid-Session appends; it does not jump ahead of the
+        // Messages already in the window (ADR-0006).
+        Fixture.skillListing(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 62_000 } }),
+      ]);
+
+      let previous: readonly ContextItem[] = [];
+      for (const call of session.calls) {
+        expect(call.reset).toBe(false);
+        const items = itemsOf(session, call.index);
+        expect(items.slice(0, previous.length)).toEqual(previous);
+        expect(itemTotal(session, call.index)).toBe(call.measuredTotal);
+        previous = items;
+      }
+
+      expect(itemsOf(session, session.calls.length - 1).map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "messages",
+        "skills",
+      ]);
+    });
+
+    it("replaces the items on a compaction, keeping System at the front", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(120_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 90_000 } }),
+        Fixture.compactSummary(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 45_000 } }),
+      ]);
+
+      const compacted = session.calls[2] as ContextSnapshot;
+      expect(compacted.reset).toBe(true);
+      expect(itemsOf(session, 2).length).toBeLessThan(itemsOf(session, 1).length);
+      expect(itemsOf(session, 2).map((entry) => entry.category)).toEqual(["system", "messages"]);
+      expect(itemTotal(session, 2)).toBe(compacted.measuredTotal);
+    });
+
+    it("leaves out an item scaling left with no tokens", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        // Too small to win a token once the delta is split.
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 12_000 } }),
+        Fixture.userMessage(400_000),
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 12_002 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.some((entry) => entry.tokens === 0)).toBe(true);
+      expect(itemsOf(session, 1).every((entry) => entry.tokens > 0)).toBe(true);
+      expect(itemTotal(session, 1)).toBe(second.measuredTotal);
+    });
+
+    it("keeps a Session linear in the number of API Calls", () => {
+      // A cumulative copy of the items on every Context Snapshot is quadratic:
+      // it is what makes a 13 MB transcript freeze the tab when the Worker
+      // structured-clones the Session back to the page. Four times the API
+      // Calls must not cost anywhere near sixteen times the Session.
+      const sessionOf = (callCount: number): Session =>
+        parseSession(
+          Array.from({ length: callCount }, (_unused, call) => [
+            Fixture.userMessage(400),
+            Fixture.assistantMessage({
+              id: `m${call}`,
+              usage: { cacheRead: 10_000 + call * 100 },
+            }),
+          ]).flat(),
+        );
+
+      const small = JSON.stringify(sessionOf(50)).length;
+      const large = JSON.stringify(sessionOf(200)).length;
+
+      expect(large).toBeLessThan(small * 6);
+    });
   });
 
   describe("Context Window inference", () => {
