@@ -102,6 +102,25 @@ function skillListingRecord(): Record<string, unknown> {
   };
 }
 
+/**
+ * A Record shaped like the `hook_result` attachment Claude Code writes when a
+ * configured hook runs. `hookEvent` is a closed protocol enum; `hookName` is
+ * whatever the developer called the hook in their settings, so it is free text.
+ */
+function hookRecord(): Record<string, unknown> {
+  return {
+    type: "attachment",
+    uuid: "99998888-7777-6666-8555-444433332222",
+    timestamp: "2026-08-30T12:36:00.000Z",
+    attachment: {
+      type: "hook_result",
+      hookEvent: "PostToolUse",
+      hookName: "ZebracornFormatOnSave",
+      hookCount: 1,
+    },
+  };
+}
+
 type Pair = { path: string; before: unknown; after: unknown };
 
 /**
@@ -297,6 +316,61 @@ describe("anonymizeRecord", () => {
       expect(name.length).toBe(before[index]?.length);
     });
     expect(at(output, ["attachment", "type"])).toBe("skill_listing");
+  });
+
+  it("replaces a hook name while keeping the hook event", () => {
+    const input = hookRecord();
+    const output = anonymizeRecord(input, DEFAULT_SEED);
+
+    const before = at(input, ["attachment", "hookName"]) as string;
+    const after = at(output, ["attachment", "hookName"]) as string;
+    expect(after).not.toBe(before);
+    expect(after.length).toBe(before.length);
+    expect(after.toLowerCase()).not.toContain("zebracorn");
+    // The event is a closed protocol enum, so it stays readable.
+    expect(at(output, ["attachment", "hookEvent"])).toBe("PostToolUse");
+  });
+
+  it("strips the server and tool out of an MCP tool name, keeping its shape", () => {
+    const input = {
+      type: "tool_use",
+      id: "toolu_01Quokkaphone",
+      name: "mcp__zebracorn__create_issue",
+      input: {},
+    };
+    const output = anonymizeRecord(input, DEFAULT_SEED) as Record<string, unknown>;
+    const after = output["name"] as string;
+
+    // The `mcp__` prefix is public Claude Code vocabulary, and the UI reads a
+    // tool name to label an MCP row, so the shape is worth keeping.
+    expect(after.startsWith("mcp__")).toBe(true);
+    expect(after.split("__")).toHaveLength(3);
+    // The server and tool segments are the developer's own configuration.
+    expect(after.toLowerCase()).not.toContain("zebracorn");
+    expect(after.toLowerCase()).not.toContain("create_issue");
+    // Length drives the token estimate downstream.
+    expect(after.length).toBe(input.name.length);
+  });
+
+  it("replaces a tool name the developer chose, and keeps a built-in one", () => {
+    const input = {
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "tool_use", id: "toolu_01A", name: "ZebracornDeploy", input: {} },
+          { type: "tool_use", id: "toolu_01B", name: "Bash", input: {} },
+        ],
+      },
+    };
+    const output = anonymizeRecord(input, DEFAULT_SEED);
+
+    // A Skill, sub-agent or plugin tool is named by the developer.
+    const custom = at(output, ["message", "content", 0, "name"]) as string;
+    expect(custom).not.toBe("ZebracornDeploy");
+    expect(custom.length).toBe("ZebracornDeploy".length);
+    // A built-in is identical for every user, and the UI labels rows with it.
+    expect(at(output, ["message", "content", 1, "name"])).toBe("Bash");
   });
 
   it("lets no free-text token survive", () => {

@@ -127,6 +127,12 @@ const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
  * value is kept verbatim only when it is also enum-shaped (`isEnumLike`): the
  * key name alone is not a promise that the value is an enum, and free text
  * stored under `status` or `level` must not survive.
+ *
+ * `hookEvent` is here but `hookName` deliberately is not: the event is a closed
+ * protocol vocabulary (`PreToolUse`, `PostToolUse`, …), while the name is
+ * whatever the developer typed in their settings. Surveying the corpus found 6
+ * distinct events against 62 distinct names, most of them longer than twenty
+ * characters — a per-user vocabulary, so it is free text.
  */
 const ENUM_KEYS: ReadonlySet<string> = new Set([
   "type",
@@ -154,7 +160,6 @@ const ENUM_KEYS: ReadonlySet<string> = new Set([
   "inference_geo",
   "speed",
   "hookEvent",
-  "hookName",
   "trigger",
 ]);
 
@@ -193,6 +198,50 @@ const TOOL_BLOCK_TYPES: ReadonlySet<string> = new Set([
   "mcp_tool_use",
   "mcp_tool_result",
 ]);
+
+/**
+ * Built-in Claude Code tool names, which are public vocabulary: they are the
+ * same for every user, so they carry nothing private, and keeping them is what
+ * lets a Demo Session's inspector read `tool_result Bash` instead of salad.
+ *
+ * This is an allow-list, so it fails closed. A tool added by a newer Claude
+ * Code, an MCP server, a Skill or a plugin is not on it and is replaced; the
+ * cost of the list going stale is a less readable Demo Session, never a leak.
+ */
+const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Agent",
+  "AskUserQuestion",
+  "Bash",
+  "BashOutput",
+  "Edit",
+  "ExitPlanMode",
+  "EnterPlanMode",
+  "Glob",
+  "Grep",
+  "KillBash",
+  "KillShell",
+  "LS",
+  "ListMcpResourcesTool",
+  "MultiEdit",
+  "NotebookEdit",
+  "NotebookRead",
+  "Read",
+  "ReadMcpResourceTool",
+  "Skill",
+  "SlashCommand",
+  "Task",
+  "TodoRead",
+  "TodoWrite",
+  "WebFetch",
+  "WebSearch",
+  "Write",
+]);
+
+/**
+ * An MCP tool name: the public `mcp__` prefix followed by the server name and
+ * the tool name, both of which come from the developer's own configuration.
+ */
+const MCP_TOOL_NAME = /^mcp__.+$/;
 
 /**
  * File extensions kept on the last segment of a fake path.
@@ -341,7 +390,7 @@ function isEnumLike(value: string, key: string): boolean {
 /**
  * How a string value is replaced.
  */
-type StringKind = "keep" | "text" | "path" | "filler" | "id";
+type StringKind = "keep" | "text" | "path" | "filler" | "id" | "mcpTool";
 
 /**
  * FNV-1a, used only to turn (seed, value) into a random stream. Not a security
@@ -474,6 +523,21 @@ function fakePath(value: string, random: () => number): string {
   return scheme + replaced.join("/");
 }
 
+/**
+ * A fake MCP tool name of exactly the same length: the public `mcp__` prefix
+ * and the `__` separators stay, every other segment becomes salad. The UI reads
+ * a tool name to label a row, so an MCP call still reads as one.
+ *
+ * `salad` never emits two separators in a row, so a replaced segment cannot
+ * grow a `__` of its own and change how the name splits.
+ */
+function fakeMcpToolName(value: string, random: () => number): string {
+  const segments = value.split("__");
+  return segments
+    .map((segment, index) => (index === 0 ? segment : salad(segment.length, "_", random)))
+    .join("__");
+}
+
 function isIdKey(key: string): boolean {
   const lower = key.toLowerCase();
   return (
@@ -497,11 +561,14 @@ function classify(
   if (key === undefined) return "text";
   // Opaque blobs: base64 image data and thinking signatures.
   if (key === "data" || key === "signature") return "filler";
-  // Tool names are built-in or MCP identifiers; a `name` anywhere else (skills,
-  // agents, MCP servers) can be private.
+  // A `name` is only ever safe on a tool block, and even there only when it is
+  // a built-in: an MCP name embeds the server the developer configured, and a
+  // Skill, sub-agent or plugin tool is named by the developer outright.
   if (key === "name") {
-    const isToolName = TOOL_BLOCK_TYPES.has(String(parent?.["type"] ?? ""));
-    return isToolName && isEnumLike(value, key) ? "keep" : "text";
+    if (!TOOL_BLOCK_TYPES.has(String(parent?.["type"] ?? ""))) return "text";
+    if (BUILTIN_TOOL_NAMES.has(value)) return "keep";
+    if (MCP_TOOL_NAME.test(value)) return "mcpTool";
+    return "text";
   }
   if (ENUM_KEYS.has(key)) return isEnumLike(value, key) ? "keep" : "text";
   if (isIdKey(key)) return "id";
@@ -522,6 +589,7 @@ function anonymizeString(
     .split("\n")
     .map((segment) => {
       if (kind === "id") return fakeId(segment, random);
+      if (kind === "mcpTool") return fakeMcpToolName(segment, random);
       if (kind === "path") return fakePath(segment, random);
       if (kind === "filler") return filler(segment.length, random);
       return salad(segment.length, " ", random);
