@@ -16,15 +16,17 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 - **No real transcript content in the repo, fixtures, tests, or demo data.** Real transcripts contain PII. Fixtures and `public/demo/*.jsonl` come only from `scripts/anonymize.ts` (structure-preserving, all free text replaced) or hand-written synthetic generators. Review anonymizer output before committing it.
 - **Never read real transcript files directly** (they're 0.5–13 MB). Write a Bun script under `.scratch/analysis/` that prints key paths, types, and counts — never string content. Existing survey scripts: `schema.ts`, `attachments.ts`, `derive.ts`, `turns.ts`.
 - The user's transcripts live at `~/.claude/projects/-Users-wyatt-johnson-Code-github-com-wyattjoh-agent-toolkit/` (101 sessions, CC 2.1.140–2.1.251). Use them only through analysis scripts.
+- **Never print deploy state or the CI token into a transcript.** Alchemy's state encoder unwraps `Redacted` and writes the **plaintext** value to disk (`State/StateEncoding.ts`), so `.alchemy/state/tviz-ci/*/DeployToken.json` holds a live Cloudflare API token. It is gitignored, but `cat`, `alchemy state get`, and `alchemy state export` on the `tviz-ci` stack would paste it into the session log — and this project's transcripts are a deliverable. Never run **`alchemy cloudflare create-token`**: it `Console.log`s the raw token to stdout by design. Mint tokens only through `stacks/github.ts`, which keeps the value `Redacted` end-to-end.
 
 ## Stack
 
 - Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha (`catppuccin-interfaces` skill for tokens/contrast).
 - **Effect v4 beta** (`effect@4.0.0-beta.107`, npm `beta` dist-tag) for the parser only: `Schema` for lenient JSONL record decoding and `Effect.gen`/`Effect.fn` for the parse→aggregate pipeline. No Layers/Services. The parser returns plain data (POD) to React. Use the `effect-ts-beta` skill; it requires the pinned source clone at `~/.claude/skills/effect-ts-beta/.source/` (see the skill's Prerequisites Check).
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
-- Deployment: **Alchemy** pinned to `alchemy@2.0.0-beta.72` in `alchemy.run.ts` → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, `Alchemy.localState()` with `.alchemy/` gitignored. Stage `prod` pins the Worker name to `tviz`; other stages use derived names. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts). `alchemy plan` is read-only and takes no `--yes`.
+- Deployment: **Alchemy** pinned to `alchemy@2.0.0-beta.72` in `alchemy.run.ts` → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, state in `Cloudflare.state()` so the laptop and CI share one state store (ADR-0005). Stage `prod` pins the Worker name to `tviz`; other stages use derived names. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts). `alchemy plan` is read-only and takes no `--yes`.
   - **Why beta.72, not latest:** alchemy ≥ beta.73 requires `effect >=4.0.0-rc.112`; this project pins `effect@4.0.0-beta.107` (the `effect-ts-beta` skill's source clone matches that tag). beta.72 is the newest alchemy whose `effect` peer accepts beta.107. `@effect/platform-{bun,node}` are pinned to the same beta.107. `bun install` warns about `@effect/sql-d1`/`sql-sqlite-do`/`@effect/vitest` resolving to rc.112 — those are alchemy's D1/DO-state deps, unused here. Bumping alchemy means bumping Effect (and the skill clone) together.
 - Tests: **Vitest** (`*.test.ts` beside source), synthetic fixtures under `src/fixtures/`.
+- CI: `.github/workflows/deploy.yml` runs lint → format:check → test → `alchemy deploy --stage prod` on pushes to `main` (plus `workflow_dispatch`). It reads `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`, which are provisioned by `stacks/github.ts` — a one-shot bootstrap stack run from a laptop with `bun run bootstrap:ci` (`--profile admin`, needs a Global API Key). Re-run it to rotate the token or change its scopes; never paste credentials into the GitHub UI. `.alchemy/` stays gitignored: only the bootstrap stack uses local state.
 - Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
 
 ## Commands
@@ -39,6 +41,8 @@ bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
 bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
 bun alchemy deploy --yes --stage prod       # public URL: Worker named `tviz`
+bun alchemy cloudflare bootstrap            # one-time: the shared state store
+bun run bootstrap:ci                        # one-time/rotate: CI token → GitHub secrets
 ```
 
 ## Planned layout
@@ -49,6 +53,7 @@ src/worker/      Web Worker entry wrapping the parser
 src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber
 src/fixtures/    synthetic JSONL fixtures for tests
 scripts/         anonymize.ts (structure-preserving anonymizer), any generators
+stacks/          github.ts — bootstrap stack minting the CI token + GitHub secrets
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/adr/        decisions; docs/rationale.md; write-up
 ```

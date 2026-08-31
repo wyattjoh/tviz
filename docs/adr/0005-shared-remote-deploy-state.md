@@ -1,0 +1,15 @@
+---
+status: accepted
+---
+
+# Deploy state lives in the Cloudflare state store, and CI's credential is minted by a bootstrap stack
+
+The app stack originally used `Alchemy.localState()`, which keeps resource state in a gitignored `.alchemy/` directory. That is fine while one laptop is the only deployer, but a GitHub Actions runner starts with empty state: it would not find the existing `tviz` Worker in its own state, would need `--adopt` on every run, and the laptop's copy of `prod` state would drift from what CI actually deployed. `alchemy.run.ts` therefore uses `Cloudflare.state()` — a Worker plus Secrets Store on the account, bootstrapped once with `bun alchemy cloudflare bootstrap` — so laptop and CI read and write the same state. Committing `.alchemy/state/` to Git was rejected: state in the repo means merge conflicts on every concurrent deploy.
+
+The credential CI deploys with is created by a second stack, `stacks/github.ts`, rather than pasted into the GitHub UI. It mints a `Cloudflare.ApiToken.AccountApiToken` scoped to four permission groups and writes it into the repo with `GitHub.Secret`. Cloudflare returns a token's value only once, so this is also the only way to get it into GitHub without it passing through a terminal or a clipboard; rotating the credential is a re-run of one command. The stack keeps `Alchemy.localState()` because it only ever runs from a developer machine, and it needs an elevated profile (`--profile admin`, a Global API Key) since creating tokens requires `API Tokens > Write` — a permission the everyday deploy credential deliberately lacks.
+
+The token stays `Redacted` from the Cloudflare API response through to `GitHub.Secret`, so it never reaches stdout: `Redacted`'s `toString`/`toJSON` render `<redacted>`, and Alchemy's plan renderer treats it as an opaque leaf rather than descending into it. The stack deliberately returns only `tokenId` and `tokenName`, never `value`. Note the asymmetry, though — the _state encoder_ does unwrap it, so the on-disk state file under `.alchemy/state/tviz-ci/` contains the plaintext token. That directory is gitignored, but it means reading state back is a credential disclosure; see the hard rule in `CLAUDE.md`.
+
+Switching stores does not migrate the app stack's existing state: `alchemy cloudflare bootstrap` hoists only the state-store's own local stack, so the remote store starts with no record of the already-deployed `tviz` Worker. The first deploy after the switch is a one-time `bun alchemy deploy --stage prod --adopt --yes` from a laptop. `--adopt` is deliberately kept out of the workflow — adopting on every CI run would silently paper over drift instead of surfacing it.
+
+`Secrets Store Write` is in the CI token's policy for a non-obvious reason: `Cloudflare.state()` stores its bearer token in the account-wide Secrets Store, and reading it back on a fresh runner mounts the secret on an ephemeral edge-preview Worker. Binding a secret requires Write, not Read. Dropping it to `Secrets Store Read` makes every CI deploy fail at state-store init.

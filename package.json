@@ -10,7 +10,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bootstrap:ci": "alchemy deploy stacks/github.ts --profile admin --yes"
   },
   "dependencies": {
     "effect": "^4.0.0-beta.107",

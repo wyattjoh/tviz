@@ -13,11 +13,14 @@ import * as Effect from "effect/Effect";
  * Stage `prod` pins the Worker name to `tviz` for a stable public URL; every
  * other stage (default `dev_$USER`) gets Alchemy's derived name.
  *
- * State lives in `.alchemy/` (gitignored). Deploy with `bun alchemy deploy --yes`.
+ * State lives in the Cloudflare-hosted state store so the laptop and GitHub
+ * Actions deploy against the same state instead of each other's shadow — see
+ * ADR-0005. Bootstrap it once per account with `bun alchemy cloudflare
+ * bootstrap`. Deploy with `bun alchemy deploy --yes`.
  */
 export default Alchemy.Stack(
   "tviz",
-  { providers: Cloudflare.providers(), state: Alchemy.localState() },
+  { providers: Cloudflare.providers(), state: Cloudflare.state() },
   Effect.gen(function* () {
     const stack = yield* Stack;
 
