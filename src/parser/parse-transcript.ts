@@ -2,7 +2,7 @@
  * Turns a JSONL transcript into a {@link Session} of Context Snapshots.
  *
  * Effect is used here and nowhere else (ADR-0004): `Schema` decodes Records
- * leniently, `Schema.TaggedError` types the two ways a file can fail, and
+ * leniently, `Schema.TaggedError` types the ways a file can yield no Session, and
  * `Effect.fn` composes decode → aggregate → Session. Decoding and aggregation
  * are themselves pure, so they stay plain functions. The result handed back
  * across the Worker boundary is plain data.
