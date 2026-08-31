@@ -38,10 +38,21 @@ export const CATEGORY_LABELS: Readonly<Record<Category, string>> = {
 };
 
 /**
- * Why the System Category cannot be broken down (ADR-0001).
+ * What each Category counts, in one sentence — the copy the legend reveals when
+ * a row is hovered or focused. System's says why it cannot be broken down
+ * (ADR-0001); the rest name the Records the parser buckets there.
  */
-export const SYSTEM_CATEGORY_HINT =
-  "system prompt + built-in tools + root CLAUDE.md (not logged; derived)";
+export const CATEGORY_DESCRIPTIONS: Readonly<Record<Category, string>> = {
+  system:
+    "The system prompt, built-in tool schemas and root CLAUDE.md — never logged, so this is the derived remainder.",
+  customAgents: "The listing of subagent types this Session can spawn, and what each one is for.",
+  memoryFiles:
+    "CLAUDE.md and other memory files read in from the project tree and your home directory.",
+  skills: "The listing of available skills — each one's name and description, not its body.",
+  mcp: "Instructions from connected MCP servers, and the deferred tool listings that come with them.",
+  messages:
+    "The conversation itself: your prompts, the assistant's replies, tool results and injected reminders.",
+};
 
 /**
  * A sub-division of the Messages Category.
@@ -67,6 +78,24 @@ export const MESSAGE_KIND_LABELS: Readonly<Record<MessageKind, string>> = {
   toolResult: "Tool result",
   reminder: "Reminder",
 };
+
+/**
+ * What each Message Kind counts, in the same voice as {@link CATEGORY_DESCRIPTIONS}.
+ */
+export const MESSAGE_KIND_DESCRIPTIONS: Readonly<Record<MessageKind, string>> = {
+  user: "Prompts you typed, plus any images pasted or dropped into the conversation.",
+  assistant:
+    "What the model wrote back, including its tool calls; thinking is not re-sent and never counted.",
+  toolResult: "What tools returned to the model — the file reads, searches and command output.",
+  reminder: "The <system-reminder> blocks the harness injects around your turns.",
+};
+
+/**
+ * Free space is not a Category, but the legend's last row still describes
+ * itself when hovered.
+ */
+export const FREE_SPACE_DESCRIPTION =
+  "Headroom left in the Context Window: Cells nothing has reached yet.";
 
 /**
  * Token totals for every Category. Always structurally complete so callers can

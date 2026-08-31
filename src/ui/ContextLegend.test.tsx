@@ -3,9 +3,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type Category,
+  CATEGORY_DESCRIPTIONS,
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   type ContextSnapshot,
+  FREE_SPACE_DESCRIPTION,
+  MESSAGE_KIND_DESCRIPTIONS,
   MESSAGE_KIND_LABELS,
   MESSAGE_KIND_ORDER,
   type MessageKind,
@@ -51,6 +54,12 @@ const renderLegend = (
 
 const row = (name: RegExp): HTMLElement => screen.getByRole("button", { name });
 
+/**
+ * The row around a button — where the pointer handlers live, so that a
+ * disabled row still describes itself.
+ */
+const rowItem = (name: RegExp): HTMLElement => row(name).closest("li") as HTMLElement;
+
 afterEach(cleanup);
 
 describe("ContextLegend", () => {
@@ -78,10 +87,86 @@ describe("ContextLegend", () => {
     expect(row(/^Messages/).textContent).toContain("18.0k");
   });
 
-  it("explains that System is derived rather than logged", () => {
+  it("explains that System is derived rather than logged, but only on hover", () => {
     render(renderLegend());
-    expect(screen.getByText(/system prompt \+ built-in tools \+ root CLAUDE\.md/)).toBeDefined();
-    expect(screen.getByText(/not logged; derived/)).toBeDefined();
+    // Nothing is described until a row is pointed at: the rail is a column of
+    // numbers, and six standing descriptions is what pushed them off-screen.
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    fireEvent.mouseOver(rowItem(/^System/));
+
+    expect(screen.getByRole("tooltip").textContent).toContain(
+      "system prompt, built-in tool schemas and root CLAUDE.md",
+    );
+    expect(screen.getByRole("tooltip").textContent).toContain("derived remainder");
+
+    fireEvent.mouseOut(rowItem(/^System/));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("describes every other Category, Message Kind and free space too", () => {
+    render(renderLegend());
+
+    for (const category of CATEGORY_ORDER) {
+      fireEvent.mouseOver(rowItem(new RegExp(`^${CATEGORY_LABELS[category]}`)));
+      expect
+        .soft(screen.getByRole("tooltip").textContent)
+        .toContain(CATEGORY_DESCRIPTIONS[category]);
+    }
+    for (const kind of MESSAGE_KIND_ORDER) {
+      fireEvent.mouseOver(rowItem(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)));
+      expect
+        .soft(screen.getByRole("tooltip").textContent)
+        .toContain(MESSAGE_KIND_DESCRIPTIONS[kind]);
+    }
+
+    const freeRow = screen.getByText("Free space").closest("li") as HTMLElement;
+    fireEvent.mouseOver(freeRow);
+    expect(screen.getByRole("tooltip").textContent).toContain(FREE_SPACE_DESCRIPTION);
+  });
+
+  it("describes a row on keyboard focus, and points the row at what describes it", () => {
+    render(renderLegend());
+
+    fireEvent.focus(row(/^Skills/));
+
+    const card = screen.getByRole("tooltip");
+    expect(card.textContent).toContain(CATEGORY_DESCRIPTIONS.skills);
+    // The card is the row's description rather than a floating aside, so a
+    // screen reader reads it with the row instead of never reaching it.
+    expect(row(/^Skills/).getAttribute("aria-describedby")).toBe(card.getAttribute("id"));
+
+    fireEvent.blur(row(/^Skills/));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("describes only one row at a time, keeping the row the pointer moved onto", () => {
+    render(renderLegend());
+
+    fireEvent.mouseOver(rowItem(/^Skills/));
+    fireEvent.mouseOver(rowItem(/^MCP/));
+    // The pointer enters the next row before it leaves the last, so a stale
+    // leave must not blank the card that just opened.
+    fireEvent.mouseOut(rowItem(/^Skills/));
+
+    const cards = screen.getAllByRole("tooltip");
+    expect(cards.length).toBe(1);
+    expect(cards[0]?.textContent).toContain(CATEGORY_DESCRIPTIONS.mcp);
+  });
+
+  it("still says what a Message Kind counts while its Category is hidden", () => {
+    render(renderLegend(toggleCategory(ALL_SHOWN, "messages")));
+
+    // The row's own button is disabled and fires no mouse events, so the card
+    // has to hang off the row rather than the control.
+    fireEvent.mouseOver(rowItem(/^Tool result/));
+
+    const card = screen.getByRole("tooltip");
+    expect(card.textContent).toContain(MESSAGE_KIND_DESCRIPTIONS.toolResult);
+    // And it is where the row explains why its toggle is inert, rather than a
+    // second native tooltip saying it.
+    expect(card.textContent).toContain("Messages is hidden");
+    expect(row(/^Tool result/).getAttribute("title")).toBeNull();
   });
 
   it("toggles a Category and a Message Kind from their rows", () => {

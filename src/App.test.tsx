@@ -506,10 +506,17 @@ describe("App", () => {
       expect(cellFill(skills)).toBe("bg-cat-skills");
     });
 
-    it("says System is derived rather than logged", async () => {
-      await open();
-      expect(screen.getByText(/system prompt \+ built-in tools \+ root CLAUDE\.md/)).toBeDefined();
-      expect(screen.getByText(/not logged; derived/)).toBeDefined();
+    it("says System is derived rather than logged, when its row is pointed at", async () => {
+      const rail = await open();
+      const systemRow = row(rail, /^System/).closest("li");
+      expect(systemRow).not.toBeNull();
+
+      fireEvent.mouseOver(systemRow as HTMLElement);
+
+      expect(screen.getByRole("tooltip").textContent).toContain(
+        "system prompt, built-in tool schemas and root CLAUDE.md",
+      );
+      expect(screen.getByRole("tooltip").textContent).toContain("derived remainder");
     });
   });
 
@@ -574,6 +581,34 @@ describe("App", () => {
       fireEvent.click(cellAt(skills));
       fireEvent.mouseLeave(contextGrid());
       expect(rail.textContent).toContain("Hover a Cell");
+    });
+
+    it("collapses a rail panel to its heading row, and opens it again", async () => {
+      const rail = await open();
+      const heading = (name: string): HTMLElement =>
+        screen.getByRole("button", { name: new RegExp(`^${name}$`, "i") });
+      expect(rail.textContent).toContain("Hover a Cell");
+
+      fireEvent.click(heading("Inspector"));
+
+      expect(heading("Inspector").getAttribute("aria-expanded")).toBe("false");
+      expect(rail.textContent).not.toContain("Hover a Cell");
+      // Only the panel that was clicked closes; the rest of the rail stands.
+      expect(rail.textContent).toContain("Free space");
+
+      fireEvent.click(heading("Inspector"));
+      expect(rail.textContent).toContain("Hover a Cell");
+    });
+
+    it("keeps a collapsed panel's setting reachable in its heading row", async () => {
+      await open();
+
+      fireEvent.click(screen.getByRole("button", { name: /^Context Window$/i }));
+
+      // What is in force must stay readable and changeable without reopening
+      // the panel, so the override's cog rides in the heading rather than the
+      // body it collapses with.
+      expect(screen.getByLabelText("Context Window override")).toBeDefined();
     });
   });
 
