@@ -25,7 +25,10 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
 - Deployment: **Alchemy** pinned to `alchemy@2.0.0-beta.72` in `alchemy.run.ts` → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, state in `Cloudflare.state()` so the laptop and CI share one state store (ADR-0005). Stage `prod` pins the Worker name to `tviz`; other stages use derived names. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts). `alchemy plan` is read-only and takes no `--yes`.
   - **Why beta.72, not latest:** alchemy ≥ beta.73 requires `effect >=4.0.0-rc.112`; this project pins `effect@4.0.0-beta.107` (the `effect-ts-beta` skill's source clone matches that tag). beta.72 is the newest alchemy whose `effect` peer accepts beta.107. `@effect/platform-{bun,node}` are pinned to the same beta.107. `bun install` warns about `@effect/sql-d1`/`sql-sqlite-do`/`@effect/vitest` resolving to rc.112 — those are alchemy's D1/DO-state deps, unused here. Bumping alchemy means bumping Effect (and the skill clone) together.
-- Tests: **Vitest** (`*.test.ts` beside source), synthetic fixtures under `src/fixtures/`.
+- Tests: **Vitest** (`*.test.ts` / `*.test.tsx` beside source), synthetic fixtures under `src/fixtures/`.
+  Parser and pure-logic tests run in the default Node environment; component tests opt into jsdom
+  with a `// @vitest-environment jsdom` docblock and use `@testing-library/react`. Shared DOM
+  stand-ins (`FileList`, transcript `File`) live in `src/ui/test-dom.ts`.
 - CI: `.github/workflows/deploy.yml` runs lint → format:check → test → `alchemy deploy --stage prod` on pushes to `main` (plus `workflow_dispatch`). It reads `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`, which are provisioned by `stacks/github.ts` — a one-shot bootstrap stack run from a laptop with `bun run bootstrap:ci` (`--profile admin`, needs a Global API Key). Re-run it to rotate the token or change its scopes; never paste credentials into the GitHub UI. `.alchemy/` stays gitignored: only the bootstrap stack uses local state.
 - Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
 
@@ -34,9 +37,10 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 ```sh
 bun run dev            # vite dev server
 bun run build          # tsc -b && vite build
-bun run test           # vitest run (add when vitest is installed)
+bun run test           # vitest run
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
+bun run format:check   # oxfmt --check
 bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
 bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
@@ -45,18 +49,30 @@ bun alchemy cloudflare bootstrap            # one-time: the shared state store
 bun run bootstrap:ci                        # one-time/rotate: CI token → GitHub secrets
 ```
 
-## Planned layout
+## Layout
 
 ```
+src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
-src/worker/      Web Worker entry wrapping the parser
-src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber
-src/fixtures/    synthetic JSONL fixtures for tests
+src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
+src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber; grid layout, formatting, theme token maps
+src/fixtures/    synthetic JSONL fixture builders for tests
+src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
 scripts/         anonymize.ts (structure-preserving anonymizer), any generators
 stacks/          github.ts — bootstrap stack minting the CI token + GitHub secrets
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/adr/        decisions; docs/rationale.md; write-up
 ```
+
+Components never name a Catppuccin colour or a hex literal: they use the semantic
+Tailwind utilities (`bg-ui-canvas`, `text-ui-text-muted`, `bg-cat-skills`,
+`bg-kind-tool-result`, `bg-cell-free`, …) declared in `src/index.css`, mapped from
+domain values in `src/ui/theme.ts`. The `ctp-*` palette layer is for the semantic
+layer only.
+
+The main view follows the "Console" variant of the throwaway UI prototype
+(branch `wyattjoh/ui-prototype`): one centred monospace column on `ui-shell`, the
+grid as the page, the legend as an aligned text table.
 
 ## Transcript format — what the parser relies on
 
