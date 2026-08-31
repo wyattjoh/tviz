@@ -1,109 +1,107 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import "tailwindcss";
 
-  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
-  --heading: system-ui, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/*
+ * Two layers, per the catppuccin-interfaces skill.
+ *
+ * Layer 1 — palette adapter: the only place Catppuccin Mocha values appear.
+ *   Swapping this block swaps the flavour.
+ * Layer 2 — semantic tokens: the only colours components are allowed to name.
+ *   No component contains a hex literal or a `ctp-` utility.
+ */
+@theme {
+  /* --- Layer 1: Catppuccin Mocha palette adapter --- */
+  --color-ctp-crust: #11111b;
+  --color-ctp-mantle: #181825;
+  --color-ctp-base: #1e1e2e;
+  --color-ctp-surface0: #313244;
+  --color-ctp-surface1: #45475a;
+  --color-ctp-surface2: #585b70;
+  --color-ctp-overlay0: #6c7086;
+  --color-ctp-overlay1: #7f849c;
+  --color-ctp-overlay2: #9399b2;
+  --color-ctp-subtext0: #a6adc8;
+  --color-ctp-subtext1: #bac2de;
+  --color-ctp-text: #cdd6f4;
+  --color-ctp-lavender: #b4befe;
+  --color-ctp-blue: #89b4fa;
+  --color-ctp-sapphire: #74c7ec;
+  --color-ctp-sky: #89dceb;
+  --color-ctp-teal: #94e2d5;
+  --color-ctp-green: #a6e3a1;
+  --color-ctp-yellow: #f9e2af;
+  --color-ctp-peach: #fab387;
+  --color-ctp-maroon: #eba0ac;
+  --color-ctp-red: #f38ba8;
+  --color-ctp-mauve: #cba6f7;
+  --color-ctp-pink: #f5c2e7;
+  --color-ctp-flamingo: #f2cdcd;
+  --color-ctp-rosewater: #f5e0dc;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* --- Layer 2: neutral ramp and interface state --- */
+  --color-ui-canvas: var(--color-ctp-base);
+  --color-ui-sunken: var(--color-ctp-mantle);
+  --color-ui-shell: var(--color-ctp-crust);
+  --color-ui-panel: var(--color-ctp-surface0);
+  --color-ui-panel-hover: var(--color-ctp-surface1);
+  --color-ui-panel-active: var(--color-ctp-surface2);
+  --color-ui-border: var(--color-ctp-surface1);
+  --color-ui-border-strong: var(--color-ctp-overlay0);
+  --color-ui-text: var(--color-ctp-text);
+  --color-ui-text-secondary: var(--color-ctp-subtext1);
+  --color-ui-text-muted: var(--color-ctp-subtext0);
+  --color-ui-text-faint: var(--color-ctp-overlay1);
+  --color-ui-action: var(--color-ctp-blue);
+  --color-ui-focus: var(--color-ctp-lavender);
+  --color-ui-warning: var(--color-ctp-yellow);
+  --color-ui-danger: var(--color-ctp-red);
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  /* --- Layer 2: one accent per Category --- */
+  --color-cat-system: var(--color-ctp-mauve);
+  --color-cat-agents: var(--color-ctp-peach);
+  --color-cat-memory: var(--color-ctp-yellow);
+  --color-cat-skills: var(--color-ctp-green);
+  --color-cat-mcp: var(--color-ctp-sapphire);
+  --color-cat-messages: var(--color-ctp-blue);
+
+  /* --- Layer 2: one accent per Message Kind --- */
+  --color-kind-user: var(--color-ctp-blue);
+  --color-kind-assistant: var(--color-ctp-sky);
+  --color-kind-tool-result: var(--color-ctp-teal);
+  --color-kind-reminder: var(--color-ctp-flamingo);
+
+  /* --- Layer 2: Cell states --- */
+  --color-cell-free: var(--color-ctp-surface0);
+  --color-cell-hidden: var(--color-ctp-mantle);
+
+  --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
   }
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  html {
+    color-scheme: dark;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  body {
+    margin: 0;
+    background: var(--color-ui-shell);
+    color: var(--color-ui-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
-}
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  ::selection {
+    background: color-mix(in oklab, var(--color-ui-focus) 35%, transparent);
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+  *:focus-visible {
+    outline: 2px solid var(--color-ui-focus);
+    outline-offset: 2px;
   }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }

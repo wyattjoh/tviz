@@ -32,26 +32,39 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 ```sh
 bun run dev            # vite dev server
 bun run build          # tsc -b && vite build
-bun run test           # vitest run (add when vitest is installed)
+bun run test           # vitest run
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
+bun run format:check   # oxfmt --check
 bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
 bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
 bun alchemy deploy --yes --stage prod       # public URL: Worker named `tviz`
 ```
 
-## Planned layout
+## Layout
 
 ```
+src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
-src/worker/      Web Worker entry wrapping the parser
-src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber
-src/fixtures/    synthetic JSONL fixtures for tests
+src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
+src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber; grid layout, formatting, theme token maps
+src/fixtures/    synthetic JSONL fixture builders for tests
+src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
 scripts/         anonymize.ts (structure-preserving anonymizer), any generators
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/adr/        decisions; docs/rationale.md; write-up
 ```
+
+Components never name a Catppuccin colour or a hex literal: they use the semantic
+Tailwind utilities (`bg-ui-canvas`, `text-ui-text-muted`, `bg-cat-skills`,
+`bg-kind-tool-result`, `bg-cell-free`, …) declared in `src/index.css`, mapped from
+domain values in `src/ui/theme.ts`. The `ctp-*` palette layer is for the semantic
+layer only.
+
+The main view follows the "Console" variant of the throwaway UI prototype
+(branch `wyattjoh/ui-prototype`): one centred monospace column on `ui-shell`, the
+grid as the page, the legend as an aligned text table.
 
 ## Transcript format — what the parser relies on
 
