@@ -74,6 +74,5 @@ cardinality at a key path means free text is leaking there) and `shape-probe.ts`
 key paths and counts only; a key the Anonymizer renamed prints as `<renamed>`, because the
 input key is itself content.
 
-The corpus lives at
-`~/.claude/projects/-Users-wyatt-johnson-Code-github-com-wyattjoh-agent-toolkit/`
+The corpus lives under this author's own `~/.claude/projects/<encoded-project-path>/`
 (101 sessions, CC 2.1.140–2.1.251). Use it only through those scripts.
