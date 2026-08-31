@@ -142,10 +142,12 @@ describe("App", () => {
     const menuBar = screen.getByRole("banner", { name: "tviz" });
     expect(menuBar.contains(screen.getByRole("button", { name: "File" }))).toBe(true);
 
-    // 2 — Session strip: which Session, which API Call, how full.
+    // 2 — Session strip: which Session and which API Call. How full the window
+    // is moved to the rail, so the strip stays one line on a narrow window.
     const strip = screen.getByRole("region", { name: "Session" });
     expect(strip.contains(screen.getByText("session-a.jsonl"))).toBe(true);
-    expect(strip.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
+    expect(strip.contains(screen.getByRole("button", { name: "close" }))).toBe(true);
+    expect(strip.textContent).not.toContain("tokens");
 
     // 3 — grid pane on the flexible left, scrolling under its own column count.
     const grid = contextGrid();
@@ -158,6 +160,10 @@ describe("App", () => {
     const rail = screen.getByRole("complementary", { name: "Legend and Inspector" });
     expect(rail.contains(screen.getByText("Free space"))).toBe(true);
     expect(rail.contains(screen.getByText("Inspector"))).toBe(true);
+    // The fill meter and the Context Window override live under the legend,
+    // whose Free space line is the other half of the same number.
+    expect(rail.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
+    expect(rail.contains(screen.getByRole("group", { name: "Context Window" }))).toBe(true);
     expect(pane.parentElement?.className).toContain("grid-cols-[minmax(0,1fr)_340px]");
 
     // 5 — the Scrubber across the bottom.

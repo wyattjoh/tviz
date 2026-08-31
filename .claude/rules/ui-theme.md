@@ -36,10 +36,16 @@ The main view is the **Workbench** shell the throwaway UI prototype settled on (
 `wyattjoh/ui-prototype`; see its `src/prototype/README.md`), in four regions established
 once in `src/App.tsx`: a menu bar carrying the File menu, a Session strip
 (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the flexible left, fixed
-right rail holding the legend-filters and the docked Inspector — and the Scrubber across
-the bottom. The grid pane is the scroll container, and both of its dimensions drive
+right rail holding the legend-filters, the Context Window panel and the docked Inspector —
+and the Scrubber across the bottom. The grid pane is the scroll container, and both of its dimensions drive
 `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill it and hands back the column
 count. Fill a region; do not restructure the shell.
+
+The Session strip is identity plus one action — file name, id, model, CC version, call
+index, and `close`. It carries no controls: the fill meter and the Context Window override
+are `ContextWindowPanel` in the rail, under Categories, because a strip holding both
+wrapped onto two lines on a narrow window and took the height out of the grid. New
+per-Session state belongs in a rail panel, not back in the strip.
 
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and

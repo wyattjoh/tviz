@@ -52,7 +52,7 @@ Everything under `infra/` — the stacks, the CLI, `bootstrap:ci` — is in
 src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
 src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
-src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Inspector, Scrubber; grid layout, filters, formatting, theme token maps
+src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, ContextWindowPanel, Inspector, Scrubber; grid and Cell-fit layout, filters, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/demo/        Demo Session manifest type + decoder, and the loader that fetches them
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)

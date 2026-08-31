@@ -30,6 +30,7 @@ import {
 } from "./domain/context.ts";
 import { collectDataTransferEntries, type PathedFile } from "./ui/collect-files.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
+import { ContextWindowPanel } from "./ui/ContextWindowPanel.tsx";
 import { ContextLegend } from "./ui/ContextLegend.tsx";
 import { DropZone } from "./ui/DropZone.tsx";
 import {
@@ -39,7 +40,6 @@ import {
   toggleMessageKind,
   withColourByKind,
 } from "./ui/filters.ts";
-import { formatTokens } from "./ui/format.ts";
 import { buildCells } from "./ui/grid.ts";
 import { Inspector } from "./ui/Inspector.tsx";
 import { MenuBar, type MenuBarProps } from "./ui/MenuBar.tsx";
@@ -301,9 +301,6 @@ const LoadedSession = ({
       <SessionHeader
         session={session}
         snapshot={snapshot}
-        windowSize={windowSize}
-        windowChoice={windowChoice}
-        onWindowChoiceChange={onWindowChoiceChange}
         onClose={() => onCloseSession(session.id)}
       />
 
@@ -335,6 +332,20 @@ const LoadedSession = ({
             />
           </RailPanel>
 
+          {/* Fill level and the window override sit under the legend: the
+              legend's Free space line is the other half of the same number,
+              and the Session strip stayed one line on a narrow window once
+              they left it. */}
+          <RailPanel title="Context Window">
+            <ContextWindowPanel
+              measuredTotal={snapshot.measuredTotal}
+              windowSize={windowSize}
+              peak={peakMeasuredTotal(session.calls)}
+              windowChoice={windowChoice}
+              onWindowChoiceChange={onWindowChoiceChange}
+            />
+          </RailPanel>
+
           {/* The Inspector docks here rather than following the pointer as a
               tooltip; the panel holds its place until it is filled. */}
           <RailPanel title="Inspector">
@@ -346,12 +357,10 @@ const LoadedSession = ({
           </RailPanel>
 
           <RailPanel title="Transcript">
+            {/* The window and its peak moved up to the Context Window panel,
+                beside the control that sets them; what is left here is what the
+                parse itself found. */}
             <p className="text-[11px] leading-snug text-ui-text-faint">
-              window {formatTokens(windowSize)}{" "}
-              {windowChoice === "auto" ? "(inferred)" : "(override)"} · peak{" "}
-              {formatTokens(peakMeasuredTotal(session.calls))}
-            </p>
-            <p className="mt-1 text-[11px] leading-snug text-ui-text-faint">
               {session.recordCount} records · {session.malformedLines} malformed ·{" "}
               {unknownRecordCount(session)} unknown
             </p>
