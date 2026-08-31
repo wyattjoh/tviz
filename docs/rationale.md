@@ -1,206 +1,111 @@
 # tviz — design rationale
 
-## Theme and approach
+## Why this theme and approach
 
-Theme 1, Exploration & Understanding.
+Drop a finished Claude Code transcript into your browser and watch its context window
+fill up, call by call. tviz draws the same picture `/context` draws — a grid of fixed-size
+cells coloured by category — but for every API call in the session, so you can see the
+window fill, what a compaction cost, and which categories were fixed overhead versus which
+ones grew.
 
-I picked this theme because the thing I most wanted to understand was sitting on my own
-disk. A Claude Code session accretes context in a way that is hard to see while it happens:
-the system prompt and tool schemas arrive up front, skills and agent listings load on first
-use, memory files get pulled in lazily as directories are touched, and every tool result
-lands in the window and stays there. Each of those is invisible in the moment, and the sum
-of them is what decides when a session starts compacting. `/context` gives a single live
-snapshot; it can't show the creep, and it can't show it for a session that is already over.
-The transcript records enough to reconstruct it — that was the bet — and once reconstructed,
-the creep is obvious in a way no amount of reading the file could make it.
+I picked Theme 1, Exploration & Understanding, because the artifact I most wanted to
+understand was already on my disk. Context creeps in ways you can't see while it happens,
+and `/context` only shows a live snapshot of the session you are sitting in. Once a
+session ends, the transcript is all that's left, and nothing reads it.
 
-Claude Code transcripts are an unfamiliar artifact. A single session is a 0.5–13 MB JSONL
-file with around twenty record types, and the one question every user asks of it — "where
-did my context go?" — is only answerable _live_, via `/context`, for the session you are
-currently sitting in. Once a session ends, the transcript is the only thing left, and
-nothing reads it.
+Two constraints shaped everything: a reviewer had to use it with no install and no data
+of their own, and transcripts are private enough that sending them anywhere was never an
+option.
 
-tviz answers that question after the fact: drop a finished transcript in your browser and
-see where its context window went, call by call. It draws the same picture `/context`
-draws — a grid of fixed-token cells coloured by category — but for every API call in the
-session, so you can watch the window fill, see what a compaction cost, and see which
-categories were fixed overhead versus which ones grew.
+## What's non-obvious
 
-Two constraints shaped everything below: the prototype had to be usable by a reviewer with
-no local install and no data of their own, and transcripts are sensitive enough that
-sending them anywhere was never an option.
+**The breakdown `/context` shows is not in the transcript.** I surveyed my own sessions
+with scripts that print record shapes, never content, and the categories `/context`
+reports are simply not recorded. The system prompt, the built-in tool schemas and the root
+memory file are never logged. A naive tool either silently omits a large part of the
+window or invents a number for it.
 
-## What is non-obvious
+**But the totals are exact, and that is enough.** Every assistant record carries the true
+token count for its API call, and the parts that _are_ logged — skills, agents, MCP
+instructions, nested memory files — appear with their actual text. So the unlogged part is
+recoverable as a remainder: measured total, minus everything the transcript accounts for.
+The data can't split that remainder further, so tviz shows it as one **System** bucket and
+says so, rather than guessing a split that would look more precise than it is.
 
-**The `/context` breakdown is not in the transcript.** This is the finding the whole
-project turns on. I surveyed about 57,000 records across a hundred of my own sessions with
-throwaway analysis scripts, and the categories `/context` reports are simply not stored.
-The system prompt, the built-in tool schemas, and the root `CLAUDE.md` are never logged at
-all. A naive tool built on this data either silently omits roughly a third of the window
-or invents a number for it.
-
-**But two things are exact, and that's enough.** Every `assistant` record carries
-`message.usage`, and `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
-is the true total context for that API call. Separately, the parts that _are_ logged —
-skills, custom agents, MCP instructions, nested memory files — appear as attachment records
-containing their actual injected text. So the unlogged portion is recoverable as a
-remainder: measured total, minus everything the transcript accounts for. Across versions it
-comes out stable to within about a thousand tokens for a given Claude Code release.
-
-**That remainder is one bucket, not three.** The data cannot distinguish system prompt from
-tool schemas from root memory — they arrive as a single opaque difference. tviz shows them
-as one combined **System** category and says so in the UI, rather than splitting it on a
-heuristic that would look more precise than it is (ADR-0001).
-
-**Character-based estimates undercount code by 1.3–1.5×.** Per-item token sizes have to be
-estimated, and characters-over-four is badly wrong for the source code and tool output that
-dominate a coding session. Rather than chase a better estimator in the browser, tviz scales
-every per-call estimate so the items sum to that call's measured total (ADR-0003). Individual
-item sizes stay approximate; the _fill level of the grid is always exact_. That trade — exact
-where it's measurable, honestly approximate where it isn't — is the one I'd defend hardest.
-
-**Several records share one API call.** A single call emits multiple `assistant` records
-that repeat the same `message.usage`, so per-call aggregation has to dedupe on
-`message.id` / `requestId` before summing anything. Missing this inflates the window by a
-large multiple, and it is not obvious from reading a handful of records.
+**Per-item sizes are estimates, scaled to fit the exact total.** Counting characters
+undercounts code badly, and code is most of what a coding session holds. Rather than chase
+a better estimator in the browser, tviz scales each call's estimates so the items sum to
+that call's measured total. Individual items stay approximate; the fill level of the grid
+is always exact. Exact where it's measurable, approximate where it isn't.
 
 ## Key decisions and trade-offs
 
-**Browser-only processing.** Transcripts contain your code, your prompts, and your file
-paths. There is no server: the deployment is an assets-only Cloudflare Worker serving static
-files, parsing happens in a Web Worker in the tab, and nothing is written to `localStorage`
-or `IndexedDB`. Close the tab and it's gone. The cost is real — a 13 MB file is parsed on
-the user's machine with no caching, which is why parsing is off the main thread (ADR-0002).
+**Everything happens in the browser.** Transcripts contain your code, your prompts and
+your file paths. There is no server: the deployment is a static site, parsing happens in a
+Web Worker in the tab, and nothing is written to browser storage. Close the tab and it's
+gone. The cost is parsing a multi-megabyte file on your machine with no caching, which is
+why parsing stays off the main thread.
 
-**Synthetic demo data.** A reviewer must be able to evaluate this with no data of their own,
-and shipping real transcripts is out of the question. `scripts/anonymize.ts` is a
-structure-preserving anonymizer: it replaces every string — including object keys and ids —
-while preserving record structure and the real token counts. The only values kept verbatim
-are the ones that are identical for every user: protocol enums like record types and roles,
-and built-in tool names. Drawing that line turned out to be the whole problem — hook names
-and MCP tool names are enum-_shaped_ but are per-user vocabulary, so allow-listing by shape
-leaked 19 real names into the first cut of the demo data. An audit caught it before it
-shipped, and the allow-lists are now judged on whether a value is the same for everyone
-rather than on whether it looks like an identifier. The demo sessions have real growth
-curves and zero private content, and they load through exactly the same code path as a
-dropped file (ADR-0002). Three ship in `public/demo/` — 0.1 MB / 0.7 MB
-/ 1.5 MB, three models, three Claude Code versions, both window sizes, one compaction — and
-a test re-parses the committed files on every run, checks them against the manifest, and
-scans them for private content.
+**Demo data is anonymized, not invented.** A reviewer has to evaluate this with no data of
+their own, and shipping real transcripts was out of the question. An anonymizer replaces
+every string in a real transcript — keys and ids included — while keeping the structure
+and the real token counts, so the demo sessions have real growth curves and zero private
+content. The hard part was deciding what to keep verbatim: only values identical for every
+user. The first cut allow-listed by shape instead and leaked real names; review caught it
+before it shipped.
 
-**A fixed-cell grid, not a treemap.** A treemap packs more information per pixel. The grid is
-the picture Claude Code users already have in their heads from `/context`, and because cells
-are a fixed number of tokens, two sessions and two points in time are directly comparable by
-eye. Filtering hides cells in place rather than re-flowing the grid, so toggling a category
-doesn't silently rescale everything you were comparing against (ADR-0006). Cells are also
-append-only rather than grouped by Category, so stepping the Scrubber through a Session reads
-as growth at the frontier instead of a re-flow on every call. The cost is that Category
-colours interleave and proportions are read from the legend — but a lone green cell in a
-field of blue is a skill that loaded mid-session, which the grouped layout threw away.
+**A fixed-cell grid, not a treemap.** A treemap packs more into each pixel, but the grid is
+the picture Claude Code users already have in their heads, and because every cell is the
+same number of tokens, two sessions or two points in time compare directly by eye. Cells
+are appended in arrival order rather than grouped by category, and filters hide cells in
+place rather than re-flowing, so scrubbing reads as growth at the edge and toggling a
+category doesn't rescale what you were comparing against. The cost is that colours
+interleave — but a lone skill cell in a field of tool output is exactly the mid-session
+load a grouped layout hides.
 
-**A docked inspector, not a tooltip.** Hovering a cell answers "what is actually in there",
-and the answer is a list — a skill listing, three tool results, a reminder, with tokens each.
-A tooltip that disappears when the pointer moves can't be read down, compared against the
-next cell, or kept while you scrub. So the inspector has a permanent home in the right rail
-under the legend, and clicking a cell pins it there. Message kinds get the same treatment as
-categories: they hide in place and they can recolour the Messages cells, because "how much of
-this session is tool output" is the question people actually arrive with, and blanking rather
-than removing keeps the answer readable against the same window.
+**A docked inspector, not a tooltip.** Hovering a cell answers "what is actually in
+there", and the answer is a list with a token count per item. A tooltip that vanishes when
+the pointer moves can't be read down, compared with the next cell, or kept while you
+scrub. So the inspector lives beside the grid, and clicking a cell pins it. Message kinds
+get the same treatment as categories — hide in place, optionally recolour — because "how
+much of this session is tool output" is the question people actually arrive with.
 
-**Effect v4 for the parser only.** `Schema` gives lenient decoding of a format with ~20
-record types where unknown types must be skipped and counted rather than throw, and
-`Effect.gen` structures the parse-and-aggregate pipeline. No Layers, no Services: the parser
-returns plain data to React (ADR-0004). Paying for the full architecture in a build
-measured in hours, not days, would have bought nothing.
+## How I used Claude Code
 
-**Deploy tooling installed separately from the app.** Alchemy needs an Effect release
-candidate; the parser is pinned to the beta its `Schema` code was written against. Rather
-than bump one to suit the other, the stacks live in `infra/` with their own lockfile and
-`node_modules`, so each import resolves to the version its importer asked for (ADR-0007).
-It also cuts the app's install from 433 packages to 138 — none of Alchemy's cloud SDKs
-belong in a browser-only build.
+Almost every line of code was written by Claude Code. My time went on the judgment calls,
+and the submitted transcripts show them in order.
 
-## How I worked with Claude Code
-
-Almost every line of code here was written by Claude Code. The judgment calls were where I
-spent my own time, and the transcripts submitted alongside this document show them in
-order. The ones that mattered:
-
-**Surveying, not reading.** Real transcripts are megabytes of my own code and prompts. I
-never let an agent open one; instead the first hour was throwaway Bun scripts that print key
-paths, record types and counts and nothing else. That rule is written into `CLAUDE.md` and
-it is why the "breakdown is not in the transcript" finding above exists — you only discover
-what a format _doesn't_ contain by counting everything it does.
+**Surveying, not reading.** No agent ever opened a real transcript; the first hour was
+throwaway scripts that print record types and counts and nothing else. That rule, with
+"nothing leaves the browser" and "no real content in the repo", sits in the project
+instructions every agent reads first. It is also why the finding above exists: you only
+learn what a format doesn't contain by counting everything it does.
 
 **Grilling before building.** Before any code, I had Claude interrogate the idea: what
-`/context` actually shows, what a transcript can and cannot support, what a reviewer with no
-data would see. That produced the spec, a glossary (`CONTEXT.md`) and the first four ADRs.
-The one-bucket System decision (ADR-0001) and the scale-to-measured rule (ADR-0003) both
-came out of that session, not out of implementation.
+`/context` actually shows, what a transcript can and can't support, what a reviewer with
+no data would see. The one-bucket System decision and the scale-to-measured rule both came
+out of that conversation, not out of implementation.
 
 **A throwaway prototype that overturned the design.** Once the parser existed, I had three
-UI shapes built side by side on branch `wyattjoh/ui-prototype` with fake data — a
-terminal-faithful console, an editorial filmstrip, and a workbench — purely to answer "what
-should this look like". The
-workbench won, but the more important outcome was that stepping through the prototype's
-scrubber showed the category-grouped grid _re-flowing_ on every call. That killed the layout
-the first implementation ticket had already shipped, became ADR-0006 (append-only cells on
-a fixed 1k-token quantum), and turned into a delta ticket rather than a rewrite. The
-prototype code was never promoted.
-
-**Tickets, adversarial review, and an integrator.** The spec was cut into nine tickets and
-run as a workflow: one agent per ticket, a second agent told to _refute_ the claim that the
-ticket was done, a repair round, and an integrator merging into `main` and re-running every
-check. Wave one ran it as designed — ticket 01 and ticket 05 each in its own isolated
-worktree — and both failed their first review on real defects: the anonymizer leaked free
-text through object keys and enum-looking values, and the grid didn't cover the drop path.
-Wave two didn't stay isolated: ticket 09's append-only relayout had to land before tickets
-02, 03 and 04 could build on top of it, so each of those worktrees merged the one ahead of
-it before starting — 09 into 02's, 02 into 03's, then 09/02/03 together again before 04.
-Ticket 02's repair round turned into more than a defect fix: it rebuilt the Workbench shell
-and settled the one-Cell floor for good, because the first pass had gotten both wrong.
-Across both waves, ticket 06 (demo mode) was the only one to pass review on the first try;
-every other ticket needed at least one repair commit before it merged. I read every review
-verdict and every integration report; the workflow ran the mechanics, I decided what
-counted as done.
-
-**Hard rules as the anchor.** `CLAUDE.md` carries the non-negotiables — transcript data
-never leaves the browser, no real transcript content anywhere in the repo, never print the
-deploy token into a session log because the session logs are a deliverable. Agents read it
-first; reviewers check against it. It was the cheapest way to keep my vision intact across
-a dozen agents that never shared a context window.
+UI shapes built side by side on fake data. Stepping through the prototype's scrubber
+showed the category-grouped grid re-flowing on every call. That killed the layout the
+first implementation had already shipped and replaced it with the append-only grid above.
+The prototype code was never promoted.
 
 ## With more time
 
-- **Subagent context windows.** `<session>/subagents/agent-*.jsonl` files are entirely
-  separate context windows. tviz counts them today; nesting them under the parent session is
-  the most obviously missing thing.
-- **Provenance for an item.** The inspector names the items in a cell and their tokens, but
-  not where they came from: linking one back to the API call that added it, and to the
-  transcript record behind it, is the next question after "_which_ tool result ate 40k
-  tokens".
-- **Small multiples.** A folder of sessions rendered as a wall of grids, to compare how
-  differently structured sessions fill up; plus a per-call growth chart.
+- **Subagent context windows.** Subagent transcripts are separate windows. tviz counts
+  them today; nesting them under the parent session is the most obviously missing thing.
+- **Provenance.** Link an item in the inspector back to the API call that added it — the
+  next question after "which tool result ate the window".
+- **Small multiples.** A folder of sessions as a wall of grids, to compare how differently
+  structured sessions fill up.
 - **Calibration.** Paste a real `/context` output and solve for the split of the System
-  bucket into prompt / tools / memory, turning the honest one-bucket answer into an exact
-  three-part one.
-- **More than Mocha.** Single theme today.
-- **A `?demo` deep link.** "load demo sessions" is one click; `/?demo` would make it zero,
-  landing a reviewer straight on a populated grid. I cut it deliberately to stay inside the
-  time box — the button already gets them to the same place.
-- **The process record as a repo artifact.** The spec, the plan, the tickets, and the
-  survey scripts behind the "surveyed ~57,000 records" claim above only exist in a
-  git-ignored `.scratch/`; committing a scrubbed copy as a process archive would make that
-  evidence visible in a fresh clone instead of just in the submitted transcripts. Also cut
-  to stay inside the time box.
-- **Reconciling the split agent rules.** `CLAUDE.md` was split into path-scoped
-  `.claude/rules/*.md` files partway through the build, and two of them — `synthetic-data.md`
-  and `demo-data.md` — ended up claiming the same `public/demo/**` path, which is exactly the
-  kind of drift the split was supposed to prevent. Deliberately left for later rather than
-  spent inside the box.
+  bucket, turning the honest one-bucket answer into an exact three-part one.
 
 ## Time spent
 
-_TODO_ — first session opened at 03:30 on 2026-08-31. Research and grilling (~1h), then
-implementation, deploy, write-up and video; fill in the total from the transcript
-timestamps before submitting.
+About N hours: roughly an hour of research and grilling, then implementation, deploy,
+write-up and video.
+
+The decisions above are recorded in more detail in [`docs/adr/`](adr/).
