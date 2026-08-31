@@ -10,8 +10,8 @@ drawn for every API call, with a scrubber to watch the window fill, a legend of 
 percent-of-window that doubles as category and message-kind filters, and an inspector that
 lists what is inside any cell you hover or pin.
 
-**[tviz.wyattjoh.workers.dev](https://tviz.wyattjoh.workers.dev)** — click _Load demo_; no
-install, no login, nothing to upload.
+**[tviz.wyattjoh.workers.dev](https://tviz.wyattjoh.workers.dev)** — click _load demo
+sessions_; no install, no login, nothing to upload.
 
 Transcripts never leave the browser. There is no server: the deployment is an assets-only
 Cloudflare Worker, parsing runs in a Web Worker in your tab, and nothing is persisted to
@@ -24,23 +24,33 @@ several, or the whole folder.
 ## Stack
 
 Bun + TypeScript, Vite 8, React 19, Tailwind (Catppuccin Mocha). Effect v4 `Schema` for
-lenient JSONL decoding in the parser. Deployed with Alchemy to Cloudflare.
+lenient JSONL decoding in the parser. Deployed with Alchemy to Cloudflare; the Alchemy
+stacks live in `infra/`, a separately installed package so its Effect version stays
+independent of the parser's.
 
 ## Development
 
 ```sh
 bun install
 bun run dev            # vite dev server
-bun run build          # tsc -b && vite build
+bun run build          # typecheck && vite build
 bun run test           # vitest run
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
+bun run format:check   # oxfmt --check
 ```
 
 Build a synthetic session from a real transcript:
 
 ```sh
 bun run anonymize <in.jsonl> <out.jsonl>
+```
+
+Deploy (after `bun run infra:install`, once per checkout):
+
+```sh
+bun run plan            # read-only preview of stage prod
+bun run deploy          # the deploy — stage prod
 ```
 
 ## Docs
