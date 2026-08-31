@@ -23,3 +23,18 @@ export const CATEGORY_FILL_CLASS: Readonly<Record<Category, string>> = {
  * Background utility for a Cell no Category fills.
  */
 export const FREE_FILL_CLASS = "bg-cell-free";
+
+/**
+ * SVG `fill` utility for each Category, used by the Scrubber's stacked bands.
+ *
+ * A separate map from {@link CATEGORY_FILL_CLASS} because SVG paints with
+ * `fill`, not `background`; both resolve the same semantic token.
+ */
+export const CATEGORY_SVG_FILL_CLASS: Readonly<Record<Category, string>> = {
+  system: "fill-cat-system",
+  customAgents: "fill-cat-agents",
+  memoryFiles: "fill-cat-memory",
+  skills: "fill-cat-skills",
+  mcp: "fill-cat-mcp",
+  messages: "fill-cat-messages",
+};

@@ -385,6 +385,50 @@ describe("parseTranscript", () => {
       expect(session.calls[1]?.reset).toBe(false);
     });
 
+    it("holds the per-call invariants across a compaction and the calls after it", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.nestedMemory(3_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.toolResult(200_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 120_000 } }),
+        Fixture.compactSummary(8_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 55_000 } }),
+        Fixture.userMessage(6_000),
+        Fixture.assistantMessage({ id: "m4", usage: { cacheRead: 61_000 } }),
+        Fixture.toolResult(30_000),
+        Fixture.assistantMessage({ id: "m5", usage: { cacheRead: 74_000 } }),
+      ]);
+
+      const system = session.calls[0]?.byCategory.system;
+      expect(session.calls.map((call) => call.reset)).toEqual([false, false, true, false, false]);
+
+      // This is the sequence the Scrubber steps through: every position is a
+      // complete, self-consistent Context Snapshot, and the append-only
+      // cumulative items only ever restart at a compaction (ADR-0006).
+      let previous: readonly ContextItem[] = [];
+      for (const call of session.calls) {
+        expect.soft(categoryTotal(call), `call ${call.index} Categories`).toBe(call.measuredTotal);
+        expect.soft(kindTotal(call), `call ${call.index} Kinds`).toBe(call.byCategory.messages);
+        expect
+          .soft(itemTotal(session, call.index), `call ${call.index} items`)
+          .toBe(call.measuredTotal);
+        // System is what the transcript never logged, so a compaction leaves it
+        // alone: it is the one Category that survives the reset unchanged.
+        expect.soft(call.byCategory.system, `call ${call.index} System`).toBe(system);
+
+        const items = itemsOf(session, call.index);
+        if (call.reset) {
+          expect(items[0]?.category).toBe("system");
+        } else {
+          expect
+            .soft(items.slice(0, previous.length), `call ${call.index} prefix`)
+            .toEqual(previous);
+        }
+        previous = items;
+      }
+    });
+
     it("resets on an isCompactSummary Record even when the total grew", () => {
       const session = parseSession([
         Fixture.skillListing(4_000),

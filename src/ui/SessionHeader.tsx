@@ -42,7 +42,9 @@ export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps
       {session.model ?? "unknown model"} · cc {session.claudeCodeVersion ?? "unknown"} · call{" "}
       <span className="text-ui-text">{snapshot.index + 1}</span>/{session.calls.length} ·{" "}
       {formatTimestamp(snapshot.timestamp)}
-      {snapshot.reset ? <span className="text-ui-warning"> · compacted</span> : null}
+      {/* A compaction is the one API Call that rewrites the grid instead of
+          extending it, so it is named rather than left to the Scrubber's mark. */}
+      {snapshot.reset ? <span className="text-ui-warning"> · compaction</span> : null}
     </div>
 
     <div className="mt-1 text-ui-text">

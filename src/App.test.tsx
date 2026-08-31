@@ -153,4 +153,81 @@ describe("App", () => {
     expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
     expect(screen.queryByRole("img")).toBeNull();
   });
+
+  describe("stepping through the Session with the Scrubber", () => {
+    /**
+     * Four API Calls, the third of which is a compaction, so the grid, the
+     * legend and the header each have something different to say at every stop.
+     */
+    const steppedTranscript = (): string =>
+      Fixture.toJsonl([
+        Fixture.skillListing(9_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 30_000 } }),
+        Fixture.toolResult(60_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 62_000 } }),
+        Fixture.compactSummary(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 41_000 } }),
+        Fixture.userMessage(8_000),
+        Fixture.assistantMessage({ id: "m4", usage: { cacheRead: 53_000 } }),
+      ]);
+
+    const openStepped = async (): Promise<HTMLInputElement> => {
+      render(<App />);
+      drop(transcriptFile("stepped.jsonl", steppedTranscript()));
+      await screen.findByRole("img");
+      return screen.getByLabelText("API call") as HTMLInputElement;
+    };
+
+    const gridLabel = (): string => screen.getByRole("img").getAttribute("aria-label") ?? "";
+
+    it("opens on the last API Call", async () => {
+      const range = await openStepped();
+
+      expect(range.value).toBe("3");
+      expect(gridLabel()).toBe("Context grid: 53.0k of 200.0k tokens used");
+    });
+
+    it("redraws the grid and the legend for the API Call the Scrubber selects", async () => {
+      const range = await openStepped();
+
+      fireEvent.click(screen.getByLabelText("First call"));
+      expect(gridLabel()).toBe("Context grid: 30.0k of 200.0k tokens used");
+      // The legend's free-space line is the window minus the selected call.
+      expect(screen.getByText("170.0k")).toBeDefined();
+
+      fireEvent.keyDown(range, { key: "ArrowRight" });
+      expect(gridLabel()).toBe("Context grid: 62.0k of 200.0k tokens used");
+      expect(screen.getByText("138.0k")).toBeDefined();
+    });
+
+    it("grows at the frontier instead of re-flowing when a call is stepped", async () => {
+      const range = await openStepped();
+
+      fireEvent.click(screen.getByLabelText("First call"));
+      const before = cellTitles();
+      // The first API Call measures 30k, so its first 30 Cells are fully
+      // covered and the 31st is the frontier the next call finishes.
+      const frontier = 30;
+
+      fireEvent.keyDown(range, { key: "ArrowRight" });
+      const after = cellTitles();
+
+      // Every Cell the first API Call fully covered says exactly what it said
+      // before; only Cells at the frontier changed (ADR-0006).
+      expect(after.slice(0, frontier)).toEqual(before.slice(0, frontier));
+      expect(after.filter((title) => title.startsWith("Free ·")).length).toBeLessThan(
+        before.filter((title) => title.startsWith("Free ·")).length,
+      );
+    });
+
+    it("names the compaction in the header on the API Call that compacted", async () => {
+      const range = await openStepped();
+
+      fireEvent.change(range, { target: { value: "2" } });
+      expect(screen.getByText("· compaction")).toBeDefined();
+
+      fireEvent.keyDown(range, { key: "ArrowLeft" });
+      expect(screen.queryByText("· compaction")).toBeNull();
+    });
+  });
 });

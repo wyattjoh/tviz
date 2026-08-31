@@ -71,9 +71,15 @@ Tailwind utilities (`bg-ui-canvas`, `text-ui-text-muted`, `bg-cat-skills`,
 domain values in `src/ui/theme.ts`. The `ctp-*` palette layer is for the semantic
 layer only.
 
-The main view follows the "Console" variant of the throwaway UI prototype
-(branch `wyattjoh/ui-prototype`): one centred monospace column on `ui-shell`, the
-grid as the page, the legend as an aligned text table.
+The main view is a centred monospace column on `ui-shell` — the grid as the page,
+the legend as an aligned text table — with the Scrubber docked across the bottom
+of the window, as the "Workbench" variant of the throwaway UI prototype settled
+(branch `wyattjoh/ui-prototype`; see its `src/prototype/README.md`). The Scrubber
+is a stacked-area chart of Category totals over every API Call, dragged to scrub,
+with transport controls, a 0.5×–4× speed control and a range input for keyboard
+stepping; compactions are dashed rules on the chart. Its geometry lives in
+`src/ui/scrubber.ts` so the shape of the chart is testable without a DOM. The
+right rail (filters + Inspector) and the File menu are still to come.
 
 ## Transcript format — what the parser relies on
 
