@@ -1,0 +1,25 @@
+{
+  "name": "tviz-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Alchemy stacks for tviz. Deliberately NOT a workspace of the app so its Effect version stays independent.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "plan": "alchemy plan",
+    "plan:prod": "alchemy plan --stage prod",
+    "deploy": "alchemy deploy --yes",
+    "deploy:prod": "alchemy deploy --stage prod --yes",
+    "bootstrap:ci": "alchemy deploy stacks/github.ts --profile admin --yes"
+  },
+  "dependencies": {
+    "alchemy": "2.0.0-beta.75",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  }
+}

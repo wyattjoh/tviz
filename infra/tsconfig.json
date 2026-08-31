@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023"],
     "types": ["node"],
@@ -14,12 +14,11 @@
     "noEmit": true,
 
     /* Linting */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  // `infra/` is a separate package with its own `effect` and its own
-  // `tsconfig.json`; typecheck it with `bun run infra:typecheck`.
-  "include": ["vite.config.ts", "scripts"]
+  "include": ["alchemy.run.ts", "stacks"]
 }

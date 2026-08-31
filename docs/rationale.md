@@ -19,6 +19,7 @@ Theme 1, Exploration & Understanding. Claude Code transcripts are an unfamiliar 
 - **Synthetic demo data via a structure-preserving anonymizer** (ADR-0002): real growth curves, zero PII.
 - **Fixed-quantum grid like `/context`** rather than a treemap: familiar to Claude Code users, and filtering keeps cells in place so proportions stay comparable.
 - **Effect v4 beta limited to Schema + a pure pipeline** (ADR-0004): typed lenient decoding without paying for Layers/Services in a 2–3h build.
+- **Deploy tooling installed separately from the app** (ADR-0007): Alchemy needs an Effect release candidate, the parser is pinned to the beta the `Schema` code was written against. Putting the stacks in `infra/` with their own lockfile lets both have what they ask for; it also cuts the app's install from 433 packages to 138, since none of Alchemy's cloud SDKs belong in a browser-only build.
 
 ## With more time
 

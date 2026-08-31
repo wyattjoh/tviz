@@ -7,12 +7,13 @@ import * as Redacted from "effect/Redacted";
 
 /**
  * Bootstrap stack: mints the Cloudflare credential GitHub Actions needs to
- * deploy `alchemy.run.ts`, and writes it into the repo as an Actions secret.
+ * deploy `../alchemy.run.ts`, and writes it into the repo as an Actions secret.
  *
  * This is a one-shot stack you run from your laptop under an elevated profile.
  * Creating an account API token requires `API Tokens > Write`, which the
  * everyday deploy credential deliberately does not have — hence
- * `--profile admin` (Cloudflare Global API Key + `gh` CLI for GitHub):
+ * `--profile admin` (Cloudflare Global API Key + `gh` CLI for GitHub), from
+ * this `infra/` directory:
  *
  *     bun run bootstrap:ci
  *
@@ -20,9 +21,12 @@ import * as Redacted from "effect/Redacted";
  * token's value only once, so Alchemy captures it in state and pipes it
  * straight into `GitHub.Secret` — the raw value never reaches the terminal.
  *
- * State is local (`.alchemy/`, gitignored) because this stack only ever runs
- * from a developer machine. The app stack uses the shared remote store so CI
- * and laptop agree on what is deployed — see ADR-0005.
+ * State is local (`infra/.alchemy/`, gitignored) because this stack only ever
+ * runs from a developer machine. The app stack uses the shared remote store so
+ * CI and laptop agree on what is deployed — see ADR-0005.
+ *
+ * Nothing here touches the app's `rootDir`, so this stack needs no path
+ * anchoring the way `../alchemy.run.ts` does.
  */
 
 const OWNER = "wyattjoh";
