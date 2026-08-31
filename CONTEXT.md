@@ -66,6 +66,26 @@ _Avoid_: box, tile, block
 The control that selects which API Call's Context Snapshot the grid shows.
 _Avoid_: timeline, slider
 
+**Free Cell**:
+A Cell nothing has reached: headroom left in the Context Window. Always drawn, so two Sessions on the same window stay comparable.
+_Avoid_: empty cell, unused cell
+
+**Hidden Cell**:
+A Cell blanked because its Category — or, for a Messages Cell, its Message Kind — is toggled off in the legend. It keeps its position and its tokens and is drawn as an outlined recess, because filtering is a paint decision and never re-flows the grid (ADR-0006). A Hidden Cell is not a Free Cell: the tokens are still there.
+_Avoid_: removed cell, filtered-out cell, empty cell
+
+**Colour by Kind**:
+The legend switch that repaints Messages Cells with their Message Kind accents instead of the Messages Category accent. Other Categories are unaffected.
+_Avoid_: group by kind, kind mode
+
+**Inspector**:
+The panel docked in the right rail describing one Cell — what fills it, the token range it covers, and the items reaching into it. Filled by hovering a Cell and held by clicking one (pinning).
+_Avoid_: tooltip, popover, details pane
+
+**Cell Share**:
+How many of a Cell's tokens one item covers. An item larger than the Cell quantum has a Share in each Cell it crosses, and the Shares of a Cell sum to the Cell — which is what the Inspector lists, rather than the items' own sizes.
+_Avoid_: overlap, item tokens
+
 ### Data
 
 **Demo Session**:

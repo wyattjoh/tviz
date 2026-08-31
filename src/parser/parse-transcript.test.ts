@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   CATEGORY_ORDER,
+  type ContextItem,
   type ContextSnapshot,
+  cumulativeItems,
   MESSAGE_KIND_ORDER,
   type Session,
 } from "../domain/context.ts";
@@ -26,6 +28,12 @@ const kindTotal = (snapshot: ContextSnapshot): number =>
 
 const labels = (snapshot: ContextSnapshot): readonly string[] =>
   snapshot.added.map((item) => item.label);
+
+const itemsOf = (session: Session, index: number): readonly ContextItem[] =>
+  cumulativeItems(session.calls, index);
+
+const itemTotal = (session: Session, index: number): number =>
+  itemsOf(session, index).reduce((sum, item) => sum + item.tokens, 0);
 
 beforeEach(() => {
   Fixture.resetFixtureSequence();
@@ -163,20 +171,107 @@ describe("parseTranscript", () => {
     expect(first.byCategory.messages).toBe(first.byKind.reminder);
   });
 
-  it("splits Messages into User, Assistant, Tool Result and Reminder", () => {
-    const session = parseSession([
-      Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
-      Fixture.userMessage(4_000),
-      Fixture.reminderMessage(4_000),
-      Fixture.toolResult(4_000),
-      Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 14_000 }, textCharacters: 4_000 }),
-      Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 16_000 } }),
-    ]);
+  describe("Message Kind mapping", () => {
+    it("splits Messages into User, Assistant, Tool Result and Reminder", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.userMessage(4_000),
+        Fixture.reminderMessage(4_000),
+        Fixture.toolResult(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 14_000 }, textCharacters: 4_000 }),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 16_000 } }),
+      ]);
 
-    const last = session.calls.at(-1) as ContextSnapshot;
-    for (const kind of MESSAGE_KIND_ORDER) {
-      expect(last.byKind[kind]).toBeGreaterThan(0);
-    }
+      const last = session.calls.at(-1) as ContextSnapshot;
+      for (const kind of MESSAGE_KIND_ORDER) {
+        expect.soft(last.byKind[kind], `no tokens landed on ${kind}`).toBeGreaterThan(0);
+      }
+      // Every Message Kind sums to the Messages Category, and no other Category
+      // picked up a Kind.
+      expect(kindTotal(last)).toBe(last.byCategory.messages);
+    });
+
+    it("reads a user text block as User and a tool result as Tool result", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.userMessage(4_000),
+        Fixture.toolResult(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["User message", "user"],
+        ["Tool result", "toolResult"],
+      ]);
+    });
+
+    it("reads a user text block wrapping a system reminder as Reminder, not User", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.reminderMessage(4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["System reminder", "reminder"],
+      ]);
+      expect(second.byKind.user).toBe(0);
+    });
+
+    it("reads an attachment the parser has no Category for as a Reminder", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.otherAttachment("hook_success", 4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.map((entry) => entry.kind)).toEqual(["reminder"]);
+    });
+
+    it("charges assistant output to the API Call after the one that produced it", () => {
+      const session = parseSession([
+        // The text and the tool use are output of call 1 and input to call 2:
+        // they are not in the context call 1 was made with.
+        Fixture.assistantMessage({
+          id: "m1",
+          usage: { cacheRead: 10_000 },
+          textCharacters: 4_000,
+          toolUse: "Read",
+        }),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const [first, second] = session.calls;
+      if (first === undefined || second === undefined) throw new Error("expected two API Calls");
+      expect(first.byKind.assistant).toBe(0);
+      expect(labels(first)).not.toContain("Assistant message");
+      expect(second.added.map((entry) => [entry.label, entry.kind])).toEqual([
+        ["Assistant message", "assistant"],
+        ["Tool use: Read", "assistant"],
+      ]);
+      expect(second.byKind.assistant).toBe(10_000);
+    });
+
+    it("leaves thinking out of every Message Kind, because it is never re-sent", () => {
+      const session = parseSession([
+        Fixture.assistantMessage({
+          id: "m1",
+          usage: { cacheRead: 10_000 },
+          thinkingCharacters: 40_000,
+          textCharacters: 4_000,
+        }),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      // Only the text survives; the thinking block would otherwise have taken
+      // ten times its share of the delta.
+      expect(second.added.map((entry) => entry.label)).toEqual(["Assistant message"]);
+      expect(second.byKind.assistant).toBe(10_000);
+    });
   });
 
   it("counts unknown Record types and malformed lines instead of failing", () => {
@@ -213,6 +308,111 @@ describe("parseTranscript", () => {
     if (outcome.ok) return;
     expect(outcome.reason).toBe("notATranscript");
     expect(outcome.message).toContain("notes.jsonl");
+  });
+
+  describe("Context Snapshot items", () => {
+    it("carries every item in the window, in the order it entered, summing to the measured total", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.nestedMemory(4_000),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+      ]);
+
+      const first = session.calls[0] as ContextSnapshot;
+      expect(itemsOf(session, 0).map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "memoryFiles",
+        "messages",
+      ]);
+      expect(itemTotal(session, 0)).toBe(first.measuredTotal);
+    });
+
+    it("extends the previous API Call's items rather than re-ordering them", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(20_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 55_000 } }),
+        // A Skill loading mid-Session appends; it does not jump ahead of the
+        // Messages already in the window (ADR-0006).
+        Fixture.skillListing(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 62_000 } }),
+      ]);
+
+      let previous: readonly ContextItem[] = [];
+      for (const call of session.calls) {
+        expect(call.reset).toBe(false);
+        const items = itemsOf(session, call.index);
+        expect(items.slice(0, previous.length)).toEqual(previous);
+        expect(itemTotal(session, call.index)).toBe(call.measuredTotal);
+        previous = items;
+      }
+
+      expect(itemsOf(session, session.calls.length - 1).map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "messages",
+        "skills",
+      ]);
+    });
+
+    it("replaces the items on a compaction, keeping System at the front", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(120_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 90_000 } }),
+        Fixture.compactSummary(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 45_000 } }),
+      ]);
+
+      const compacted = session.calls[2] as ContextSnapshot;
+      expect(compacted.reset).toBe(true);
+      expect(itemsOf(session, 2).length).toBeLessThan(itemsOf(session, 1).length);
+      expect(itemsOf(session, 2).map((entry) => entry.category)).toEqual(["system", "messages"]);
+      expect(itemTotal(session, 2)).toBe(compacted.measuredTotal);
+    });
+
+    it("leaves out an item scaling left with no tokens", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        // Too small to win a token once the delta is split.
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 12_000 } }),
+        Fixture.userMessage(400_000),
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 12_002 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.some((entry) => entry.tokens === 0)).toBe(true);
+      expect(itemsOf(session, 1).every((entry) => entry.tokens > 0)).toBe(true);
+      expect(itemTotal(session, 1)).toBe(second.measuredTotal);
+    });
+
+    it("keeps a Session linear in the number of API Calls", () => {
+      // A cumulative copy of the items on every Context Snapshot is quadratic:
+      // it is what makes a 13 MB transcript freeze the tab when the Worker
+      // structured-clones the Session back to the page. Four times the API
+      // Calls must not cost anywhere near sixteen times the Session.
+      const sessionOf = (callCount: number): Session =>
+        parseSession(
+          Array.from({ length: callCount }, (_unused, call) => [
+            Fixture.userMessage(400),
+            Fixture.assistantMessage({
+              id: `m${call}`,
+              usage: { cacheRead: 10_000 + call * 100 },
+            }),
+          ]).flat(),
+        );
+
+      const small = JSON.stringify(sessionOf(50)).length;
+      const large = JSON.stringify(sessionOf(200)).length;
+
+      expect(large).toBeLessThan(small * 6);
+    });
   });
 
   describe("Context Window inference", () => {
@@ -270,6 +470,50 @@ describe("parseTranscript", () => {
       expect(compacted.byCategory.skills).toBe(0);
       expect(categoryTotal(compacted)).toBe(compacted.measuredTotal);
       expect(session.calls[1]?.reset).toBe(false);
+    });
+
+    it("holds the per-call invariants across a compaction and the calls after it", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.nestedMemory(3_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.toolResult(200_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 120_000 } }),
+        Fixture.compactSummary(8_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 55_000 } }),
+        Fixture.userMessage(6_000),
+        Fixture.assistantMessage({ id: "m4", usage: { cacheRead: 61_000 } }),
+        Fixture.toolResult(30_000),
+        Fixture.assistantMessage({ id: "m5", usage: { cacheRead: 74_000 } }),
+      ]);
+
+      const system = session.calls[0]?.byCategory.system;
+      expect(session.calls.map((call) => call.reset)).toEqual([false, false, true, false, false]);
+
+      // This is the sequence the Scrubber steps through: every position is a
+      // complete, self-consistent Context Snapshot, and the append-only
+      // cumulative items only ever restart at a compaction (ADR-0006).
+      let previous: readonly ContextItem[] = [];
+      for (const call of session.calls) {
+        expect.soft(categoryTotal(call), `call ${call.index} Categories`).toBe(call.measuredTotal);
+        expect.soft(kindTotal(call), `call ${call.index} Kinds`).toBe(call.byCategory.messages);
+        expect
+          .soft(itemTotal(session, call.index), `call ${call.index} items`)
+          .toBe(call.measuredTotal);
+        // System is what the transcript never logged, so a compaction leaves it
+        // alone: it is the one Category that survives the reset unchanged.
+        expect.soft(call.byCategory.system, `call ${call.index} System`).toBe(system);
+
+        const items = itemsOf(session, call.index);
+        if (call.reset) {
+          expect(items[0]?.category).toBe("system");
+        } else {
+          expect
+            .soft(items.slice(0, previous.length), `call ${call.index} prefix`)
+            .toEqual(previous);
+        }
+        previous = items;
+      }
     });
 
     it("resets on an isCompactSummary Record even when the total grew", () => {
