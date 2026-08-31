@@ -1,6 +1,6 @@
 /**
- * Empty state: drop a `.jsonl` transcript or a whole project folder, or pick
- * files with a picker.
+ * Empty state: drop a `.jsonl` transcript or a whole project folder, pick
+ * files with a picker, or load the bundled Demo Sessions.
  *
  * A dropped folder is walked recursively (`collectDataTransferEntries`);
  * `partitionEntries` downstream (in `useSessionLoader`) is what tells a
@@ -32,16 +32,36 @@ export type DropZoneProps = {
    * Transcripts that failed to parse, one row per file.
    */
   readonly errors: readonly LoadErrorEntry[];
+  /**
+   * Called when the reviewer asks for the bundled Demo Sessions.
+   */
+  readonly onLoadDemo: () => void;
+  /**
+   * Which Demo Session is being fetched, or `undefined` when no demo load is
+   * in flight.
+   */
+  readonly demoProgress: string | undefined;
+  /**
+   * Why the last demo load failed, or `undefined`.
+   */
+  readonly demoError: string | undefined;
 };
 
 /**
  * Drop target and file/folder pickers for one or more transcripts.
  */
-export const DropZone = ({ onFiles, pending, errors }: DropZoneProps) => {
+export const DropZone = ({
+  onFiles,
+  pending,
+  errors,
+  onLoadDemo,
+  demoProgress,
+  demoError,
+}: DropZoneProps) => {
   const [isOver, setIsOver] = useState(false);
   const filesInputId = useId();
   const folderInputId = useId();
-  const isBusy = pending.length > 0;
+  const isBusy = pending.length > 0 || demoProgress !== undefined;
 
   return (
     <div className="flex h-full min-h-full items-center justify-center p-8 font-mono">
@@ -64,11 +84,13 @@ export const DropZone = ({ onFiles, pending, errors }: DropZoneProps) => {
           }`}
         >
           <div className="text-ui-text">
-            {isBusy
-              ? pending.length === 1
-                ? `parsing ${pending[0]?.fileName}…`
-                : `parsing ${pending.length} files…`
-              : "drop a .jsonl transcript"}
+            {demoProgress !== undefined
+              ? `parsing ${demoProgress}…`
+              : isBusy
+                ? pending.length === 1
+                  ? `parsing ${pending[0]?.fileName}…`
+                  : `parsing ${pending.length} files…`
+                : "drop a .jsonl transcript"}
           </div>
           <div className="mt-2 text-xs text-ui-text-muted">
             or a whole project folder — session files from ~/.claude/projects/
@@ -112,7 +134,26 @@ export const DropZone = ({ onFiles, pending, errors }: DropZoneProps) => {
                 event.target.value = "";
               }}
             />
+
+            <button
+              type="button"
+              onClick={onLoadDemo}
+              disabled={isBusy}
+              className="rounded border border-ui-focus px-3 py-1.5 text-ui-focus hover:bg-ui-panel disabled:opacity-50"
+            >
+              load demo sessions
+            </button>
           </div>
+
+          <div className="mt-2 text-[11px] text-ui-text-faint">
+            no transcript to hand? three bundled sessions, small to large
+          </div>
+
+          {demoError === undefined ? null : (
+            <p role="alert" className="mt-6 text-xs text-ui-danger">
+              {demoError}
+            </p>
+          )}
 
           {errors.length === 0 ? null : (
             <ul className="mt-6 space-y-1 text-left text-xs">
@@ -127,6 +168,13 @@ export const DropZone = ({ onFiles, pending, errors }: DropZoneProps) => {
 
         <p className="text-xs leading-relaxed text-ui-text-faint">
           transcripts are parsed in this tab only — nothing is uploaded, nothing is stored.
+        </p>
+        {/* Short by necessity: the manifest, which carries the full statement,
+            is only fetched once the reviewer asks for the Demo Sessions. Its
+            `note` is what the loaded view shows. */}
+        <p className="text-xs leading-relaxed text-ui-text-faint">
+          the demo sessions are synthetic: real record structure and token counts, every word
+          replaced with placeholder text.
         </p>
       </div>
     </div>

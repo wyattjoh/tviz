@@ -276,3 +276,28 @@ export type Session = {
    */
   readonly subagentCount: number | undefined;
 };
+
+/**
+ * A Session as the app holds it: the parsed data plus how to name it in the
+ * Session list and whether it is a Demo Session.
+ *
+ * A Session parsed from a dropped file and a Session fetched from
+ * `public/demo/` go through the same Worker and produce the same
+ * {@link Session}; this wrapper is the only place they differ.
+ */
+export type LoadedSession = {
+  /**
+   * The parsed Session.
+   */
+  readonly session: Session;
+  /**
+   * Name shown in the Session list: the manifest name for a Demo Session, the
+   * file name for one the user supplied.
+   */
+  readonly label: string;
+  /**
+   * The manifest blurb for a Demo Session. Its presence is what marks a Session
+   * as synthetic, so the UI can say so wherever the Session is shown.
+   */
+  readonly description: string | undefined;
+};

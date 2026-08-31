@@ -40,6 +40,11 @@ right rail holding the legend-filters and the docked Inspector — and the Scrub
 the bottom. The grid pane is the scroll container and its width drives `ContextGrid`'s
 column count. Fill a region; do not restructure the shell.
 
+The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
+Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
+"(demo)" rather than the file it is served as), and Close all sessions. There is no session
+sidebar — a new way into the app is a File-menu entry.
+
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in place; it
 never removes them, so legend totals never change when a Category or Message Kind is

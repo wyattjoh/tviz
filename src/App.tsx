@@ -14,8 +14,13 @@
  * Sessions from the File menu never re-parses anything. The selected API Call
  * and the Context Window override live here because the strip, the grid, the
  * legend and the Scrubber all read them.
+ *
+ * The Demo Sessions are fetched by `loadDemoSessions` and then handed to the
+ * same Session list as a dropped file, so there is no demo-only view: only
+ * their manifest name and the manifest's synthetic-data note live here.
  */
 import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { loadDemoSessions } from "./demo/load-demo-sessions.ts";
 import {
   type Category,
   cumulativeItems,
@@ -46,12 +51,78 @@ import { effectiveWindowSize, type WindowChoice } from "./ui/window-choice.ts";
 const unknownRecordCount = (session: Session): number =>
   Object.values(session.unknownRecordTypes).reduce((sum, count) => sum + count, 0);
 
+/**
+ * What the app knows about the Demo Sessions: which open Sessions came from
+ * the manifest, what the manifest says about them, and how the last load went.
+ */
+type DemoState = {
+  /**
+   * Manifest name per Demo Session id. Membership is what marks a Session as
+   * synthetic.
+   */
+  readonly labels: ReadonlyMap<string, string>;
+  /**
+   * The manifest's own statement about the Demo Sessions, shown while one is
+   * on screen — the file that produces them is what says they are synthetic.
+   */
+  readonly note: string | undefined;
+  /**
+   * Which Demo Session is being fetched, or `undefined` when idle.
+   */
+  readonly progress: string | undefined;
+  /**
+   * Why the last demo load failed, or `undefined`.
+   */
+  readonly error: string | undefined;
+};
+
+const NO_DEMO: DemoState = {
+  labels: new Map(),
+  note: undefined,
+  progress: undefined,
+  error: undefined,
+};
+
 const App = () => {
   const loader = useSessionLoader();
   // Not per-Session: switching Sessions from the File menu keeps whatever
   // override is selected, matching the throwaway prototype this was settled
   // against.
   const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
+  const [demo, setDemo] = useState<DemoState>(NO_DEMO);
+
+  const addParsedSessions = loader.addParsedSessions;
+  const loadDemo = useCallback(() => {
+    setDemo((current) => ({ ...current, progress: "the demo sessions", error: undefined }));
+    loadDemoSessions({
+      onProgress: (progress) =>
+        setDemo((current) => ({
+          ...current,
+          progress: `${progress.name} (${progress.index} of ${progress.total})`,
+        })),
+    }).then((outcome) => {
+      if (!outcome.ok) {
+        setDemo((current) => ({ ...current, progress: undefined, error: outcome.message }));
+        return;
+      }
+      setDemo({
+        labels: new Map(outcome.sessions.map((loaded) => [loaded.session.id, loaded.label])),
+        note: outcome.note,
+        progress: undefined,
+        error: undefined,
+      });
+      addParsedSessions(
+        outcome.sessions.map((loaded) => loaded.session),
+        outcome.selectedId,
+      );
+    });
+  }, [addParsedSessions]);
+
+  const closeAll = loader.closeAll;
+  const onCloseAll = useCallback(() => {
+    setDemo(NO_DEMO);
+    closeAll();
+  }, [closeAll]);
 
   const selectedSession = loader.sessions.find((session) => session.id === loader.selectedId);
 
@@ -62,7 +133,10 @@ const App = () => {
     errors: loader.errors,
     onFiles: loader.addEntries,
     onSelectSession: loader.selectSession,
-    onCloseAll: loader.closeAll,
+    onCloseAll,
+    onLoadDemo: loadDemo,
+    demoBusy: demo.progress !== undefined,
+    demoLabels: demo.labels,
   };
   const onCloseSession = loader.closeSession;
 
@@ -70,7 +144,14 @@ const App = () => {
     return (
       <div className="grid h-full min-h-full grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px]">
         <MenuBar {...menuBarProps} />
-        <DropZone onFiles={loader.addEntries} pending={loader.pending} errors={loader.errors} />
+        <DropZone
+          onFiles={loader.addEntries}
+          pending={loader.pending}
+          errors={loader.errors}
+          onLoadDemo={loadDemo}
+          demoProgress={demo.progress}
+          demoError={demo.error}
+        />
       </div>
     );
   }
@@ -87,6 +168,7 @@ const App = () => {
       menuBarProps={menuBarProps}
       onFiles={loader.addEntries}
       onCloseSession={onCloseSession}
+      demoNote={demo.labels.has(selectedSession.id) ? demo.note : undefined}
     />
   );
 };
@@ -107,6 +189,11 @@ type LoadedSessionProps = {
    * Closes one Session, leaving the rest of the loaded Sessions open.
    */
   readonly onCloseSession: (id: string) => void;
+  /**
+   * The demo manifest's statement about the Demo Sessions, when the Session on
+   * screen is one of them. Its presence is what marks the view as synthetic.
+   */
+  readonly demoNote: string | undefined;
 };
 
 /**
@@ -139,6 +226,7 @@ const LoadedSession = ({
   menuBarProps,
   onFiles,
   onCloseSession,
+  demoNote,
 }: LoadedSessionProps) => {
   // The last API Call answers "where did it end up?", which is the question a
   // finished Session is usually opened with.
@@ -267,6 +355,11 @@ const LoadedSession = ({
               {session.recordCount} records · {session.malformedLines} malformed ·{" "}
               {unknownRecordCount(session)} unknown
             </p>
+            {/* The manifest's own statement, so what a reviewer reads about the
+                Demo Sessions is the file that produced them rather than a copy. */}
+            {demoNote === undefined ? null : (
+              <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
+            )}
           </RailPanel>
         </aside>
       </div>

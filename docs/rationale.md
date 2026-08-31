@@ -77,7 +77,10 @@ and shipping real transcripts is out of the question. `scripts/anonymize.ts` is 
 structure-preserving anonymizer: it replaces every string — including object keys, enum-ish
 values, and ids — while preserving record structure and the real token counts. The demo
 sessions have real growth curves and zero private content, and they load through exactly the
-same code path as a dropped file (ADR-0002).
+same code path as a dropped file (ADR-0002). Three ship in `public/demo/` — 0.1 MB / 0.7 MB
+/ 1.5 MB, three models, three Claude Code versions, both window sizes, one compaction — and
+a test re-parses the committed files on every run, checks them against the manifest, and
+scans them for private content.
 
 **A fixed-cell grid, not a treemap.** A treemap packs more information per pixel. The grid is
 the picture Claude Code users already have in their heads from `/context`, and because cells

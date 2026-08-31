@@ -49,10 +49,11 @@ src/parser/      Effect Schema record types, JSONL decode, per-call aggregation 
 src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
 src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Inspector, Scrubber; grid layout, filters, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
+src/demo/        Demo Session manifest type + decoder, and the loader that fetches them
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
 scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators
 stacks/          github.ts — bootstrap stack minting the CI token + GitHub secrets
-public/demo/     bundled anonymized demo sessions (small/medium/large)
+public/demo/     manifest.json + the bundled anonymized Demo Sessions (small/medium/large)
 docs/            adr/ (decisions), transcript-format.md, rationale.md, agents/
 ```
 

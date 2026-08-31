@@ -1,0 +1,36 @@
+{
+  "note": "Demo Sessions are synthetic. They were produced by the Anonymizer (scripts/anonymize.ts): every free-text string, path and name was replaced with same-length placeholder text, while Record order, Record types and the Measured Tokens of every API Call were kept exactly. The token dynamics are real; none of the words are.",
+  "defaultSessionId": "medium",
+  "sessions": [
+    {
+      "id": "small",
+      "file": "small.jsonl",
+      "name": "Small session",
+      "description": "Five API Calls in a 200k window. Almost two thirds of it is System, so it shows what a session costs before any work happens.",
+      "bytes": 109992,
+      "calls": 5,
+      "model": "claude-opus-4-7",
+      "claudeCodeVersion": "2.1.247"
+    },
+    {
+      "id": "medium",
+      "file": "medium.jsonl",
+      "name": "Medium session",
+      "description": "Sixty-two API Calls filling half a 200k window, and the only Demo Session in which all six Categories are present, memory files included.",
+      "bytes": 734845,
+      "calls": 62,
+      "model": "claude-opus-4-8",
+      "claudeCodeVersion": "2.1.209"
+    },
+    {
+      "id": "large",
+      "file": "large.jsonl",
+      "name": "Large session",
+      "description": "Eighty-one API Calls in a 1M window, with one compaction part-way through: the context drops and attribution restarts from the summary.",
+      "bytes": 1505516,
+      "calls": 81,
+      "model": "claude-fable-5",
+      "claudeCodeVersion": "2.1.217"
+    }
+  ]
+}

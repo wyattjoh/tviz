@@ -44,6 +44,9 @@ const baseProps = (overrides: Partial<MenuBarProps> = {}): MenuBarProps => ({
   onFiles: vi.fn(),
   onSelectSession: vi.fn(),
   onCloseAll: vi.fn(),
+  onLoadDemo: vi.fn(),
+  demoBusy: false,
+  demoLabels: new Map(),
   ...overrides,
 });
 
@@ -242,5 +245,37 @@ describe("MenuBar", () => {
 
     openMenu();
     expect(screen.getAllByRole("alert")).toHaveLength(2);
+  });
+
+  it("loads the Demo Sessions and names them from the manifest", () => {
+    const onLoadDemo = vi.fn();
+    render(
+      <MenuBar
+        {...baseProps({
+          sessions: [session("s1", "medium.jsonl", 60_000)],
+          selectedId: "s1",
+          demoLabels: new Map([["s1", "Medium session"]]),
+          onLoadDemo,
+        })}
+      />,
+    );
+    openMenu();
+
+    // A Demo Session is named by the manifest and says so, rather than showing
+    // the file name it happens to be served under.
+    expect(screen.getByRole("button", { name: /^Medium session \(demo\)/ })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load demo sessions" }));
+    expect(onLoadDemo).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a second demo load while one is in flight", () => {
+    render(<MenuBar {...baseProps({ demoBusy: true })} />);
+    openMenu();
+
+    expect(
+      screen.getByRole("button", { name: "Load demo sessions" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(screen.getByText("loading demo sessions…")).toBeDefined();
   });
 });

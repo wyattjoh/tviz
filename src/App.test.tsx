@@ -780,3 +780,224 @@ describe("App", () => {
     });
   });
 });
+
+const DEMO_MANIFEST = {
+  note: "Demo Sessions are synthetic.",
+  defaultSessionId: "medium",
+  sessions: [
+    {
+      id: "small",
+      file: "small.jsonl",
+      name: "Small session",
+      description: "The smallest shape the grid can show.",
+      bytes: 100,
+      calls: 1,
+      model: "claude-opus-4-7",
+      claudeCodeVersion: "2.1.247",
+    },
+    {
+      id: "medium",
+      file: "medium.jsonl",
+      name: "Medium session",
+      description: "Every Category is present.",
+      bytes: 200,
+      calls: 1,
+      model: "claude-opus-4-8",
+      claudeCodeVersion: "2.1.209",
+    },
+    {
+      id: "large",
+      file: "large.jsonl",
+      name: "Large session",
+      description: "One compaction part-way through.",
+      bytes: 300,
+      calls: 1,
+      model: "claude-fable-5",
+      claudeCodeVersion: "2.1.217",
+    },
+  ],
+};
+
+const DEMO_SHAPES: Readonly<Record<string, { readonly tokens: number; readonly model: string }>> = {
+  "small.jsonl": { tokens: 20_000, model: "claude-opus-4-7" },
+  "medium.jsonl": { tokens: 60_000, model: "claude-opus-4-8" },
+  // A Claude 5 model, so this Demo Session is the one on a 1M window.
+  "large.jsonl": { tokens: 90_000, model: "claude-fable-5" },
+};
+
+const demoTranscript = (file: string): string => {
+  const shape = DEMO_SHAPES[file] ?? { tokens: 0, model: "claude-opus-4-7" };
+  Fixture.resetFixtureSequence();
+  return Fixture.toJsonl([
+    Fixture.skillListing(4_000),
+    Fixture.assistantMessage({
+      id: file,
+      model: shape.model,
+      usage: { cacheRead: shape.tokens },
+    }),
+  ]).replaceAll(/"sessionId":"[^"]+"/g, `"sessionId":"${file.replace(".jsonl", "")}-id"`);
+};
+
+const stubDemoFetch = (manifestBody: unknown = DEMO_MANIFEST): void => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const file = url.slice(url.lastIndexOf("/") + 1);
+      if (file === "manifest.json") {
+        return { ok: true, status: 200, json: async () => manifestBody } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        blob: async () => new Blob([demoTranscript(file)], { type: "application/jsonl" }),
+      } as unknown as Response;
+    }),
+  );
+};
+
+/**
+ * The empty state's own button. The File menu is the other entry point, and
+ * the only one once a Session is open.
+ */
+const loadDemo = (): void => {
+  fireEvent.click(screen.getByRole("button", { name: "load demo sessions" }));
+};
+
+const openFileMenu = (): void => {
+  fireEvent.click(screen.getByRole("button", { name: "File" }));
+};
+
+const loadDemoFromFileMenu = (): void => {
+  openFileMenu();
+  fireEvent.click(screen.getByRole("button", { name: "Load demo sessions" }));
+};
+
+/**
+ * The Session rows of the File menu, which is where the Workbench lists open
+ * Sessions instead of a sidebar.
+ */
+const sessionMenuRows = (): readonly HTMLElement[] => {
+  // The dropdown has no role of its own, so it is reached through the heading
+  // that only ever exists inside it.
+  const panel = screen.getByText("Open sessions").parentElement;
+  if (panel === null) throw new Error("the File menu has no panel");
+  return within(panel)
+    .getAllByRole("button")
+    .filter((button) => button.getAttribute("aria-pressed") !== null);
+};
+
+describe("App demo mode", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("lists the Demo Sessions in the File menu and shows the medium one", async () => {
+    stubDemoFetch();
+    render(<App />);
+
+    loadDemo();
+    await findContextGrid();
+
+    openFileMenu();
+    const rows = sessionMenuRows();
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.textContent?.startsWith("Small session"))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+
+    // The manifest asks for the medium Session, which is neither first nor last.
+    const selected = rows.filter((row) => row.getAttribute("aria-pressed") === "true");
+    expect(selected).toHaveLength(1);
+    expect(selected[0]?.textContent).toContain("Medium session");
+    expect(contextGrid().getAttribute("aria-label")).toBe(
+      "Context grid: 60.0k of 200.0k tokens used",
+    );
+  });
+
+  it("marks Demo Sessions as synthetic and shows the manifest's own note", async () => {
+    stubDemoFetch();
+    render(<App />);
+
+    loadDemo();
+    await findContextGrid();
+
+    // The statement in the rail is the manifest's `note`, not a copy of it in
+    // a component: change the manifest and the app says something else.
+    expect(screen.getByText(DEMO_MANIFEST.note)).toBeDefined();
+
+    openFileMenu();
+    expect(sessionMenuRows().every((row) => row.textContent?.includes("(demo)"))).toBe(true);
+  });
+
+  it("shows no synthetic-data note for a Session the user supplied", async () => {
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await findContextGrid();
+
+    expect(screen.queryByText(DEMO_MANIFEST.note)).toBeNull();
+  });
+
+  it("switches the grid to another Demo Session when it is selected", async () => {
+    stubDemoFetch();
+    render(<App />);
+
+    loadDemo();
+    await findContextGrid();
+
+    openFileMenu();
+    fireEvent.click(screen.getByRole("button", { name: /^Large session \(demo\)/ }));
+
+    expect(contextGrid().getAttribute("aria-label")).toBe(
+      "Context grid: 90.0k of 1000.0k tokens used",
+    );
+  });
+
+  it("reaches the demo from the File menu of a loaded Session", async () => {
+    stubDemoFetch();
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await findContextGrid();
+
+    loadDemoFromFileMenu();
+    await screen.findByText(DEMO_MANIFEST.note);
+
+    // The dropped Session stays open beside the Demo Sessions; the demo does
+    // not replace what the user loaded.
+    openFileMenu();
+    expect(sessionMenuRows()).toHaveLength(4);
+    expect(screen.getByRole("region", { name: "Session" }).textContent).toContain("medium.jsonl");
+  });
+
+  it("keeps the reviewer on the empty state with an alert when the demo cannot load", async () => {
+    stubDemoFetch({ note: "incomplete" });
+    render(<App />);
+
+    loadDemo();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("demo manifest is unusable");
+    expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
+  });
+
+  it("keeps the open Session when the demo fails to load", async () => {
+    stubDemoFetch({ note: "incomplete" });
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await findContextGrid();
+
+    loadDemoFromFileMenu();
+    await waitFor(() => {
+      expect(screen.queryByText(DEMO_MANIFEST.note)).toBeNull();
+    });
+
+    // A dropped transcript exists only in this tab: a failed demo fetch must
+    // not be what throws it away.
+    expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
+      "session-a.jsonl",
+    );
+    expect(queryContextGrid()).not.toBeNull();
+    expect(screen.queryByText("drop a .jsonl transcript")).toBeNull();
+  });
+});

@@ -69,6 +69,13 @@ export type SessionLoader = {
    */
   readonly addEntries: (entries: readonly PathedFile[]) => void;
   /**
+   * Adds Sessions that are already parsed — the Demo Sessions, which the demo
+   * loader fetches and hands to the same Worker client before the Session list
+   * ever sees them — and selects one of them. Nothing is stored: they live
+   * here exactly as long as a dropped Session does.
+   */
+  readonly addParsedSessions: (sessions: readonly Session[], selectedId: string) => void;
+  /**
    * Switches which Session the grid shows.
    */
   readonly selectSession: (id: string) => void;
@@ -159,6 +166,15 @@ export const useSessionLoader = (): SessionLoader => {
     }
   }, []);
 
+  const addParsedSessions = useCallback((parsed: readonly Session[], selectId: string) => {
+    setRawSessions((current) => {
+      const next = new Map(current);
+      for (const session of parsed) next.set(session.id, session);
+      return next;
+    });
+    setSelectedId(selectId);
+  }, []);
+
   const selectSession = useCallback((id: string) => setSelectedId(id), []);
 
   const closeSession = useCallback((id: string) => {
@@ -209,6 +225,7 @@ export const useSessionLoader = (): SessionLoader => {
     errors,
     selectedId,
     addEntries,
+    addParsedSessions,
     selectSession,
     closeSession,
     closeAll,

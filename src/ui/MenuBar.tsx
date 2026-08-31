@@ -7,6 +7,9 @@
  * (`collectFileListEntries` / `collectDataTransferEntries`), and every open
  * Session is listed with its call count and peak so the grid can be switched
  * without a session sidebar.
+ *
+ * "Load demo sessions" is here too, so a reviewer with no transcript has the
+ * same way in once the empty state's drop zone is gone.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { peakMeasuredTotal, type Session } from "../domain/context.ts";
@@ -128,6 +131,19 @@ export type MenuBarProps = {
    * Closes every open Session and returns to the empty state.
    */
   readonly onCloseAll: () => void;
+  /**
+   * Loads the bundled Demo Sessions.
+   */
+  readonly onLoadDemo: () => void;
+  /**
+   * True while a demo load is in flight, so the menu cannot start a second.
+   */
+  readonly demoBusy: boolean;
+  /**
+   * Manifest name per Demo Session id. A Session in this map is synthetic, so
+   * the menu says so on its row rather than showing the demo's file name.
+   */
+  readonly demoLabels: ReadonlyMap<string, string>;
 };
 
 /**
@@ -141,6 +157,9 @@ const FileMenu = ({
   onFiles,
   onSelectSession,
   onCloseAll,
+  onLoadDemo,
+  demoBusy,
+  demoLabels,
 }: MenuBarProps) => {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
@@ -224,6 +243,16 @@ const FileMenu = ({
             onFiles={onFiles}
             onPicked={close}
           />
+          <MenuItem
+            label="Load demo sessions"
+            hint={undefined}
+            checked={undefined}
+            disabled={demoBusy}
+            onClick={() => {
+              onLoadDemo();
+              close();
+            }}
+          />
           <div className="my-1 border-t border-ui-border" />
           <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
             Open sessions
@@ -234,7 +263,11 @@ const FileMenu = ({
             sessions.map((session) => (
               <MenuItem
                 key={session.id}
-                label={session.fileName}
+                label={
+                  demoLabels.has(session.id)
+                    ? `${demoLabels.get(session.id)} (demo)`
+                    : session.fileName
+                }
                 hint={`${session.calls.length} · ${formatTokens(peakMeasuredTotal(session.calls))}`}
                 checked={session.id === selectedId}
                 disabled={false}
@@ -249,6 +282,9 @@ const FileMenu = ({
             <div className="px-3 py-1.5 text-xs text-ui-text-faint">
               parsing {pending.length} file{pending.length === 1 ? "" : "s"}…
             </div>
+          )}
+          {!demoBusy ? null : (
+            <div className="px-3 py-1.5 text-xs text-ui-text-faint">loading demo sessions…</div>
           )}
           {errors.length === 0 ? null : (
             <>

@@ -211,7 +211,7 @@ const TOOL_BLOCK_TYPES: ReadonlySet<string> = new Set([
  * Code, an MCP server, a Skill or a plugin is not on it and is replaced; the
  * cost of the list going stale is a less readable Demo Session, never a leak.
  */
-const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
+export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
   "Agent",
   "AskUserQuestion",
   "Bash",
@@ -836,6 +836,158 @@ export function findStructuralDifferences(
 
   return differences.slice(0, limit);
 }
+
+const LETTER_RUN = /[A-Za-z]+/g;
+
+/**
+ * How many leaks {@link findRealText} reports per string value before it
+ * truncates: three words are enough to recognise a sentence.
+ */
+const MAX_REPORTED_WORDS = 3;
+
+/**
+ * Whether a word could have come out of the Anonymizer.
+ *
+ * Replacement text is built from {@link SALAD_WORDS}, so a word survives only
+ * if it is one of them, a prefix of one (the last word of a salad is cut to
+ * length), or one plus a trailing letter (a salad ending on its separator has
+ * that separator replaced by a letter). Runs of up to {@link MAX_LETTER_RUN}
+ * letters are what fake ids and base64 filler are capped at, and file
+ * extensions are kept on fake paths by design.
+ */
+function isSyntheticWord(word: string): boolean {
+  const lower = word.toLowerCase();
+  if (lower.length <= MAX_LETTER_RUN) return true;
+  if (SAFE_EXTENSIONS.has(lower)) return true;
+  return SALAD_WORDS.some(
+    (candidate) =>
+      candidate.startsWith(lower) ||
+      (lower.startsWith(candidate) && lower.length === candidate.length + 1),
+  );
+}
+
+/**
+ * Find words in a string that the Anonymizer could not have produced.
+ *
+ * Use it on free text only — a value the Anonymizer keeps (an enum, a uuid, a
+ * timestamp, a tool name) is not word salad and is not meant to be.
+ *
+ * @param value - Text from an anonymized transcript, or derived from one.
+ * @returns The words that are not salad, in the order they appear.
+ */
+export function findRealWords(value: string): string[] {
+  return (value.match(LETTER_RUN) ?? []).filter((word) => !isSyntheticWord(word));
+}
+
+function scanString(
+  value: string,
+  key: string | undefined,
+  parent: Record<string, unknown> | undefined,
+  path: string,
+  out: string[],
+): void {
+  const kind = classify(value, key, parent);
+  // A kept value is an enum, a uuid or a timestamp: allow-listed by shape, and
+  // covered by the forbidden-term scan rather than by the salad vocabulary.
+  if (kind === "keep") return;
+  // A fake id keeps its `msg_` / `toolu_` prefix, and a fake path its URI
+  // scheme; both are structure the Anonymizer promises to preserve.
+  const body =
+    kind === "id"
+      ? value.slice(ID_PREFIX.exec(value)?.[0]?.length ?? 0)
+      : value.slice(URI_SCHEME.exec(value)?.[0]?.length ?? 0);
+
+  const leaked = findRealWords(body);
+  if (leaked.length === 0) return;
+  const words = leaked.slice(0, MAX_REPORTED_WORDS).map((word) => `"${word}"`);
+  out.push(`${path} is not synthetic: ${words.join(", ")}`);
+}
+
+function scanValue(
+  value: unknown,
+  key: string | undefined,
+  parent: Record<string, unknown> | undefined,
+  path: string,
+  out: string[],
+): void {
+  if (typeof value === "string") {
+    scanString(value, key, parent, path, out);
+    return;
+  }
+  if (Array.isArray(value)) {
+    // Array items inherit their container's key, exactly as the Anonymizer
+    // classifies them.
+    for (const [index, item] of value.entries()) {
+      scanValue(item, key, parent, `${path}[${index}]`, out);
+    }
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+
+  const record = value as Record<string, unknown>;
+  for (const [childKey, child] of Object.entries(record)) {
+    // A key can be content too — a file-backup map is keyed by file name — so a
+    // key outside the schema must read as salad like any renamed key.
+    if (!isSchemaKey(childKey) && findRealWords(childKey).length > 0) {
+      out.push(`${path}.${childKey} is a key that is not synthetic`);
+    }
+    scanValue(child, childKey, record, `${path}.${childKey}`, out);
+  }
+}
+
+/**
+ * Find text in an anonymized transcript that the Anonymizer could not have
+ * produced.
+ *
+ * The forbidden-term scan asks whether known-private strings survived; this
+ * asks the stronger question of whether *anything* did. Every string the
+ * Anonymizer would have replaced must read as Latin word salad, a fake path, a
+ * fake id or base64 filler, so a leaked English sentence, identifier or comment
+ * shows up here even though it names nobody.
+ *
+ * @param text - The anonymized transcript text.
+ * @param limit - Maximum number of findings to return.
+ * @returns One message per leak, as `line N: path is not synthetic: "word"`.
+ */
+export function findRealText(text: string, limit = 20): string[] {
+  const findings: string[] = [];
+  for (const [index, line] of text.split("\n").entries()) {
+    if (line.trim() === "") continue;
+    let record: unknown;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      // A malformed line is replaced by salad, so it is scanned as free text.
+      scanString(line, undefined, undefined, `line ${index + 1}`, findings);
+      if (findings.length >= limit) break;
+      continue;
+    }
+    scanValue(record, undefined, undefined, `line ${index + 1}`, findings);
+    if (findings.length >= limit) break;
+  }
+  return findings.slice(0, limit);
+}
+
+/**
+ * Private names that must never appear in a Demo Session or fixture: this
+ * repository, the repository the surveyed transcripts came from, the
+ * developer's GitHub account and real name, and the macOS home prefix those
+ * paths start with.
+ *
+ * They are written out rather than derived from the checkout directory, because
+ * a worktree is named after the branch, not after the repository — and because
+ * CI runs as a different user, where a list derived from the account name
+ * checks nothing. The Anonymizer CLI checks its output against this list before
+ * writing, and the demo-data test checks the committed files against it again.
+ */
+export const KNOWN_PRIVATE_TERMS: readonly string[] = [
+  "tviz",
+  "wyattjoh",
+  "wyatt",
+  "johnson",
+  "agent-toolkit",
+  "Users/",
+];
 
 /**
  * Inputs for {@link defaultForbiddenTerms}, passed in rather than read from the

@@ -20,6 +20,7 @@ import {
   defaultForbiddenTerms,
   findForbiddenTerms,
   findStructuralDifferences,
+  KNOWN_PRIVATE_TERMS,
 } from "./anonymizer.ts";
 
 type Options = {
@@ -70,16 +71,6 @@ function parseOptions(argv: readonly string[]): Options {
   }
   return options;
 }
-
-/**
- * Private names that must never appear in a Demo Session or fixture: this
- * repository, the repository the surveyed transcripts came from, the
- * developer's GitHub account, and the macOS home prefix those paths start with.
- *
- * They are written out rather than derived from the checkout directory, because
- * a worktree is named after the branch, not after the repository.
- */
-const KNOWN_PRIVATE_TERMS = ["tviz", "wyattjoh", "agent-toolkit", "Users/"];
 
 /**
  * Terms that must never appear in the output: the developer's account name and
