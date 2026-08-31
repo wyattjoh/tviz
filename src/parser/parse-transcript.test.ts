@@ -287,6 +287,35 @@ describe("parseTranscript", () => {
     });
   });
 
+  describe("Subagent Sessions", () => {
+    it("leaves inlined Subagent Session Records out of the parent's API Calls", () => {
+      const session = parseSession([
+        Fixture.userMessage(400),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.sidechain(Fixture.userMessage(4_000)),
+        Fixture.sidechain(Fixture.assistantMessage({ id: "sub1", usage: { cacheRead: 90_000 } })),
+        Fixture.userMessage(800),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 12_000 } }),
+      ]);
+
+      expect(session.calls.map((call) => call.measuredTotal)).toEqual([10_000, 12_000]);
+      expect(session.calls.at(-1)?.measuredTotal).toBe(12_000);
+    });
+
+    it("parses a transcript made entirely of Subagent Session Records on its own terms", () => {
+      const session = parseSession(
+        [
+          Fixture.sidechain(Fixture.userMessage(400)),
+          Fixture.sidechain(Fixture.assistantMessage({ id: "sub1", usage: { cacheRead: 9_000 } })),
+        ],
+        "agent-1.jsonl",
+      );
+
+      expect(session.calls).toHaveLength(1);
+      expect(session.calls[0]?.measuredTotal).toBe(9_000);
+    });
+  });
+
   it("carries the Session identity through", () => {
     const session = parseSession(
       [Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } })],
@@ -296,6 +325,7 @@ describe("parseTranscript", () => {
     expect(session.fileName).toBe("session-a.jsonl");
     expect(session.claudeCodeVersion).toBe("2.1.251");
     expect(session.model).toBe("claude-sonnet-4-5-20250929");
-    expect(session.subagentCount).toBe(0);
+    // A single dropped file has no sidecar `subagents/` directory to count.
+    expect(session.subagentCount).toBeUndefined();
   });
 });

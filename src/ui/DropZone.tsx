@@ -55,7 +55,7 @@ export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
           <div className="text-ui-text">
             {isBusy ? `parsing ${parsing}…` : "drop a .jsonl transcript"}
           </div>
-          <div className="mt-2 text-xs text-ui-text-faint">
+          <div className="mt-2 text-xs text-ui-text-muted">
             a session file from ~/.claude/projects/
           </div>
 

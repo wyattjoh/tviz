@@ -208,8 +208,13 @@ export type Session = {
    */
   readonly unknownRecordTypes: Readonly<Record<string, number>>;
   /**
-   * Number of Subagent Sessions found beside this transcript. Always 0 until the
-   * folder loader supplies it.
+   * Number of Subagent Sessions found beside this transcript, or `undefined`
+   * when nothing measured it.
+   *
+   * A single dropped file carries no sidecar `subagents/` directory, so the
+   * count is unknown rather than zero; only the folder loader can supply it. A
+   * Subagent Session owns its own Context Window, so claiming zero would be a
+   * false statement about where a Session's context went.
    */
-  readonly subagentCount: number;
+  readonly subagentCount: number | undefined;
 };

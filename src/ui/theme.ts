@@ -5,7 +5,7 @@
  * Components import class names from here; they never name a Catppuccin colour
  * or a hex literal themselves.
  */
-import type { Category, MessageKind } from "../domain/context.ts";
+import type { Category } from "../domain/context.ts";
 
 /**
  * Background utility for each Category, used by grid Cells and legend swatches.
@@ -20,22 +20,6 @@ export const CATEGORY_FILL_CLASS: Readonly<Record<Category, string>> = {
 };
 
 /**
- * Background utility for each Message Kind.
- */
-export const MESSAGE_KIND_FILL_CLASS: Readonly<Record<MessageKind, string>> = {
-  user: "bg-kind-user",
-  assistant: "bg-kind-assistant",
-  toolResult: "bg-kind-tool-result",
-  reminder: "bg-kind-reminder",
-};
-
-/**
  * Background utility for a Cell no Category fills.
  */
 export const FREE_FILL_CLASS = "bg-cell-free";
-
-/**
- * Background utility for a Cell whose Category is toggled off; it stays in place
- * so the grid never re-flows while filtering.
- */
-export const HIDDEN_FILL_CLASS = "bg-cell-hidden";

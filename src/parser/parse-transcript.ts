@@ -308,6 +308,21 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
 };
 
 /**
+ * Drops the Records that belong to a Subagent Session.
+ *
+ * A Subagent Session owns its own Context Window, so its API Calls are not the
+ * parent Session's: counting them would inflate `calls` and let a subagent's
+ * Context Snapshot end up on the grid. Current Claude Code versions write
+ * Subagent Sessions to sidecar files, but older ones inline them with
+ * `isSidechain: true`. A transcript made *entirely* of sidechain Records is a
+ * Subagent Session's own transcript, which stays parseable on its own terms.
+ */
+const parentSessionRecords = (records: readonly KnownRecord[]): readonly KnownRecord[] =>
+  records.some((record) => record.isSidechain !== true)
+    ? records.filter((record) => record.isSidechain !== true)
+    : records;
+
+/**
  * Walks the decoded Records and produces one Context Snapshot per API Call.
  *
  * Items seen since the previous call are scaled so their Estimated Tokens sum to
@@ -464,7 +479,7 @@ export const parseTranscriptEffect = Effect.fn("parseTranscript")(function* (
   }
 
   const decoded = decodeTranscript(fileName, text);
-  const calls = aggregateCalls(decoded.records);
+  const calls = aggregateCalls(parentSessionRecords(decoded.records));
 
   if (calls.length === 0) {
     return yield* new NotATranscriptError({
@@ -487,7 +502,8 @@ export const parseTranscriptEffect = Effect.fn("parseTranscript")(function* (
     recordCount: decoded.recordCount,
     malformedLines: decoded.malformedLines,
     unknownRecordTypes: decoded.unknownRecordTypes,
-    subagentCount: 0,
+    // Only the folder loader can see the sidecar `subagents/` directory.
+    subagentCount: undefined,
   };
   return session;
 });

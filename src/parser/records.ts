@@ -43,6 +43,9 @@ const MessageContent = Schema.Union([Schema.String, Schema.Array(ContentBlock)])
 /**
  * An `assistant` Record. Several of them can share one `message.id`, in which
  * case they belong to the same API Call.
+ *
+ * `isSidechain` marks a Record that belongs to a Subagent Session, whose
+ * Context Window is separate from the parent Session's.
  */
 export const AssistantRecord = Schema.Struct({
   type: Schema.Literal("assistant"),
@@ -52,6 +55,7 @@ export const AssistantRecord = Schema.Struct({
   version: Schema.optional(Schema.String),
   sessionId: Schema.optional(Schema.String),
   isCompactSummary: Schema.optional(Schema.Boolean),
+  isSidechain: Schema.optional(Schema.Boolean),
   message: Schema.Struct({
     id: Schema.optional(Schema.String),
     model: Schema.optional(Schema.String),
@@ -71,6 +75,7 @@ export const UserRecord = Schema.Struct({
   version: Schema.optional(Schema.String),
   sessionId: Schema.optional(Schema.String),
   isCompactSummary: Schema.optional(Schema.Boolean),
+  isSidechain: Schema.optional(Schema.Boolean),
   isMeta: Schema.optional(Schema.Boolean),
   message: Schema.Struct({
     content: Schema.optional(MessageContent),
@@ -88,6 +93,7 @@ export const AttachmentRecord = Schema.Struct({
   version: Schema.optional(Schema.String),
   sessionId: Schema.optional(Schema.String),
   isCompactSummary: Schema.optional(Schema.Boolean),
+  isSidechain: Schema.optional(Schema.Boolean),
   attachment: withUnknownRest({
     type: Schema.String,
     content: Schema.optional(Schema.Unknown),
@@ -108,6 +114,7 @@ export const AnyRecord = Schema.Struct({
   version: Schema.optional(Schema.String),
   sessionId: Schema.optional(Schema.String),
   isCompactSummary: Schema.optional(Schema.Boolean),
+  isSidechain: Schema.optional(Schema.Boolean),
 });
 
 /**

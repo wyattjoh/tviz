@@ -48,8 +48,12 @@ export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps
     <div className="mt-1 text-ui-text">
       {formatTokens(snapshot.measuredTotal)} / {formatTokens(session.windowSize)} tokens ·{" "}
       <span className="text-ui-text-muted">
-        {formatPercent(snapshot.measuredTotal, session.windowSize)} full · {session.subagentCount}{" "}
-        subagent sessions
+        {formatPercent(snapshot.measuredTotal, session.windowSize)} full
+        {/* A Subagent Session owns a separate Context Window; only the folder
+            loader can count them, so a single dropped file says nothing. */}
+        {session.subagentCount === undefined
+          ? null
+          : ` · ${session.subagentCount} subagent sessions`}
       </span>
     </div>
   </header>

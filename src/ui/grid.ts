@@ -38,11 +38,54 @@ export const cellTokenRange = (
 };
 
 /**
- * Assigns every Cell the Category that fills the majority of its token range.
+ * One fill competing for Cells: its exact share of the grid and the number of
+ * Cells it must not drop below.
+ */
+type Share = {
+  readonly fill: CellFill;
+  readonly exact: number;
+  readonly minimum: number;
+};
+
+/**
+ * Splits `cellCount` Cells between the shares by the largest-remainder method,
+ * never going below a share's `minimum` while any share is still above its own.
+ */
+const apportion = (shares: readonly Share[], cellCount: number): number[] => {
+  const counts = shares.map((share) => Math.max(share.minimum, Math.floor(share.exact)));
+  const byRemainder = shares
+    .map((share, index) => ({ index, remainder: share.exact - Math.floor(share.exact) }))
+    .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+
+  const total = (): number => counts.reduce((sum, count) => sum + count, 0);
+
+  for (const { index } of byRemainder) {
+    if (total() >= cellCount) break;
+    counts[index] = (counts[index] ?? 0) + 1;
+  }
+
+  // A share bumped up to its minimum, or a Context Snapshot that overflows the
+  // Context Window, can push the total past the grid; give the surplus back
+  // starting with the smallest remainder.
+  for (const { index } of [...byRemainder].reverse()) {
+    const count = counts[index] ?? 0;
+    const surplus = total() - cellCount;
+    if (surplus <= 0) break;
+    const minimum = shares[index]?.minimum ?? 0;
+    counts[index] = Math.max(minimum, count - surplus);
+  }
+
+  return counts;
+};
+
+/**
+ * Assigns every Cell in the grid a fill.
  *
- * Categories are laid out end to end in {@link CATEGORY_ORDER}; whatever is left
- * over at the end of the window is free space. A Category wins a tie against
- * free space so a small Category is never invisible.
+ * Categories are laid out end to end in {@link CATEGORY_ORDER} and whatever is
+ * left of the Context Window is free space. Cells are split by the
+ * largest-remainder method so the grid always holds exactly `cellCount` Cells,
+ * and every Category with a non-zero total keeps at least one Cell — a Category
+ * the legend lists is never missing from the grid, however small it is.
  */
 export const buildCells = (
   byCategory: CategoryTokens,
@@ -50,29 +93,22 @@ export const buildCells = (
   cellCount: number = CELL_COUNT,
 ): readonly CellFill[] => {
   const quantum = cellQuantum(windowSize, cellCount);
-  const segments: { category: Category; start: number; end: number }[] = [];
-  let filled = 0;
-  for (const category of CATEGORY_ORDER) {
-    const tokens = Math.max(0, byCategory[category]);
-    segments.push({ category, start: filled, end: filled + tokens });
-    filled += tokens;
+  if (!Number.isFinite(quantum) || quantum <= 0) {
+    return Array.from({ length: cellCount }, (): CellFill => "free");
   }
 
-  return Array.from({ length: cellCount }, (_, index): CellFill => {
-    const cellStart = index * quantum;
-    const cellEnd = cellStart + quantum;
-
-    let winner: Category | undefined;
-    let winningOverlap = 0;
-    for (const segment of segments) {
-      const overlap = Math.min(segment.end, cellEnd) - Math.max(segment.start, cellStart);
-      if (overlap > winningOverlap) {
-        winningOverlap = overlap;
-        winner = segment.category;
-      }
-    }
-
-    const freeOverlap = Math.max(0, cellEnd - Math.max(cellStart, filled));
-    return winner !== undefined && winningOverlap >= freeOverlap ? winner : "free";
+  const categoryShares = CATEGORY_ORDER.map((category): Share => {
+    const tokens = Math.max(0, byCategory[category]);
+    return { fill: category, exact: tokens / quantum, minimum: tokens > 0 ? 1 : 0 };
   });
+  const used = categoryShares.reduce((sum, share) => sum + share.exact, 0);
+  const shares: readonly Share[] = [
+    ...categoryShares,
+    { fill: "free", exact: Math.max(0, cellCount - used), minimum: 0 },
+  ];
+
+  const counts = apportion(shares, cellCount);
+  return shares.flatMap((share, index) =>
+    Array.from({ length: counts[index] ?? 0 }, (): CellFill => share.fill),
+  );
 };

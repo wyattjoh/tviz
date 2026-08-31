@@ -243,6 +243,15 @@ export const compactSummary = (characters: number): FixtureRecord => ({
 });
 
 /**
+ * Marks a Record as belonging to a Subagent Session, the way Claude Code does
+ * when it inlines one into the parent Session's transcript.
+ */
+export const sidechain = (record: FixtureRecord): FixtureRecord => ({
+  ...record,
+  isSidechain: true,
+});
+
+/**
  * A Record of a type the parser does not account for.
  */
 export const metadataRecord = (type: string): FixtureRecord => ({

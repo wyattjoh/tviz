@@ -24,7 +24,10 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
 - Deployment: **Alchemy** pinned to `alchemy@2.0.0-beta.72` in `alchemy.run.ts` → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, `Alchemy.localState()` with `.alchemy/` gitignored. Stage `prod` pins the Worker name to `tviz`; other stages use derived names. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts). `alchemy plan` is read-only and takes no `--yes`.
   - **Why beta.72, not latest:** alchemy ≥ beta.73 requires `effect >=4.0.0-rc.112`; this project pins `effect@4.0.0-beta.107` (the `effect-ts-beta` skill's source clone matches that tag). beta.72 is the newest alchemy whose `effect` peer accepts beta.107. `@effect/platform-{bun,node}` are pinned to the same beta.107. `bun install` warns about `@effect/sql-d1`/`sql-sqlite-do`/`@effect/vitest` resolving to rc.112 — those are alchemy's D1/DO-state deps, unused here. Bumping alchemy means bumping Effect (and the skill clone) together.
-- Tests: **Vitest** (`*.test.ts` beside source), synthetic fixtures under `src/fixtures/`.
+- Tests: **Vitest** (`*.test.ts` / `*.test.tsx` beside source), synthetic fixtures under `src/fixtures/`.
+  Parser and pure-logic tests run in the default Node environment; component tests opt into jsdom
+  with a `// @vitest-environment jsdom` docblock and use `@testing-library/react`. Shared DOM
+  stand-ins (`FileList`, transcript `File`) live in `src/ui/test-dom.ts`.
 - Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
 
 ## Commands

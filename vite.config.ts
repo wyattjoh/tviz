@@ -17,6 +17,9 @@ export default defineConfig({
     watch: { ignored: [worktrees] },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    // Parser tests are plain Node; component tests opt into jsdom with a
+    // `@vitest-environment` docblock.
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    restoreMocks: true,
   },
 });
