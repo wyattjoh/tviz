@@ -5,6 +5,7 @@ import {
   cumulativeItems,
   emptyCategoryTokens,
   emptyMessageKindTokens,
+  peakMeasuredTotal,
 } from "./context.ts";
 
 const item = (label: string, tokens: number): ContextItem => ({
@@ -95,5 +96,16 @@ describe("cumulativeItems", () => {
     expect(cumulativeItems(calls, -1)).toEqual([]);
     expect(cumulativeItems(calls, 1)).toEqual([]);
     expect(cumulativeItems([], 0)).toEqual([]);
+  });
+});
+
+describe("peakMeasuredTotal", () => {
+  it("finds the largest measuredTotal across the Session's API Calls", () => {
+    const calls = [call(0, [item("a", 100)]), call(1, [item("b", 400)]), call(2, [item("c", 50)])];
+    expect(peakMeasuredTotal(calls)).toBe(400);
+  });
+
+  it("is 0 for a Session with no API Calls", () => {
+    expect(peakMeasuredTotal([])).toBe(0);
   });
 });

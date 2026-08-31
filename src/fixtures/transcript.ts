@@ -22,9 +22,22 @@ export const filler = (characters: number): string => {
  */
 export type FixtureRecord = Record<string, unknown>;
 
+const DEFAULT_SESSION_ID = "00000000-0000-4000-8000-000000000000";
+
+let sessionIdOverride: string | undefined;
+
+/**
+ * Overrides the `sessionId` every subsequent Record's envelope carries, until
+ * reset or overridden again — lets a test build several Sessions with
+ * distinct ids without hand-rolling the envelope.
+ */
+export const setFixtureSessionId = (sessionId: string | undefined): void => {
+  sessionIdOverride = sessionId;
+};
+
 const envelope = (index: number): FixtureRecord => ({
   uuid: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-  sessionId: "00000000-0000-4000-8000-000000000000",
+  sessionId: sessionIdOverride ?? DEFAULT_SESSION_ID,
   timestamp: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
   version: "2.1.251",
 });
@@ -33,10 +46,12 @@ let sequence = 0;
 const next = (): FixtureRecord => envelope((sequence += 1));
 
 /**
- * Resets the monotonic uuid/timestamp counter so fixtures are reproducible.
+ * Resets the monotonic uuid/timestamp counter and the sessionId override so
+ * fixtures are reproducible and isolated between tests.
  */
 export const resetFixtureSequence = (): void => {
   sequence = 0;
+  sessionIdOverride = undefined;
 };
 
 /**

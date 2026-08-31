@@ -1,5 +1,6 @@
 /**
- * App shell: drop one transcript, then step through its API Calls.
+ * App shell: drop transcripts (files or a whole project folder), then step
+ * through the selected Session's API Calls.
  *
  * The loaded view is the Workbench layout the throwaway UI prototype settled on
  * (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a menu bar and a
@@ -8,14 +9,18 @@
  * docked across the bottom. The four regions are established here once, so the
  * filter and Inspector work fills the rail instead of re-laying out the app.
  *
- * The selected API Call lives here because the strip, the grid, the legend and
- * the Scrubber all read it.
+ * {@link useSessionLoader} owns the Session list — which files parsed, which
+ * are still parsing, which failed, and Subagent Session counts — so switching
+ * Sessions from the File menu never re-parses anything. The selected API Call
+ * and the Context Window override live here because the strip, the grid, the
+ * legend and the Scrubber all read them.
  */
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import {
   type Category,
   cumulativeItems,
   type MessageKind,
+  peakMeasuredTotal,
   type Session,
 } from "./domain/context.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
@@ -31,60 +36,62 @@ import {
 import { formatTokens } from "./ui/format.ts";
 import { buildCells } from "./ui/grid.ts";
 import { Inspector } from "./ui/Inspector.tsx";
-import { MenuBar } from "./ui/MenuBar.tsx";
+import { MenuBar, type MenuBarProps } from "./ui/MenuBar.tsx";
 import { Scrubber } from "./ui/Scrubber.tsx";
 import { SessionHeader } from "./ui/SessionHeader.tsx";
-import { parseTranscriptFile } from "./worker/parse-client.ts";
-
-type AppState =
-  | { readonly status: "idle"; readonly error: string | undefined }
-  | { readonly status: "parsing"; readonly fileName: string }
-  | { readonly status: "loaded"; readonly session: Session };
+import { useSessionLoader } from "./ui/session-loader.ts";
+import { effectiveWindowSize, type WindowChoice } from "./ui/window-choice.ts";
 
 const unknownRecordCount = (session: Session): number =>
   Object.values(session.unknownRecordTypes).reduce((sum, count) => sum + count, 0);
 
-const peakOf = (session: Session): number =>
-  session.calls.reduce((max, call) => Math.max(max, call.measuredTotal), 0);
-
 const App = () => {
-  const [state, setState] = useState<AppState>({ status: "idle", error: undefined });
+  const loader = useSessionLoader();
+  // Not per-Session: switching Sessions from the File menu keeps whatever
+  // override is selected, matching the throwaway prototype this was settled
+  // against.
+  const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
 
-  const loadFile = useCallback((file: File) => {
-    setState({ status: "parsing", fileName: file.name });
-    parseTranscriptFile(file).then((outcome) => {
-      setState(
-        outcome.ok
-          ? { status: "loaded", session: outcome.session }
-          : { status: "idle", error: outcome.message },
-      );
-    });
-  }, []);
+  const selectedSession = loader.sessions.find((session) => session.id === loader.selectedId);
 
-  const clear = useCallback(() => setState({ status: "idle", error: undefined }), []);
+  const menuBarProps = {
+    sessions: loader.sessions,
+    selectedId: loader.selectedId,
+    pending: loader.pending,
+    errors: loader.errors,
+    onFiles: loader.addEntries,
+    onSelectSession: loader.selectSession,
+    onCloseAll: loader.closeAll,
+  };
 
-  if (state.status !== "loaded") {
+  if (selectedSession === undefined) {
     return (
       <div className="grid h-full min-h-full grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px]">
-        <MenuBar />
-        <DropZone
-          onFile={loadFile}
-          parsing={state.status === "parsing" ? state.fileName : undefined}
-          error={state.status === "idle" ? state.error : undefined}
-        />
+        <MenuBar {...menuBarProps} />
+        <DropZone onFiles={loader.addEntries} pending={loader.pending} errors={loader.errors} />
       </div>
     );
   }
 
   // Keying on the Session restarts the Scrubber at the last API Call of
-  // whatever was loaded, rather than carrying the previous Session's position
-  // into a Session that may not even have that many API Calls.
-  return <LoadedSession key={state.session.id} session={state.session} onClear={clear} />;
+  // whatever is selected, rather than carrying the previous Session's
+  // position into a Session that may not even have that many API Calls.
+  return (
+    <LoadedSession
+      key={selectedSession.id}
+      session={selectedSession}
+      windowChoice={windowChoice}
+      onWindowChoiceChange={setWindowChoice}
+      menuBarProps={menuBarProps}
+    />
+  );
 };
 
 type LoadedSessionProps = {
   readonly session: Session;
-  readonly onClear: () => void;
+  readonly windowChoice: WindowChoice;
+  readonly onWindowChoiceChange: (choice: WindowChoice) => void;
+  readonly menuBarProps: MenuBarProps;
 };
 
 /**
@@ -110,7 +117,12 @@ const RailPanel = ({ title, children }: RailPanelProps) => (
   </section>
 );
 
-const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
+const LoadedSession = ({
+  session,
+  windowChoice,
+  onWindowChoiceChange,
+  menuBarProps,
+}: LoadedSessionProps) => {
   // The last API Call answers "where did it end up?", which is the question a
   // finished Session is usually opened with.
   const [callIndex, setCallIndex] = useState(session.calls.length - 1);
@@ -122,12 +134,14 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
   const [inspectedIndex, setInspectedIndex] = useState<number | undefined>(undefined);
   const [pinnedIndex, setPinnedIndex] = useState<number | undefined>(undefined);
 
+  const windowSize = effectiveWindowSize(session, windowChoice);
+
   // The layout is built here rather than inside the grid because the Inspector
   // in the rail reads the same Cells. It ignores the filters by design: hiding
   // is a paint-time decision, so no filter can move a Cell (ADR-0006).
   const cells = useMemo(
-    () => buildCells(cumulativeItems(session.calls, callIndex), session.windowSize),
-    [session.calls, callIndex, session.windowSize],
+    () => buildCells(cumulativeItems(session.calls, callIndex), windowSize),
+    [session.calls, callIndex, windowSize],
   );
 
   const onToggleCategory = useCallback(
@@ -156,14 +170,21 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
 
   return (
     <div className="grid h-full min-h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-ui-canvas font-mono text-[13px]">
-      <MenuBar />
-      <SessionHeader session={session} snapshot={snapshot} onClear={onClear} />
+      <MenuBar {...menuBarProps} />
+      <SessionHeader
+        session={session}
+        snapshot={snapshot}
+        windowSize={windowSize}
+        windowChoice={windowChoice}
+        onWindowChoiceChange={onWindowChoiceChange}
+        onClear={menuBarProps.onCloseAll}
+      />
 
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px]">
         <main aria-label="Context grid" className="min-h-0 border-r border-ui-border">
           <ContextGrid
             cells={cells}
-            windowSize={session.windowSize}
+            windowSize={windowSize}
             measuredTotal={snapshot.measuredTotal}
             filters={filters}
             pinnedIndex={pinnedIndex}
@@ -179,7 +200,7 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
           <RailPanel title="Categories">
             <ContextLegend
               snapshot={snapshot}
-              windowSize={session.windowSize}
+              windowSize={windowSize}
               filters={filters}
               onToggleCategory={onToggleCategory}
               onToggleMessageKind={onToggleMessageKind}
@@ -199,8 +220,9 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
 
           <RailPanel title="Transcript">
             <p className="text-[11px] leading-snug text-ui-text-faint">
-              window {formatTokens(session.windowSize)} (inferred) · peak{" "}
-              {formatTokens(peakOf(session))}
+              window {formatTokens(windowSize)}{" "}
+              {windowChoice === "auto" ? "(inferred)" : "(override)"} · peak{" "}
+              {formatTokens(peakMeasuredTotal(session.calls))}
             </p>
             <p className="mt-1 text-[11px] leading-snug text-ui-text-faint">
               {session.recordCount} records · {session.malformedLines} malformed ·{" "}
@@ -212,7 +234,7 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
 
       <Scrubber
         calls={session.calls}
-        windowSize={session.windowSize}
+        windowSize={windowSize}
         callIndex={callIndex}
         onSelectCall={setCallIndex}
       />

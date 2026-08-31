@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DropZone } from "./DropZone.tsx";
 import { fileListOf, transcriptFile } from "./test-dom.ts";
@@ -13,42 +13,98 @@ const dropTarget = (): HTMLElement => {
 };
 
 describe("DropZone", () => {
-  it("hands a dropped transcript to its caller", () => {
-    const onFile = vi.fn();
-    render(<DropZone onFile={onFile} parsing={undefined} error={undefined} />);
+  it("hands a dropped transcript to its caller", async () => {
+    const onFiles = vi.fn();
+    render(<DropZone onFiles={onFiles} pending={[]} errors={[]} />);
 
     const file = transcriptFile("session-a.jsonl", "{}\n");
     fireEvent.drop(dropTarget(), { dataTransfer: { files: fileListOf(file) } });
 
-    expect(onFile).toHaveBeenCalledWith(file);
+    // Collecting a drop's entries is async even for a flat file list, so the
+    // recursive-folder walk always goes through one code path.
+    await waitFor(() => expect(onFiles).toHaveBeenCalledWith([{ file, path: "session-a.jsonl" }]));
   });
 
-  it("hands a picked transcript to its caller", () => {
-    const onFile = vi.fn();
-    render(<DropZone onFile={onFile} parsing={undefined} error={undefined} />);
+  it("hands every picked transcript to its caller", () => {
+    const onFiles = vi.fn();
+    render(<DropZone onFiles={onFiles} pending={[]} errors={[]} />);
 
-    const file = transcriptFile("session-b.jsonl", "{}\n");
-    fireEvent.change(screen.getByLabelText("choose a transcript"), {
+    const fileA = transcriptFile("session-a.jsonl", "{}\n");
+    const fileB = transcriptFile("session-b.jsonl", "{}\n");
+    fireEvent.change(screen.getByLabelText("choose files"), {
+      target: { files: fileListOf(fileA, fileB) },
+    });
+
+    expect(onFiles).toHaveBeenCalledWith([
+      { file: fileA, path: "session-a.jsonl" },
+      { file: fileB, path: "session-b.jsonl" },
+    ]);
+  });
+
+  it("hands every folder-picked transcript to its caller, path included", () => {
+    const onFiles = vi.fn();
+    render(<DropZone onFiles={onFiles} pending={[]} errors={[]} />);
+
+    const file = transcriptFile("session-a.jsonl", "{}\n");
+    Object.defineProperty(file, "webkitRelativePath", { value: "project/session-a.jsonl" });
+    fireEvent.change(screen.getByLabelText("choose a folder"), {
       target: { files: fileListOf(file) },
     });
 
-    expect(onFile).toHaveBeenCalledWith(file);
+    expect(onFiles).toHaveBeenCalledWith([{ file, path: "project/session-a.jsonl" }]);
   });
 
-  it("names the file it is parsing", () => {
-    render(<DropZone onFile={vi.fn()} parsing="session-c.jsonl" error={undefined} />);
+  it("names the single file it is parsing", () => {
+    render(
+      <DropZone
+        onFiles={vi.fn()}
+        pending={[{ path: "session-c.jsonl", fileName: "session-c.jsonl" }]}
+        errors={[]}
+      />,
+    );
 
     expect(screen.getByText(/parsing session-c\.jsonl/)).toBeDefined();
   });
 
-  it("announces a load failure in an alert", () => {
-    render(<DropZone onFile={vi.fn()} parsing={undefined} error="empty.jsonl is empty." />);
+  it("counts several files parsing at once", () => {
+    render(
+      <DropZone
+        onFiles={vi.fn()}
+        pending={[
+          { path: "a.jsonl", fileName: "a.jsonl" },
+          { path: "b.jsonl", fileName: "b.jsonl" },
+        ]}
+        errors={[]}
+      />,
+    );
 
-    expect(screen.getByRole("alert").textContent).toBe("empty.jsonl is empty.");
+    expect(screen.getByText(/parsing 2 files/)).toBeDefined();
+  });
+
+  it("announces each load failure in its own alert", () => {
+    render(
+      <DropZone
+        onFiles={vi.fn()}
+        pending={[]}
+        errors={[
+          { path: "empty.jsonl", fileName: "empty.jsonl", message: "empty.jsonl is empty." },
+          {
+            path: "notes.txt",
+            fileName: "notes.txt",
+            message:
+              "notes.txt is not a Claude Code transcript: no API calls found in 0 record(s), 0 malformed line(s).",
+          },
+        ]}
+      />,
+    );
+
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(2);
+    expect(alerts[0]?.textContent).toBe("empty.jsonl is empty.");
   });
 
   it("shows no alert when nothing has failed", () => {
-    render(<DropZone onFile={vi.fn()} parsing={undefined} error={undefined} />);
+    render(<DropZone onFiles={vi.fn()} pending={[]} errors={[]} />);
 
     expect(screen.queryByRole("alert")).toBeNull();
   });

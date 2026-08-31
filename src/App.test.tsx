@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
 import * as Fixture from "./fixtures/transcript.ts";
@@ -49,6 +49,25 @@ const drop = (file: File): void => {
   const target = screen.getByText("drop a .jsonl transcript").closest("section");
   if (target === null) throw new Error("the drop zone has no drop target");
   fireEvent.drop(target, { dataTransfer: { files: fileListOf(file) } });
+};
+
+/**
+ * Drops several files (and, with a `path`, whole folders) in one gesture, the
+ * way a folder drag delivers every entry at once. jsdom's `DataTransfer` has
+ * no entries API, so a file's folder-relative path is carried the same way a
+ * `webkitdirectory` picker carries it: `webkitRelativePath`.
+ */
+const dropMany = (entries: readonly { readonly file: File; readonly path?: string }[]): void => {
+  for (const entry of entries) {
+    if (entry.path !== undefined) {
+      Object.defineProperty(entry.file, "webkitRelativePath", { value: entry.path });
+    }
+  }
+  const target = screen.getByText("drop a .jsonl transcript").closest("section");
+  if (target === null) throw new Error("the drop zone has no drop target");
+  fireEvent.drop(target, {
+    dataTransfer: { files: fileListOf(...entries.map((entry) => entry.file)) },
+  });
 };
 
 /**
@@ -212,12 +231,27 @@ describe("App", () => {
     expect(queryContextGrid()).toBeNull();
   });
 
-  it("shows the parser's message in an alert when the file is not a transcript", async () => {
+  it("shows the parser's message in an alert when a .jsonl file has no API Calls", async () => {
+    render(<App />);
+    drop(transcriptFile("notes.jsonl", '{"type":"local_command"}\n'));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("notes.jsonl is not a Claude Code transcript");
+  });
+
+  it("ignores a non-.jsonl file silently rather than surfacing an error", async () => {
     render(<App />);
     drop(transcriptFile("notes.txt", "hello, this is not a transcript\n"));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("notes.txt is not a Claude Code transcript");
+    // Nothing async is left in flight for an ignored file — flush the drop's
+    // microtask so a false negative can't hide a bug that fires later.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(queryContextGrid()).toBeNull();
   });
 
   it("returns to the drop zone when the Session is cleared", async () => {
@@ -511,6 +545,137 @@ describe("App", () => {
       fireEvent.click(cellAt(skills));
       fireEvent.mouseLeave(contextGrid());
       expect(rail.textContent).toContain("Hover a Cell");
+    });
+  });
+
+  describe("folder drop, the Session list, and the Context Window override", () => {
+    it("collects only .jsonl files from a multi-file drop, listing every Session in the File menu", async () => {
+      render(<App />);
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000a1");
+      const fileA = transcriptFile("session-a.jsonl", transcript());
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000a2");
+      const fileB = transcriptFile("session-b.jsonl", transcript());
+      Fixture.setFixtureSessionId(undefined);
+      const notes = transcriptFile("README.md", "not a transcript at all\n");
+
+      dropMany([{ file: fileA }, { file: fileB }, { file: notes }]);
+      await findContextGrid();
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      // The selected Session's file name is also in the Session strip behind
+      // the menu, so the Session-list row is found by its button role.
+      expect(screen.getByRole("button", { name: /session-a\.jsonl/ })).toBeDefined();
+      expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+      expect(screen.queryByText("README.md")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("counts Subagent Session sidecars on the parent Session; sidecars never appear as Sessions or errors", async () => {
+      render(<App />);
+      const parentId = "00000000-0000-4000-8000-0000000000b1";
+      Fixture.setFixtureSessionId(parentId);
+      const parent = transcriptFile(`${parentId}.jsonl`, transcript());
+      const sidecarA = transcriptFile("agent-1.jsonl", transcript());
+      const sidecarB = transcriptFile("agent-2.jsonl", transcript());
+      const sidecarMeta = transcriptFile("agent-1.meta.json", "{}");
+      const toolResult = transcriptFile("out.txt", "offloaded output\n");
+      Fixture.setFixtureSessionId(undefined);
+
+      dropMany([
+        { file: parent, path: `project/${parentId}.jsonl` },
+        { file: sidecarA, path: `project/${parentId}/subagents/agent-1.jsonl` },
+        { file: sidecarB, path: `project/${parentId}/subagents/agent-2.jsonl` },
+        { file: sidecarMeta, path: `project/${parentId}/subagents/agent-1.meta.json` },
+        { file: toolResult, path: `project/${parentId}/tool-results/out.txt` },
+      ]);
+      await findContextGrid();
+
+      expect(screen.getByText("2 subagent sessions")).toBeDefined();
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      expect(screen.queryByText("agent-1.jsonl")).toBeNull();
+      expect(screen.queryByText("agent-2.jsonl")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("switches the grid to a different Session from the File menu", async () => {
+      render(<App />);
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000c1");
+      const fileA = transcriptFile("session-a.jsonl", transcript());
+      Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000c2");
+      const fileB = transcriptFile("session-b.jsonl", transcript());
+      Fixture.setFixtureSessionId(undefined);
+
+      dropMany([{ file: fileA }, { file: fileB }]);
+      await findContextGrid();
+
+      const strip = screen.getByRole("region", { name: "Session" });
+      expect(strip.textContent).toContain("session-a.jsonl");
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      fireEvent.click(screen.getByText("session-b.jsonl"));
+
+      expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
+        "session-b.jsonl",
+      );
+    });
+
+    it("changes the grid denominator and the legend percentages immediately on a Context Window override", async () => {
+      render(<App />);
+      drop(transcriptFile("session-a.jsonl", transcript()));
+      await findContextGrid();
+
+      expect(contextGrid().getAttribute("aria-label")).toBe(
+        "Context grid: 45.0k of 200.0k tokens used",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
+
+      expect(contextGrid().getAttribute("aria-label")).toBe(
+        "Context grid: 45.0k of 1000.0k tokens used",
+      );
+      expect(screen.getByText(/45\.0k \/ 1000\.0k tokens/)).toBeDefined();
+      // The legend's free-space line is the overridden window minus the total.
+      expect(screen.getByText("955.0k")).toBeDefined();
+
+      fireEvent.click(screen.getByRole("button", { name: "auto" }));
+      expect(contextGrid().getAttribute("aria-label")).toBe(
+        "Context grid: 45.0k of 200.0k tokens used",
+      );
+    });
+
+    it("shows a progress indicator while a file is still parsing, per file rather than globally", async () => {
+      render(<App />);
+      const fileA = transcriptFile("session-a.jsonl", transcript());
+      const stuck = transcriptFile("session-b.jsonl", transcript());
+      // Never resolves, so `session-b.jsonl` stays "pending" for the rest of
+      // the test — lets the progress indicator be asserted deterministically
+      // rather than racing the mocked parse's own microtask queue.
+      stuck.text = () => new Promise<string>(() => {});
+
+      dropMany([{ file: fileA }, { file: stuck }]);
+      await findContextGrid();
+
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      expect(screen.getByText(/parsing 1 file/)).toBeDefined();
+    });
+
+    it("surfaces a failure for one file without blocking the rest, per file rather than globally", async () => {
+      render(<App />);
+      const good = transcriptFile("good.jsonl", transcript());
+      const bad = transcriptFile("bad.jsonl", "   \n\n");
+
+      dropMany([{ file: good }, { file: bad }]);
+      await findContextGrid();
+
+      // The good file still loaded and is on screen despite the other failing.
+      expect(screen.getByRole("region", { name: "Session" }).textContent).toContain("good.jsonl");
+
+      // Once a Session is loaded, per-file failures surface from the File
+      // menu rather than the (now unmounted) empty-state drop zone.
+      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toBe("bad.jsonl");
     });
   });
 });

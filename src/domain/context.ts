@@ -216,6 +216,16 @@ export const cumulativeItems = (
 };
 
 /**
+ * The highest Measured Tokens any API Call in a Session reached — what the
+ * Session list and the Session strip call "peak".
+ *
+ * @param calls - Context Snapshots of one Session, in transcript order
+ * @returns The largest `measuredTotal`, or `0` for a Session with no calls
+ */
+export const peakMeasuredTotal = (calls: readonly ContextSnapshot[]): number =>
+  calls.reduce((max, call) => Math.max(max, call.measuredTotal), 0);
+
+/**
  * One Claude Code conversation parsed from a single JSONL transcript.
  */
 export type Session = {

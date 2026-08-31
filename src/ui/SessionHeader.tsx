@@ -1,9 +1,11 @@
 /**
  * The Session strip under the menu bar: which Session is loaded, which API Call
- * the grid is showing, and how full the Context Window is at that call.
+ * the grid is showing, how full the Context Window is at that call, and the
+ * Context Window override.
  */
 import type { ContextSnapshot, Session } from "../domain/context.ts";
 import { formatPercent, formatTimestamp, formatTokens } from "./format.ts";
+import { type WindowChoice, WINDOW_CHOICES } from "./window-choice.ts";
 
 /**
  * Props for {@link SessionHeader}.
@@ -18,15 +20,40 @@ export type SessionHeaderProps = {
    */
   readonly snapshot: ContextSnapshot;
   /**
-   * Clears the Session and returns to the drop zone.
+   * The Context Window used as the fill bar's and the token count's
+   * denominator — the Session's inferred `windowSize` unless `windowChoice`
+   * overrides it.
+   */
+  readonly windowSize: number;
+  /**
+   * Which Context Window override is selected.
+   */
+  readonly windowChoice: WindowChoice;
+  /**
+   * Changes the Context Window override.
+   */
+  readonly onWindowChoiceChange: (choice: WindowChoice) => void;
+  /**
+   * Closes every open Session and returns to the drop zone.
    */
   readonly onClear: () => void;
 };
 
+const windowChoiceLabel = (choice: WindowChoice): string =>
+  choice === "auto" ? "auto" : formatTokens(choice);
+
 /**
- * Session identity on the left, fill level on the right, in one strip.
+ * Session identity on the left, fill level and the Context Window override on
+ * the right, in one strip.
  */
-export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps) => (
+export const SessionHeader = ({
+  session,
+  snapshot,
+  windowSize,
+  windowChoice,
+  onWindowChoiceChange,
+  onClear,
+}: SessionHeaderProps) => (
   <section
     aria-label="Session"
     className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ui-border bg-ui-sunken px-4 py-2"
@@ -55,16 +82,37 @@ export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps
         <div
           className="h-full rounded-full bg-ui-action"
           style={{
-            width: `${Math.min(100, (snapshot.measuredTotal / Math.max(1, session.windowSize)) * 100)}%`,
+            width: `${Math.min(100, (snapshot.measuredTotal / Math.max(1, windowSize)) * 100)}%`,
           }}
         />
       </div>
       <span className="text-xs text-ui-text">
-        {formatTokens(snapshot.measuredTotal)} / {formatTokens(session.windowSize)} tokens ·{" "}
+        {formatTokens(snapshot.measuredTotal)} / {formatTokens(windowSize)} tokens ·{" "}
         <span className="text-ui-text-muted">
-          {formatPercent(snapshot.measuredTotal, session.windowSize)} full
+          {formatPercent(snapshot.measuredTotal, windowSize)} full
         </span>
       </span>
+      <div
+        role="group"
+        aria-label="Context Window"
+        className="flex overflow-hidden rounded border border-ui-border text-xs"
+      >
+        {WINDOW_CHOICES.map((choice) => (
+          <button
+            type="button"
+            key={String(choice)}
+            aria-pressed={choice === windowChoice}
+            onClick={() => onWindowChoiceChange(choice)}
+            className={`px-2 py-0.5 ${
+              choice === windowChoice
+                ? "bg-ui-panel-active text-ui-text"
+                : "text-ui-text-muted hover:bg-ui-panel"
+            }`}
+          >
+            {windowChoiceLabel(choice)}
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         onClick={onClear}
