@@ -118,4 +118,29 @@ describe("bun run anonymize", () => {
     expect(result.stderr).toContain("forbidden terms survived");
     expect(readdirSync(workspace)).toEqual(["session.jsonl"]);
   });
+
+  it("writes nothing when a default forbidden term survives", { timeout: 30000 }, () => {
+    // An enum-shaped value under an allow-listed key is kept verbatim, so this
+    // reaches the scan without `--forbid`: the private repository name is on
+    // the default list.
+    const line = JSON.stringify({ type: "system", subtype: "agent-toolkit" });
+    writeFileSync(input, `${line}\n`, "utf8");
+
+    const result = run([input, output]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("forbidden terms survived");
+    expect(result.stderr).toContain("agent-toolkit");
+    expect(readdirSync(workspace)).toEqual(["session.jsonl"]);
+  });
+
+  it("writes nothing when the structure would drift", { timeout: 30000 }, () => {
+    // 1e999 parses as Infinity and serializes back as null, so the output no
+    // longer matches the input: exactly the drift the self-check exists for.
+    writeFileSync(input, `${TRANSCRIPT}{"type":"user","overflow":1e999}\n`, "utf8");
+
+    const result = run([input, output]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("structure changed");
+    expect(readdirSync(workspace)).toEqual(["session.jsonl"]);
+  });
 });

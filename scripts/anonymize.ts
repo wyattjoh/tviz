@@ -13,11 +13,11 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { basename, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import {
   anonymizeTranscript,
   DEFAULT_SEED,
+  defaultForbiddenTerms,
   findForbiddenTerms,
   findStructuralDifferences,
 } from "./anonymizer.ts";
@@ -72,13 +72,25 @@ function parseOptions(argv: readonly string[]): Options {
 }
 
 /**
- * Terms that must never appear in a Demo Session or fixture: the developer's
- * account name, their home directory, and this repository's name.
+ * Private names that must never appear in a Demo Session or fixture: this
+ * repository, the repository the surveyed transcripts came from, the
+ * developer's GitHub account, and the macOS home prefix those paths start with.
+ *
+ * They are written out rather than derived from the checkout directory, because
+ * a worktree is named after the branch, not after the repository.
+ */
+const KNOWN_PRIVATE_TERMS = ["tviz", "wyattjoh", "agent-toolkit", "Users/"];
+
+/**
+ * Terms that must never appear in the output: the developer's account name and
+ * home directory, the known private names, and anything passed with `--forbid`.
  */
 function forbiddenTerms(extra: readonly string[]): string[] {
-  const home = homedir();
-  const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-  return [userInfo().username, home, basename(home), basename(repoRoot), ...extra];
+  return defaultForbiddenTerms({
+    username: userInfo().username,
+    homeDirectory: homedir(),
+    knownTerms: [...KNOWN_PRIVATE_TERMS, ...extra],
+  });
 }
 
 function fail(message: string): never {

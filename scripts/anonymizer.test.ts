@@ -3,6 +3,7 @@ import {
   anonymizeRecord,
   anonymizeTranscript,
   DEFAULT_SEED,
+  defaultForbiddenTerms,
   findForbiddenTerms,
   findStructuralDifferences,
 } from "./anonymizer.ts";
@@ -75,10 +76,13 @@ function assistantRecord(): Record<string, unknown> {
       durationMs: 4.5,
       truncated: null,
     },
-    fileBackups: {
+    trackedFileBackups: {
       "/Users/zebracorn/Code/quokkaphone/src/App.tsx": "zebracorn backup body",
       "/Users/zebracorn/Code/quokkaphone/src/index.css": "quokkaphone backup body",
       "gruntfish notes.md": "wobblesprocket backup body",
+      // A content key can be shaped exactly like a schema key: no slash, no
+      // space, nothing but letters.
+      Xylophonefile: "wobblesprocket second body",
     },
   };
 }
@@ -209,29 +213,76 @@ describe("anonymizeRecord", () => {
     }
   });
 
-  it("rewrites ids into same-shape ids that still resolve to each other", () => {
+  it("keeps uuids so a Demo Session still matches its file name", () => {
     const input = assistantRecord();
     const output = anonymizeRecord(input, DEFAULT_SEED);
-    const sibling = anonymizeRecord(
-      { type: "user", sessionId: input["sessionId"], parentUuid: input["parentUuid"] },
-      DEFAULT_SEED,
-    );
 
-    for (const path of [["parentUuid"], ["sessionId"], ["requestId"], ["message", "id"]]) {
+    // A uuid is random by construction: it holds no free text, and the Loader
+    // reads `sessionId` as the Session id.
+    for (const path of [["parentUuid"], ["sessionId"]]) {
+      expect(at(output, path), path.join(".")).toBe(at(input, path));
+    }
+    expect(at(anonymizeRecord(skillListingRecord(), DEFAULT_SEED), ["uuid"])).toBe(
+      at(skillListingRecord(), ["uuid"]),
+    );
+  });
+
+  it("rewrites non-uuid ids into same-shape ids that still resolve to each other", () => {
+    const input = assistantRecord();
+    const output = anonymizeRecord(input, DEFAULT_SEED);
+    const sibling = anonymizeRecord({ type: "user", requestId: input["requestId"] }, DEFAULT_SEED);
+
+    for (const path of [["requestId"], ["message", "id"]]) {
       const before = at(input, path) as string;
       const after = at(output, path) as string;
       expect(after, path.join(".")).not.toBe(before);
       expect(after.length).toBe(before.length);
     }
-    expect(at(output, ["sessionId"])).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
     expect(at(output, ["message", "id"])).toMatch(/^msg_[0-9a-zA-Z]+$/);
     expect(at(output, ["message", "content", 1, "id"])).toMatch(/^toolu_[0-9a-zA-Z]+$/);
 
     // The same id anonymizes to the same value, so records still link up.
-    expect(at(sibling, ["sessionId"])).toBe(at(output, ["sessionId"]));
-    expect(at(sibling, ["parentUuid"])).toBe(at(output, ["parentUuid"]));
+    expect(at(sibling, ["requestId"])).toBe(at(output, ["requestId"]));
+  });
+
+  it("keeps an allow-listed value only when it is shaped like an enum", () => {
+    const input = {
+      type: "system",
+      subtype: "local_command",
+      model: "claude-opus-5-20260101[1m]",
+      decision: "approve zebracorn request",
+      level: "reviewer note: quokkaphone codename",
+      status: "gruntfish escalation",
+    };
+    const output = anonymizeRecord(input, DEFAULT_SEED) as Record<string, string>;
+
+    for (const key of ["type", "subtype", "model"] as const) {
+      expect(output[key], key).toBe(input[key]);
+    }
+    for (const key of ["decision", "level", "status"] as const) {
+      expect(output[key], key).not.toBe(input[key]);
+      expect(output[key]?.length, key).toBe(input[key].length);
+    }
+    for (const token of PLANTED) {
+      expect(JSON.stringify(output).toLowerCase()).not.toContain(token.toLowerCase());
+    }
+  });
+
+  it("keeps lengths when a value holds a non-BMP character", () => {
+    const emoji = "\u{1F600}";
+    const input = {
+      type: "assistant",
+      requestId: `msg_${emoji.repeat(5)}abc`,
+      message: { role: "assistant", content: `${emoji.repeat(3)} zebracorn` },
+    };
+    const output = anonymizeRecord(input, DEFAULT_SEED);
+
+    expect(findStructuralDifferences(JSON.stringify(input), JSON.stringify(output))).toEqual([]);
+    for (const pair of pairs(input, output)) {
+      if (typeof pair.before !== "string") continue;
+      expect((pair.after as string).length, pair.path).toBe(pair.before.length);
+    }
+    expect(JSON.stringify(output).toLowerCase()).not.toContain("zebracorn");
   });
 
   it("replaces names that are not tool names", () => {
@@ -280,8 +331,8 @@ describe("anonymizeRecord", () => {
     const input = assistantRecord();
     const output = anonymizeRecord(input, DEFAULT_SEED);
 
-    const before = Object.keys(at(input, ["fileBackups"]) as object);
-    const after = Object.keys(at(output, ["fileBackups"]) as object);
+    const before = Object.keys(at(input, ["trackedFileBackups"]) as object);
+    const after = Object.keys(at(output, ["trackedFileBackups"]) as object);
     expect(after).toHaveLength(before.length);
     expect(new Set(after).size).toBe(after.length);
     after.forEach((key, index) => {
@@ -292,8 +343,11 @@ describe("anonymizeRecord", () => {
       for (const token of PLANTED) expect(key.toLowerCase()).not.toContain(token.toLowerCase());
     });
     expect(after[0]).toContain("/");
+    // A content key shaped like an identifier is renamed too.
+    expect(after[3]).not.toBe("Xylophonefile");
     // Schema keys keep their name.
-    expect(Object.keys(output as object)).toContain("fileBackups");
+    expect(Object.keys(output as object)).toContain("trackedFileBackups");
+    expect(Object.keys(at(output, ["message", "usage"]) as object)).toContain("input_tokens");
   });
 
   it("caps letter runs in generated ids and filler", () => {
@@ -377,6 +431,19 @@ describe("anonymizeTranscript", () => {
     expect(findStructuralDifferences(transcript, result.text)).toEqual([]);
   });
 
+  it("keeps CRLF line endings, and reports them when they are lost", () => {
+    const crlf = transcript.split("\n").join("\r\n");
+    const result = anonymizeTranscript(crlf, DEFAULT_SEED);
+    const lines = result.text.split("\n");
+
+    expect(lines).toHaveLength(5);
+    expect(lines.slice(0, -1).every((line) => line.endsWith("\r"))).toBe(true);
+    expect(findStructuralDifferences(crlf, result.text)).toEqual([]);
+    // The self-check notices a dropped terminator, which record-by-record
+    // comparison alone cannot see.
+    expect(findStructuralDifferences(crlf, crlf.split("\r\n").join("\n"))).not.toEqual([]);
+  });
+
   it("is deterministic per seed", () => {
     expect(anonymizeTranscript(transcript, "seed-a").text).toBe(
       anonymizeTranscript(transcript, "seed-a").text,
@@ -418,6 +485,39 @@ describe("findStructuralDifferences", () => {
     expect(findStructuralDifferences(before, changedNumber)).toHaveLength(1);
     expect(findStructuralDifferences(before, changedLength)).toHaveLength(1);
     expect(findStructuralDifferences(`${before}\n${before}`, before)).toHaveLength(1);
+
+    const changedType = JSON.stringify({ type: "user", text: "abc", usage: { input_tokens: 10 } });
+    expect(findStructuralDifferences(before, changedType)).toHaveLength(1);
+  });
+});
+
+describe("defaultForbiddenTerms", () => {
+  it("covers the account name, its parts, the home directory and known names", () => {
+    const terms = defaultForbiddenTerms({
+      username: "ada.lovelace",
+      homeDirectory: "/Users/ada.lovelace",
+      knownTerms: ["quokkaphone", "Users/", "no"],
+    });
+
+    for (const term of [
+      "ada.lovelace",
+      "ada",
+      "lovelace",
+      "/Users/ada.lovelace",
+      "quokkaphone",
+      "Users/",
+    ]) {
+      expect(terms, term).toContain(term);
+    }
+    // Terms too short to mean anything are dropped.
+    expect(terms).not.toContain("no");
+    expect(findForbiddenTerms("wrote /users/ADA.Lovelace/notes", terms)).not.toEqual([]);
+  });
+
+  it("tolerates a missing account name or home directory", () => {
+    expect(
+      defaultForbiddenTerms({ username: undefined, homeDirectory: undefined, knownTerms: [] }),
+    ).toEqual([]);
   });
 });
 
