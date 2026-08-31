@@ -16,7 +16,8 @@
     "infra:install": "cd infra && bun install --frozen-lockfile",
     "infra:typecheck": "cd infra && bun run typecheck",
     "plan": "cd infra && bun run plan:prod",
-    "deploy": "cd infra && bun run deploy:prod"
+    "deploy": "cd infra && bun run deploy:prod",
+    "bootstrap:ci": "infra/node_modules/.bin/alchemy deploy infra/stacks/github.ts --profile admin --yes"
   },
   "dependencies": {
     "effect": "^4.0.0-beta.107",

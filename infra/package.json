@@ -9,8 +9,7 @@
     "plan": "alchemy plan",
     "plan:prod": "alchemy plan --stage prod",
     "deploy": "alchemy deploy --yes",
-    "deploy:prod": "alchemy deploy --stage prod --yes",
-    "bootstrap:ci": "alchemy deploy stacks/github.ts --profile admin --yes"
+    "deploy:prod": "alchemy deploy --stage prod --yes"
   },
   "dependencies": {
     "alchemy": "2.0.0-beta.75",
@@ -21,5 +20,6 @@
     "@effect/platform-node": "4.0.0-rc.112",
     "@types/node": "^24.13.3",
     "typescript": "~6.0.2"
-  }
+  },
+  "//": "There is deliberately no `bootstrap:ci` here: `stacks/github.ts` uses Alchemy.localState(), which anchors `.alchemy/state` at the working directory, and `bun run` runs a script from its own package's root. Running it from `infra/` would start from empty state and re-mint the CI token, so the script lives in the ROOT package.json — see ADR-0005 and ADR-0007."
 }
