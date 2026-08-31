@@ -56,7 +56,7 @@ bun run bootstrap:ci                        # one-time/rotate: CI token → GitH
 src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
 src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
-src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber; grid layout, formatting, theme token maps
+src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Scrubber; grid layout, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
 scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators
@@ -71,15 +71,21 @@ Tailwind utilities (`bg-ui-canvas`, `text-ui-text-muted`, `bg-cat-skills`,
 domain values in `src/ui/theme.ts`. The `ctp-*` palette layer is for the semantic
 layer only.
 
-The main view is a centred monospace column on `ui-shell` — the grid as the page,
-the legend as an aligned text table — with the Scrubber docked across the bottom
-of the window, as the "Workbench" variant of the throwaway UI prototype settled
-(branch `wyattjoh/ui-prototype`; see its `src/prototype/README.md`). The Scrubber
-is a stacked-area chart of Category totals over every API Call, dragged to scrub,
-with transport controls, a 0.5×–4× speed control and a range input for keyboard
-stepping; compactions are dashed rules on the chart. Its geometry lives in
-`src/ui/scrubber.ts` so the shape of the chart is testable without a DOM. The
-right rail (filters + Inspector) and the File menu are still to come.
+The main view is the **Workbench** shell the throwaway UI prototype settled on
+(branch `wyattjoh/ui-prototype`; see its `src/prototype/README.md`), in four
+regions established once in `src/App.tsx`: a menu bar carrying the File menu, a
+Session strip (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on
+the flexible left, fixed right rail holding the legend and the docked Inspector
+— and the Scrubber across the bottom. The grid pane is the scroll container and
+its width drives `ContextGrid`'s column count. Filters and the Inspector fill the
+rail, and opening Sessions fills the File menu, without moving the regions.
+
+The Scrubber is a stacked-area chart of Category totals over every API Call,
+dragged to scrub, with transport controls, a 0.5×–4× speed control and a range
+input for keyboard stepping; compactions are dashed rules on the chart. Its
+geometry lives in `src/ui/scrubber.ts` so the shape of the chart is testable
+without a DOM. The chart is a drag surface rather than a control: it hands focus
+to the range input so ←/→ keep stepping after a drag.
 
 ## Transcript format — what the parser relies on
 

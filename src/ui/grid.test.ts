@@ -239,6 +239,35 @@ describe("buildCells", () => {
       expect(after[1]?.start).toBe(before[1]?.start);
     });
 
+    it("keeps a Cell the floor granted once the Category wins Cells of its own", () => {
+      // MCP arrives 175 tokens at a time and is invisible on the grid until the
+      // floor gives it Cell 20. Twelve calls later it has grown past the
+      // quantum and wins Cells outright — which must not cost it the Cell it
+      // was granted: Cell 20 is settled far behind the frontier, and ADR-0006
+      // lets only the frontier Cell change colour.
+      const before = buildCells(
+        [item("system", 20_000), item("mcp", 175), item("messages", 5_000, "toolResult")],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+      const after = buildCells(
+        [
+          item("system", 20_000),
+          item("mcp", 175),
+          item("messages", 5_000, "toolResult"),
+          item("mcp", 12_000),
+        ],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(before[20]?.fill).toBe("mcp");
+      expect(after[20]?.fill).toBe("mcp");
+      // Everything the earlier Context Snapshot fully covered is untouched.
+      expect(fills(after).slice(0, 25)).toEqual(fills(before).slice(0, 25));
+      // MCP now also holds the thirteen Cells its own tokens fill, on top of
+      // the one the floor granted it.
+      expect(countOf(after, "mcp")).toBe(14);
+    });
+
     it("rewrites earlier Cells only when the API Call is a compaction", () => {
       const session = compactedSession();
       const [, second, third] = session.calls;

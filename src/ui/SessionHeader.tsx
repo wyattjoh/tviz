@@ -1,6 +1,6 @@
 /**
- * The two lines above the grid: which Session is loaded, and which API Call the
- * grid is showing.
+ * The Session strip under the menu bar: which Session is loaded, which API Call
+ * the grid is showing, and how full the Context Window is at that call.
  */
 import type { ContextSnapshot, Session } from "../domain/context.ts";
 import { formatPercent, formatTimestamp, formatTokens } from "./format.ts";
@@ -24,39 +24,54 @@ export type SessionHeaderProps = {
 };
 
 /**
- * Session identity, then model, Claude Code version, API Call and fill level.
+ * Session identity on the left, fill level on the right, in one strip.
  */
 export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps) => (
-  <header>
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-ui-text-faint">
-      <span className="text-ui-text">tviz</span>
-      <span className="text-ui-focus underline underline-offset-4">{session.fileName}</span>
-      <span className="truncate">{session.id}</span>
-      <button type="button" onClick={onClear} className="ml-auto hover:text-ui-text-secondary">
+  <section
+    aria-label="Session"
+    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ui-border bg-ui-sunken px-4 py-2"
+  >
+    <span className="text-ui-focus underline underline-offset-4">{session.fileName}</span>
+    <span className="truncate text-xs text-ui-text-faint">{session.id}</span>
+    <span className="rounded bg-ui-panel px-2 py-0.5 text-xs text-ui-text-secondary">
+      {session.model ?? "unknown model"}
+    </span>
+    <span className="text-xs text-ui-text-muted">cc {session.claudeCodeVersion ?? "unknown"}</span>
+    <span className="text-xs text-ui-text-muted">
+      call <span className="text-ui-text">{snapshot.index + 1}</span>/{session.calls.length} ·{" "}
+      {formatTimestamp(snapshot.timestamp)}
+    </span>
+    {/* A Subagent Session owns a separate Context Window; only the folder
+        loader can count them, so a single dropped file says nothing. */}
+    {session.subagentCount === undefined ? null : (
+      <span className="text-xs text-ui-text-faint">{session.subagentCount} subagent sessions</span>
+    )}
+    {/* A compaction is the one API Call that rewrites the grid instead of
+        extending it, so it is named rather than left to the Scrubber's mark. */}
+    {snapshot.reset ? <span className="text-xs text-ui-warning"> · compaction</span> : null}
+
+    <div className="ml-auto flex items-center gap-3">
+      <div className="h-1.5 w-32 overflow-hidden rounded-full bg-ui-panel">
+        <div
+          className="h-full rounded-full bg-ui-action"
+          style={{
+            width: `${Math.min(100, (snapshot.measuredTotal / Math.max(1, session.windowSize)) * 100)}%`,
+          }}
+        />
+      </div>
+      <span className="text-xs text-ui-text">
+        {formatTokens(snapshot.measuredTotal)} / {formatTokens(session.windowSize)} tokens ·{" "}
+        <span className="text-ui-text-muted">
+          {formatPercent(snapshot.measuredTotal, session.windowSize)} full
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onClear}
+        className="rounded px-2 py-0.5 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+      >
         clear
       </button>
     </div>
-
-    <div className="mt-6 text-ui-text-secondary">
-      <span className="text-ui-text-faint">⟩ </span>
-      {session.model ?? "unknown model"} · cc {session.claudeCodeVersion ?? "unknown"} · call{" "}
-      <span className="text-ui-text">{snapshot.index + 1}</span>/{session.calls.length} ·{" "}
-      {formatTimestamp(snapshot.timestamp)}
-      {/* A compaction is the one API Call that rewrites the grid instead of
-          extending it, so it is named rather than left to the Scrubber's mark. */}
-      {snapshot.reset ? <span className="text-ui-warning"> · compaction</span> : null}
-    </div>
-
-    <div className="mt-1 text-ui-text">
-      {formatTokens(snapshot.measuredTotal)} / {formatTokens(session.windowSize)} tokens ·{" "}
-      <span className="text-ui-text-muted">
-        {formatPercent(snapshot.measuredTotal, session.windowSize)} full
-        {/* A Subagent Session owns a separate Context Window; only the folder
-            loader can count them, so a single dropped file says nothing. */}
-        {session.subagentCount === undefined
-          ? null
-          : ` · ${session.subagentCount} subagent sessions`}
-      </span>
-    </div>
-  </header>
+  </section>
 );

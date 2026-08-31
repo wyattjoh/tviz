@@ -120,6 +120,7 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
   const lastIndex = calls.length - 1;
   const play = usePlayback(callIndex, lastIndex, onSelectCall);
   const chartRef = useRef<SVGSVGElement>(null);
+  const rangeRef = useRef<HTMLInputElement>(null);
   const dragging = useRef(false);
 
   const bands = useMemo(() => bandsFor(calls, windowSize), [calls, windowSize]);
@@ -149,6 +150,13 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
 
   const onPointerDown = (event: PointerEvent<SVGSVGElement>) => {
     dragging.current = true;
+    // The chart is a drag surface, not a control: pressing it would otherwise
+    // leave focus on the document and the arrow keys dead. Focus goes to the
+    // range input — the Scrubber's one real slider — so dragging and then
+    // stepping with ←/→ works as the caption promises. The `mousedown` that
+    // follows this event is suppressed below, or its default action would take
+    // the focus straight back off again.
+    rangeRef.current?.focus({ preventScroll: true });
     // Capturing keeps the drag alive past the edges of the chart, so scrubbing
     // too far parks on the first or last API Call instead of stopping dead.
     // jsdom has no capture API, hence the guard.
@@ -172,9 +180,12 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
   /**
    * Arrow keys step one API Call at a time, Home and End jump to either end.
    *
-   * Handled here rather than left to the range input's native behaviour so that
-   * a step pauses playback like every other manual scrub, and so the keys work
-   * wherever focus sits inside the Scrubber.
+   * Handled on the Scrubber as a whole rather than left to the range input's
+   * native behaviour, so that a step pauses playback like every other manual
+   * scrub and so the keys also work while focus sits on a transport button.
+   * Nothing inside the Scrubber takes focus except its controls — the chart
+   * hands focus to the range input when it is dragged — so every route in
+   * reaches this handler.
    */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const step =
@@ -274,6 +285,10 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
           preserveAspectRatio="none"
           className="h-[110px] w-full cursor-crosshair touch-none"
           onPointerDown={onPointerDown}
+          // Keeps the browser's own focus handling — which would move focus to
+          // the chart's nearest focusable ancestor, i.e. off the range input —
+          // and its text selection out of the drag.
+          onMouseDown={(event) => event.preventDefault()}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
@@ -314,6 +329,7 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
       </div>
 
       <input
+        ref={rangeRef}
         type="range"
         min={0}
         max={lastIndex}

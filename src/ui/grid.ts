@@ -146,7 +146,28 @@ const majorityCategory = (byCategory: ReadonlyMap<Category, number>): Category |
 };
 
 /**
- * Gives every Category holding tokens at least one Cell.
+ * What one Cell holds, as the one-Cell floor needs to see it.
+ */
+type CellClaims = {
+  /**
+   * Tokens of this Cell's range held by each Category reaching into it.
+   */
+  readonly byCategory: ReadonlyMap<Category, number>;
+  /**
+   * Categories whose items carry on past this Cell, so they are certain to
+   * reach at least one more Cell.
+   */
+  readonly open: ReadonlySet<Category>;
+};
+
+/**
+ * Nothing is still growing once the grid has run out of Cells.
+ */
+const NOTHING_OPEN: ReadonlySet<Category> = new Set<Category>();
+
+/**
+ * Gives every Category holding tokens at least one Cell, and never takes one
+ * back.
  *
  * A Category smaller than the quantum — 175 tokens of MCP against a Cell of
  * 1,000 — loses every majority vote and would disappear from a grid whose legend
@@ -154,41 +175,75 @@ const majorityCategory = (byCategory: ReadonlyMap<Category, number>): Category |
  * to a starving Category changes that Cell's *colour* only: nothing moves and
  * nothing re-flows, which is all ADR-0006 forbids.
  *
- * The Cell taken is the one where the starving Category covers the most tokens,
- * and only a Category that holds more than one Cell can donate. When no such
- * donor exists — more Categories present than Cells drawn — the floor gives up
- * rather than shuffling colours between two Categories that each hold one Cell.
+ * The floor walks the grid from the front and decides each Category **once**, at
+ * the Cell where that Category stops reaching further; what it is granted there
+ * it keeps for the rest of the Session, even once later API Calls append enough
+ * of it to win Cells outright. Deciding globally instead — "does this Category
+ * hold a Cell anywhere in the finished grid?" — reads the future, and the future
+ * changes: a Category granted a Cell at call 12 would hand it back at call 40,
+ * recolouring a settled Cell far behind the frontier, which ADR-0006 forbids.
+ * Every input to a grant is therefore taken from the Cells up to the one being
+ * settled, and those depend only on a prefix of the items — the same prefix
+ * every later Context Snapshot starts with.
+ *
+ * The Cell taken is the one the starving Category covers most of, and the donor
+ * must survive it: it either already holds another Cell or is still growing into
+ * the Cells ahead. When no such donor exists — more Categories crowding into a
+ * Cell than there are Cells to go round — the floor gives up rather than
+ * shuffling colours between two Categories that each hold one Cell.
  */
-const applyCategoryFloor = (
-  cells: Cell[],
-  perCell: readonly (ReadonlyMap<Category, number> | undefined)[],
-): void => {
+const applyCategoryFloor = (cells: Cell[], claims: readonly CellClaims[]): void => {
   const cellsHeld = new Map<Category, number>();
-  for (const cell of cells) {
-    if (cell.fill === "free") continue;
-    cellsHeld.set(cell.fill, (cellsHeld.get(cell.fill) ?? 0) + 1);
-  }
+  const seen = new Set<Category>();
+  const decided = new Set<Category>();
 
-  for (const category of CATEGORY_ORDER) {
-    if ((cellsHeld.get(category) ?? 0) > 0) continue;
-
+  /**
+   * Hands a starving Category the Cell it reaches furthest into, among the Cells
+   * walked so far whose holder can afford to lose one.
+   */
+  const takeCellFor = (category: Category, upTo: number, open: ReadonlySet<Category>): void => {
     let target: number | undefined;
     let bestOverlap = 0;
-    for (const [index, byCategory] of perCell.entries()) {
-      const overlap = byCategory?.get(category) ?? 0;
+    for (let index = 0; index <= upTo; index += 1) {
+      const overlap = claims[index]?.byCategory.get(category) ?? 0;
       if (overlap <= bestOverlap) continue;
       const donor = cells[index]?.fill;
-      if (donor === undefined || donor === "free" || (cellsHeld.get(donor) ?? 0) <= 1) continue;
+      if (donor === undefined || donor === "free") continue;
+      // The donor keeps a Cell either way: it already holds a second one, or it
+      // carries on into Cells this walk has not reached yet.
+      if ((cellsHeld.get(donor) ?? 0) < 2 && !open.has(donor)) continue;
       target = index;
       bestOverlap = overlap;
     }
 
     const cell = target === undefined ? undefined : cells[target];
-    if (target === undefined || cell === undefined || cell.fill === "free") continue;
+    if (target === undefined || cell === undefined || cell.fill === "free") return;
     cellsHeld.set(cell.fill, (cellsHeld.get(cell.fill) ?? 0) - 1);
     cellsHeld.set(category, 1);
     cells[target] = { ...cell, fill: category };
+  };
+
+  /**
+   * Decides, once and for all, every Category that has stopped reaching further.
+   */
+  const settleClosed = (upTo: number, open: ReadonlySet<Category>): void => {
+    for (const category of CATEGORY_ORDER) {
+      if (decided.has(category) || !seen.has(category) || open.has(category)) continue;
+      decided.add(category);
+      if ((cellsHeld.get(category) ?? 0) === 0) takeCellFor(category, upTo, open);
+    }
+  };
+
+  for (const [index, { byCategory, open }] of claims.entries()) {
+    const fill = cells[index]?.fill;
+    if (fill !== undefined && fill !== "free") cellsHeld.set(fill, (cellsHeld.get(fill) ?? 0) + 1);
+    for (const category of byCategory.keys()) seen.add(category);
+    settleClosed(index, open);
   }
+
+  // A Context Snapshot that overflows the window leaves Categories still
+  // reaching past the last Cell drawn; they are settled once the grid runs out.
+  settleClosed(cells.length - 1, NOTHING_OPEN);
 };
 
 /**
@@ -203,9 +258,9 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
   const spans = spanItems(items);
   const cellCount = cellCountFor(windowSize);
   const cells: Cell[] = [];
-  // What each Cell holds per Category, kept so the floor below can find the Cell
-  // a starving Category has the strongest claim on.
-  const perCell: (ReadonlyMap<Category, number> | undefined)[] = [];
+  // What each Cell holds per Category, and which Categories carry on past it:
+  // all the one-Cell floor below is allowed to know at that point in the grid.
+  const claims: CellClaims[] = [];
   // Spans and Cells both advance left to right, so one pointer walks both.
   let firstSpan = 0;
 
@@ -216,18 +271,20 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
     while (firstSpan < spans.length && (spans[firstSpan]?.end ?? 0) <= start) firstSpan += 1;
 
     const overlaps: Overlap[] = [];
+    const open = new Set<Category>();
     for (let cursor = firstSpan; cursor < spans.length; cursor += 1) {
       const span = spans[cursor];
       if (span === undefined || span.start >= end) break;
       const overlap = overlapOf(span, start, end);
       if (overlap > 0) overlaps.push({ item: span.item, overlap });
+      if (span.end > end) open.add(span.item.category);
     }
 
     const byCategory = tokensByCategory(overlaps);
+    claims.push({ byCategory, open });
     const fill = majorityCategory(byCategory);
     if (fill === undefined) {
       cells.push({ index, start, end, fill: "free", items: [] });
-      perCell.push(undefined);
       continue;
     }
 
@@ -242,10 +299,9 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
         .sort((left, right) => right.overlap - left.overlap)
         .map((entry) => entry.item),
     });
-    perCell.push(byCategory);
   }
 
-  applyCategoryFloor(cells, perCell);
+  applyCategoryFloor(cells, claims);
 
   return cells;
 };

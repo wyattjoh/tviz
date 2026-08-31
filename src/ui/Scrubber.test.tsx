@@ -157,6 +157,25 @@ describe("Scrubber", () => {
     expect(range().value).toBe(String(last - 1));
   });
 
+  it("steps with the arrow keys straight after the chart was dragged", () => {
+    const { chart, calls } = renderScrubber();
+
+    // Dragging the chart is the advertised way in, and the caption promises
+    // ←/→ steps next: the chart is not focusable, so the drag has to leave
+    // focus on a Scrubber control rather than on the document.
+    fireEvent.pointerDown(chart, { clientX: CHART_PX / 2, pointerId: 1 });
+    fireEvent.pointerUp(chart, { clientX: CHART_PX / 2, pointerId: 1 });
+    const middle = Math.round((calls.length - 1) / 2);
+    expect(range().value).toBe(String(middle));
+    expect(document.activeElement).toBe(range());
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "ArrowRight" });
+    expect(range().value).toBe(String(middle + 1));
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "ArrowLeft" });
+    expect(range().value).toBe(String(middle));
+  });
+
   it("stops at the ends rather than stepping outside the Session", () => {
     const { calls } = renderScrubber();
 

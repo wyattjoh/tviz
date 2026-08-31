@@ -23,17 +23,22 @@ const LAST_CALL_TOKENS = 45_000;
  * A Session whose last API Call holds every Category, including two Categories
  * smaller than one Cell — Custom agents (375 tokens) and MCP (175) — which land
  * in different Cells, the case the grid's one-Cell floor exists for.
+ *
+ * The first API Call measures 30,400 rather than a round 30,000 so that it ends
+ * *inside* a Cell, as a Session in the wild does. On the boundary, the Messages
+ * item MCP shares its Cell with would hold that one Cell and stop dead there,
+ * and the floor does not take a Category's only Cell.
  */
 const transcript = (): string =>
   Fixture.toJsonl([
     Fixture.skillListing(9_000),
+    Fixture.mcpInstructions(700),
     Fixture.agentListing(1_500),
     Fixture.nestedMemory(6_000),
-    Fixture.mcpInstructions(700),
     Fixture.userMessage(2_000),
     Fixture.assistantMessage({
       id: "m1",
-      usage: { cacheRead: 30_000 },
+      usage: { cacheRead: 30_400 },
       textCharacters: 600,
     }),
     Fixture.toolResult(40_000),
@@ -63,6 +68,55 @@ describe("App", () => {
     expect(screen.getByText(/45\.0k \/ 200\.0k tokens/)).toBeDefined();
     expect(screen.getByText("Free space")).toBeDefined();
     expect(screen.getByText("155.0k")).toBeDefined();
+  });
+
+  it("lays a loaded Session out in the four Workbench regions", async () => {
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await screen.findByRole("img");
+
+    // 1 — menu bar, with the File menu Sessions will be opened from.
+    const menuBar = screen.getByRole("banner", { name: "tviz" });
+    expect(menuBar.contains(screen.getByRole("button", { name: "File" }))).toBe(true);
+
+    // 2 — Session strip: which Session, which API Call, how full.
+    const strip = screen.getByRole("region", { name: "Session" });
+    expect(strip.contains(screen.getByText("session-a.jsonl"))).toBe(true);
+    expect(strip.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
+
+    // 3 — grid pane on the flexible left, scrolling under its own column count.
+    const grid = screen.getByRole("img");
+    const pane = screen.getByRole("main", { name: "Context grid" });
+    expect(pane.contains(grid)).toBe(true);
+    expect(grid.parentElement?.className).toContain("overflow-auto");
+
+    // 4 — the fixed 340px right rail, holding the legend and the docked
+    // Inspector panel the Inspector work fills.
+    const rail = screen.getByRole("complementary", { name: "Legend and Inspector" });
+    expect(rail.contains(screen.getByText("Free space"))).toBe(true);
+    expect(rail.contains(screen.getByText("Inspector"))).toBe(true);
+    expect(pane.parentElement?.className).toContain("grid-cols-[minmax(0,1fr)_340px]");
+
+    // 5 — the Scrubber across the bottom.
+    const scrubber = screen.getByRole("region", { name: "Scrubber" });
+    expect(scrubber.contains(screen.getByLabelText("API call"))).toBe(true);
+  });
+
+  it("opens and closes the File menu the Session list will fill", async () => {
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await screen.findByRole("img");
+
+    const file = screen.getByRole("button", { name: "File" });
+    expect(file.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(file);
+    expect(file.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Open files…")).toBeDefined();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(file.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Open files…")).toBeNull();
   });
 
   it("lays Cells out in the order items entered the context", async () => {
@@ -218,6 +272,43 @@ describe("App", () => {
       expect(after.filter((title) => title.startsWith("Free ·")).length).toBeLessThan(
         before.filter((title) => title.startsWith("Free ·")).length,
       );
+    });
+
+    it("keeps a Cell the floor granted when that Category grows past a Cell", async () => {
+      // MCP enters as 175 tokens — smaller than a Cell — and is only on the
+      // grid because the floor granted it one. The next API Call adds 3,000
+      // tokens of deferred tool names to the same Category, which wins Cells of
+      // its own at the frontier. The granted Cell sits ~20 Cells behind that
+      // frontier and must not change hands (ADR-0006).
+      render(<App />);
+      drop(
+        transcriptFile(
+          "floored.jsonl",
+          Fixture.toJsonl([
+            Fixture.mcpInstructions(700),
+            Fixture.toolResult(80_000),
+            Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_400 } }),
+            Fixture.deferredTools(12_000),
+            Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 44_000 } }),
+          ]),
+        ),
+      );
+      await screen.findByRole("img");
+
+      const range = screen.getByLabelText("API call") as HTMLInputElement;
+      fireEvent.click(screen.getByLabelText("First call"));
+      const before = cellTitles();
+      const granted = before.findIndex((title) => title.startsWith("MCP ·"));
+      // The first API Call measures 40.4k, so its first 40 Cells are settled.
+      const frontier = 40;
+      expect(granted).toBeGreaterThanOrEqual(0);
+      expect(granted).toBeLessThan(frontier);
+
+      fireEvent.keyDown(range, { key: "ArrowRight" });
+      const after = cellTitles();
+
+      expect(after[granted]).toMatch(/^MCP ·/);
+      expect(after.slice(0, frontier)).toEqual(before.slice(0, frontier));
     });
 
     it("names the compaction in the header on the API Call that compacted", async () => {

@@ -119,8 +119,9 @@ describe("ContextGrid", () => {
     // The block is 200 Cells tall over 20 columns here and 1,000 over the same
     // columns at a 1M window, so the pane — not the Cell — absorbs the growth.
     const pane = screen.getByRole("img").parentElement;
-    expect(pane?.className).toContain("overflow-y-auto");
-    expect(pane?.className).toContain("max-h-[60vh]");
+    expect(pane?.className).toContain("overflow-auto");
+    // The pane fills the Workbench's grid region rather than sizing itself.
+    expect(pane?.className).toContain("flex-1");
 
     rerender(<ContextGrid calls={callsOf(items)} callIndex={0} windowSize={1_000_000} />);
     expect(sizes()).toEqual(new Set(["16px×16px"]));

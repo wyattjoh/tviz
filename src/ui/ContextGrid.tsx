@@ -115,12 +115,14 @@ export const ContextGrid = ({ calls, callIndex, windowSize }: ContextGridProps) 
   if (snapshot === undefined) return null;
 
   return (
-    <div>
-      {/* `scrollbarGutter` keeps the column count from oscillating when the
-          grid grows just tall enough to need a scrollbar. */}
+    <div className="flex h-full min-h-0 flex-col">
+      {/* The pane takes whatever height the Workbench's grid region has and
+          scrolls when the block outgrows it. `scrollbarGutter` keeps the column
+          count from oscillating when the grid grows just tall enough to need a
+          scrollbar. */}
       <div
         ref={paneRef}
-        className="max-h-[60vh] overflow-y-auto"
+        className="min-h-0 flex-1 overflow-auto p-5"
         style={{ scrollbarGutter: "stable" }}
       >
         <div
@@ -147,7 +149,7 @@ export const ContextGrid = ({ calls, callIndex, windowSize }: ContextGridProps) 
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] text-ui-text-faint">
+      <p className="border-t border-ui-border px-5 py-2 text-[11px] text-ui-text-faint">
         {cells.length} cells × {formatTokens(CELL_TOKENS)} tokens, in the order they entered the
         context
       </p>
