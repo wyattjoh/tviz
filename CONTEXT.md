@@ -1,0 +1,77 @@
+# tviz
+
+A browser tool that shows how a Claude Code session's context window is filled, using the same buckets the `/context` command reports.
+
+## Language
+
+### Transcript
+
+**Session**:
+One Claude Code conversation, recorded as one JSONL transcript file. May own Subagent Sessions.
+_Avoid_: conversation, chat, log
+
+**Subagent Session**:
+A session spawned by a parent Session's agent tool; it has its own, separate Context Window.
+_Avoid_: sidechain, child transcript
+
+**Record**:
+One line of a transcript. Records are messages, attachments, or metadata.
+_Avoid_: entry, event, line
+
+**Attachment**:
+A Record Claude Code injects into the conversation alongside a user message (skill listing, hook output, nested memory, reminders).
+_Avoid_: system reminder (that is how an Attachment is rendered, not what it is)
+
+**API Call**:
+One request to the model. Several assistant Records can belong to the same API Call.
+_Avoid_: turn, step, round (ambiguous between user turns and model calls)
+
+### Context accounting
+
+**Context Window**:
+The maximum number of input tokens the model accepts; the grid's denominator.
+_Avoid_: context limit, max tokens
+
+**Context Snapshot**:
+The composition of the context by Category as of one API Call.
+_Avoid_: state, frame
+
+**Measured Tokens**:
+Token counts reported by the API for an API Call; exact.
+_Avoid_: actual tokens, real tokens
+
+**Estimated Tokens**:
+Token counts derived from text length and scaled so that estimates within an API Call sum to its Measured Tokens.
+_Avoid_: approximate tokens, guessed tokens
+
+**Category**:
+One `/context` bucket: System, Skills, Custom Agents, Memory Files, MCP, Messages.
+_Avoid_: bucket, group, segment
+
+**System**:
+The Category holding everything the transcript does not log: the system prompt, built-in tool schemas, and root CLAUDE.md files.
+_Avoid_: System prompt (too narrow), overhead, remainder
+
+**Message Kind**:
+A sub-division of the Messages Category: User, Assistant, Tool Result, Reminder.
+_Avoid_: message type, role
+
+### Visualization
+
+**Cell**:
+One box in the grid, representing a fixed quantum of tokens and coloured by the Category that fills it.
+_Avoid_: box, tile, block
+
+**Scrubber**:
+The control that selects which API Call's Context Snapshot the grid shows.
+_Avoid_: timeline, slider
+
+### Data
+
+**Demo Session**:
+A bundled Session, produced by the Anonymizer, that lets a reviewer use the tool without supplying data.
+_Avoid_: sample, example, fixture (fixtures are for tests)
+
+**Anonymizer**:
+The script that turns a real Session into a synthetic one by replacing all free text while preserving Record structure, order, and Measured Tokens.
+_Avoid_: scrubber (taken), redactor, sanitizer

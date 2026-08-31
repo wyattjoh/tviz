@@ -1,6 +1,73 @@
 # tviz
 
-This is a local project, do not push changes to remote unless explicitly requested to do so. Merges will be peformed by performing the merge command locally. This is also a time constrained project, so perform work in parallel wherever possible.
+Browser-only visualizer for Claude Code session transcripts. Drop a `.jsonl` transcript (or a folder of them) and see where the context window went, bucketed like `/context`: System, Skills, Custom agents, Memory files, MCP, Messages — as a grid of fixed-token cells with category filters and a per-API-call scrubber.
+
+Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or the parser. The feature spec is `.scratch/context-viz/spec.md`; the design rationale draft is `docs/rationale.md`.
+
+## Constraints (drive every scope decision)
+
+- Deployed prototype must be usable in a browser with **no local install** and **no reviewer-supplied data** → demo mode with bundled synthetic sessions is mandatory, not optional.
+- Deliverables: deployed URL, GitHub repo, `docs/rationale.md` + ~5 min video (user records), and the Claude Code transcripts of this project. Keep the rationale draft current as decisions land.
+- Prefer one polished interaction over breadth. Extensions go in the rationale's "with more time" section, not into the MVP.
+
+## Hard rules
+
+- **Transcript data never leaves the browser.** No upload, no server-side parsing, no persistence (no IndexedDB/localStorage of session content). The Worker is assets-only.
+- **No real transcript content in the repo, fixtures, tests, or demo data.** Real transcripts contain PII. Fixtures and `public/demo/*.jsonl` come only from `scripts/anonymize.ts` (structure-preserving, all free text replaced) or hand-written synthetic generators. Review anonymizer output before committing it.
+- **Never read real transcript files directly** (they're 0.5–13 MB). Write a Bun script under `.scratch/analysis/` that prints key paths, types, and counts — never string content. Existing survey scripts: `schema.ts`, `attachments.ts`, `derive.ts`, `turns.ts`.
+- The user's transcripts live at `~/.claude/projects/-Users-wyatt-johnson-Code-github-com-wyattjoh-agent-toolkit/` (101 sessions, CC 2.1.140–2.1.251). Use them only through analysis scripts.
+
+## Stack
+
+- Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha (`catppuccin-interfaces` skill for tokens/contrast).
+- **Effect v4 beta** (`effect@4.0.0-beta.107`, npm `beta` dist-tag) for the parser only: `Schema` for lenient JSONL record decoding and `Effect.gen`/`Effect.fn` for the parse→aggregate pipeline. No Layers/Services. The parser returns plain data (POD) to React. Use the `effect-ts-beta` skill; it requires the pinned source clone at `~/.claude/skills/effect-ts-beta/.source/` (see the skill's Prerequisites Check).
+- Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
+- Deployment: **Alchemy** (`alchemy@2.0.0-beta.x`) → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, `Alchemy.localState()` with `.alchemy/` gitignored. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts).
+- Tests: **Vitest** (`*.test.ts` beside source), synthetic fixtures under `src/fixtures/`.
+- Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
+
+## Commands
+
+```sh
+bun run dev            # vite dev server
+bun run build          # tsc -b && vite build
+bun run test           # vitest run (add when vitest is installed)
+bun run lint           # oxlint --deny-warnings
+bun run format         # oxfmt
+bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
+bun alchemy deploy --yes                    # after explicit confirmation only
+```
+
+## Planned layout
+
+```
+src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
+src/worker/      Web Worker entry wrapping the parser
+src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber
+src/fixtures/    synthetic JSONL fixtures for tests
+scripts/         anonymize.ts (structure-preserving anonymizer), any generators
+public/demo/     bundled anonymized demo sessions (small/medium/large)
+docs/adr/        decisions; docs/rationale.md; write-up
+```
+
+## Transcript format — what the parser relies on
+
+Verified against 57k records. The `/context` breakdown is **not** stored; it is derived (see ADR-0001, ADR-0003).
+
+| Record                                                                                                                                                                                            | Category / use                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `assistant` → `message.usage.{input_tokens,cache_read_input_tokens,cache_creation_input_tokens}`                                                                                                  | **Exact total context** for that API call. Several `assistant` records share one `message.id`/`requestId` (one call, many content blocks) — dedupe per call. |
+| `attachment.type = skill_listing` (`content`, `names`, `skillCount`, `isInitial`)                                                                                                                 | Skills                                                                                                                                                       |
+| `attachment.type = agent_listing_delta` (`addedLines`, `addedTypes`, `removedTypes`)                                                                                                              | Custom agents                                                                                                                                                |
+| `attachment.type = nested_memory` (`path`, `content.rawContent`, `content.globs`)                                                                                                                 | Memory files (lazy-loaded rules/MEMORY.md/nested CLAUDE.md only)                                                                                             |
+| `attachment.type = mcp_instructions_delta` (`addedBlocks`), `deferred_tools_delta` (`addedLines`)                                                                                                 | MCP / deferred tool names                                                                                                                                    |
+| `user`/`assistant` content blocks (`text`, `tool_use`, `tool_result`, `image`; `thinking` is not re-sent) and remaining attachments (`hook_success`, `total_tokens_reminder`, `task_reminder`, …) | Messages, with sub-kinds User / Assistant / Tool result / Reminder                                                                                           |
+| system prompt, built-in tool schemas, root CLAUDE.md                                                                                                                                              | **Not logged.** Combined "System" bucket = first-call total − estimated logged parts; stable per CC version (±1k).                                           |
+| `type` ∈ `system` (`subtype`: `turn_duration`, `stop_hook_summary`, `local_command`, …), `last-prompt`, `ai-title`, `mode`, `file-history-*`, `queue-operation`, …                                | Metadata, not in context. Unknown record types must be skipped and counted, never fatal.                                                                     |
+| `<session>/subagents/agent-*.jsonl` + `.meta.json` (`agentType`, `spawnDepth`)                                                                                                                    | Separate context windows. MVP: count only.                                                                                                                   |
+| `<session>/tool-results/*.txt`                                                                                                                                                                    | Offloaded outputs, not in context. Ignore.                                                                                                                   |
+
+Context window size is not recorded: default from a model→window table (Claude 5 family = 1M, older = 200k), bump to 1M when any observed total exceeds 200k, and allow a UI override.
 
 ## Agent skills
 
