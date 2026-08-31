@@ -7,8 +7,11 @@
  * context growth of the Session it came from. Every free-text string is
  * replaced by deterministic, seeded word salad of the same length with newline
  * positions preserved; only enum-like values (Record and Attachment types,
- * roles, model ids, tool names, versions and timestamps) are kept, because the
- * parser reads them and they carry no private content.
+ * roles, model ids, built-in tool names, versions and timestamps) are kept,
+ * because the parser reads them and they carry no private content. A tool name
+ * is kept only when it is a built-in: an MCP name embeds the server the
+ * developer configured, and a Skill, sub-agent or plugin tool is named by the
+ * developer outright.
  *
  * Uuids are kept: a uuid is random by construction, so it cannot carry free
  * text, and keeping it means a Demo Session's `sessionId` still equals the name
