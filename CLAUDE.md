@@ -22,7 +22,8 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 - Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha (`catppuccin-interfaces` skill for tokens/contrast).
 - **Effect v4 beta** (`effect@4.0.0-beta.107`, npm `beta` dist-tag) for the parser only: `Schema` for lenient JSONL record decoding and `Effect.gen`/`Effect.fn` for the parse→aggregate pipeline. No Layers/Services. The parser returns plain data (POD) to React. Use the `effect-ts-beta` skill; it requires the pinned source clone at `~/.claude/skills/effect-ts-beta/.source/` (see the skill's Prerequisites Check).
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
-- Deployment: **Alchemy** (`alchemy@2.0.0-beta.x`) → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, `Alchemy.localState()` with `.alchemy/` gitignored. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts).
+- Deployment: **Alchemy** pinned to `alchemy@2.0.0-beta.72` in `alchemy.run.ts` → `Cloudflare.Website.Vite("Website")`, assets-only Worker on `*.workers.dev`, `Alchemy.localState()` with `.alchemy/` gitignored. Stage `prod` pins the Worker name to `tviz`; other stages use derived names. Use the `alchemy` skill. Do **not** add `@cloudflare/vite-plugin`. `alchemy deploy` is a remote write: get explicit confirmation first, then run with `--yes` (agent env forces plain mode, which never prompts). `alchemy plan` is read-only and takes no `--yes`.
+  - **Why beta.72, not latest:** alchemy ≥ beta.73 requires `effect >=4.0.0-rc.112`; this project pins `effect@4.0.0-beta.107` (the `effect-ts-beta` skill's source clone matches that tag). beta.72 is the newest alchemy whose `effect` peer accepts beta.107. `@effect/platform-{bun,node}` are pinned to the same beta.107. `bun install` warns about `@effect/sql-d1`/`sql-sqlite-do`/`@effect/vitest` resolving to rc.112 — those are alchemy's D1/DO-state deps, unused here. Bumping alchemy means bumping Effect (and the skill clone) together.
 - Tests: **Vitest** (`*.test.ts` beside source), synthetic fixtures under `src/fixtures/`.
 - Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
 
@@ -35,7 +36,9 @@ bun run test           # vitest run (add when vitest is installed)
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
 bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
+bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
+bun alchemy deploy --yes --stage prod       # public URL: Worker named `tviz`
 ```
 
 ## Planned layout
