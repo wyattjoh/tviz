@@ -506,10 +506,17 @@ describe("App", () => {
       expect(cellFill(skills)).toBe("bg-cat-skills");
     });
 
-    it("says System is derived rather than logged", async () => {
-      await open();
-      expect(screen.getByText(/system prompt \+ built-in tools \+ root CLAUDE\.md/)).toBeDefined();
-      expect(screen.getByText(/not logged; derived/)).toBeDefined();
+    it("says System is derived rather than logged, when its row is pointed at", async () => {
+      const rail = await open();
+      const systemRow = row(rail, /^System/).closest("li");
+      expect(systemRow).not.toBeNull();
+
+      fireEvent.mouseOver(systemRow as HTMLElement);
+
+      expect(screen.getByRole("tooltip").textContent).toContain(
+        "system prompt, built-in tool schemas and root CLAUDE.md",
+      );
+      expect(screen.getByRole("tooltip").textContent).toContain("derived remainder");
     });
   });
 

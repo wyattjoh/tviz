@@ -94,6 +94,17 @@ Messages before it asks about the Kind, and the legend disables the Kind rows wh
 Category is off. A row's `aria-pressed` and its filled swatch both promise "these Cells are
 drawn", so a Kind may not claim to be shown while every one of its Cells is blanked.
 
+A legend row says what it counts in a card that floats under it while it is hovered or
+focused — the one floating layer in the rail, and not a contradiction of the docked
+Inspector below: a Cell's contents are read and compared, while a row's description is a
+one-line reminder of what the bucket means and does not earn permanent rail height. The
+copy lives in `src/domain/context.ts` (`CATEGORY_DESCRIPTIONS`,
+`MESSAGE_KIND_DESCRIPTIONS`, `FREE_SPACE_DESCRIPTION`) so the words the legend uses for a
+Category are the words `CONTEXT.md` defines it with. The card's pointer handlers hang off
+the row, not its button — a disabled Message Kind row fires no mouse events of its own and
+still has something to say — and it is `pointer-events-none` so it never swallows the hover
+of the row it covers.
+
 The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell Share** —
 the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
 never the item's own size: a 40k tool result crosses 40 Cells, and reporting its size in

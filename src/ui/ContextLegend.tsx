@@ -8,17 +8,24 @@
  * changes a total on this legend, because the numbers come from the Context
  * Snapshot rather than from the Cells (ADR-0006). What is hidden is still
  * counted, so the percentages two Sessions are compared on stay stable.
+ *
+ * Every row also says what it counts, in a card that floats under it while it
+ * is hovered or focused. The copy lives with the vocabulary in
+ * `src/domain/context.ts`, not here, so the words the legend uses for a
+ * Category are the words the domain uses for it.
  */
-import { Fragment } from "react";
+import { Fragment, useId, useState } from "react";
 import {
   type Category,
+  CATEGORY_DESCRIPTIONS,
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   type ContextSnapshot,
+  FREE_SPACE_DESCRIPTION,
+  MESSAGE_KIND_DESCRIPTIONS,
   MESSAGE_KIND_LABELS,
   MESSAGE_KIND_ORDER,
   type MessageKind,
-  SYSTEM_CATEGORY_HINT,
 } from "../domain/context.ts";
 import { type GridFilters, isCategoryHidden, isMessageKindHidden } from "./filters.ts";
 import { formatPercent, formatTokens } from "./format.ts";
@@ -85,6 +92,44 @@ const Swatch = ({ fillClass, ringClass, hidden, small }: SwatchProps) => (
 );
 
 /**
+ * What a row counts, revealed while that row is hovered or focused.
+ *
+ * The card floats over the rows below rather than pushing them down: the legend
+ * is a column of numbers read against each other, and re-flowing it under the
+ * pointer would move the row being pointed at. `pointer-events-none` stops it
+ * swallowing the hover of whatever it covers, so the pointer walks the list
+ * without the card fighting it.
+ *
+ * This is not the Inspector, which stays docked in the rail: a Cell's contents
+ * are read and compared, while a row's description is a one-line reminder of
+ * what the bucket means, and does not earn permanent rail height.
+ */
+type RowDescriptionProps = {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  /**
+   * Why the row's toggle is inert, when it is — said here rather than in a
+   * native `title`, so a row never explains itself in two tooltips at once.
+   */
+  readonly disabledReason: string | undefined;
+};
+
+const RowDescription = ({ id, label, description, disabledReason }: RowDescriptionProps) => (
+  <div
+    id={id}
+    role="tooltip"
+    className="pointer-events-none absolute top-full right-0 left-0 z-20 mt-1 rounded-md border border-ui-border-strong bg-ui-shell px-2 py-1.5 shadow-lg"
+  >
+    <p className="text-[10px] tracking-wide text-ui-text-faint uppercase">{label}</p>
+    <p className="mt-0.5 text-[11px] leading-snug text-ui-text-secondary">{description}</p>
+    {disabledReason === undefined ? null : (
+      <p className="mt-1 text-[10px] leading-snug text-ui-text-faint">{disabledReason}</p>
+    )}
+  </div>
+);
+
+/**
  * One toggleable legend row.
  *
  * `aria-pressed` carries the filter state: pressed means the row's Cells are
@@ -100,7 +145,10 @@ type FilterRowProps = {
   readonly fillClass: string;
   readonly ringClass: string;
   readonly label: string;
-  readonly hint: string | undefined;
+  readonly description: string;
+  readonly descriptionId: string;
+  readonly described: boolean;
+  readonly onDescribe: (described: boolean) => void;
   readonly tokens: number;
   readonly windowSize: number;
   readonly hidden: boolean;
@@ -114,7 +162,10 @@ const FilterRow = ({
   fillClass,
   ringClass,
   label,
-  hint,
+  description,
+  descriptionId,
+  described,
+  onDescribe,
   tokens,
   windowSize,
   hidden,
@@ -123,15 +174,25 @@ const FilterRow = ({
   small,
   onToggle,
 }: FilterRowProps) => (
-  // Laid out for the 340px rail: the hint sits under its row rather than
-  // beside it, so the numbers stay in their columns.
-  <li>
+  // Laid out for the 340px rail: the description floats under its row rather
+  // than sitting beside it, so the numbers stay in their columns.
+  //
+  // The pointer handlers ride on the `li` rather than the button because a
+  // disabled button fires no mouse events of its own, and a Message Kind row
+  // whose Category is hidden still has something to say about what it counts.
+  <li
+    className="relative"
+    onMouseEnter={() => onDescribe(true)}
+    onMouseLeave={() => onDescribe(false)}
+  >
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={!hidden}
       disabled={disabled}
-      title={disabledReason}
+      aria-describedby={described ? descriptionId : undefined}
+      onFocus={() => onDescribe(true)}
+      onBlur={() => onDescribe(false)}
       className={`flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-ui-panel disabled:cursor-not-allowed disabled:hover:bg-transparent ${
         hidden ? "opacity-60" : ""
       } ${small ? "text-[11px]" : "text-xs"}`}
@@ -151,9 +212,14 @@ const FilterRow = ({
         {formatPercent(tokens, windowSize)}
       </span>
     </button>
-    {hint === undefined ? null : (
-      <p className="mt-0.5 mb-1 ml-[18px] text-[10px] leading-snug text-ui-text-faint">{hint}</p>
-    )}
+    {described ? (
+      <RowDescription
+        id={descriptionId}
+        label={label}
+        description={description}
+        disabledReason={disabledReason}
+      />
+    ) : null}
   </li>
 );
 
@@ -174,6 +240,14 @@ export const ContextLegend = ({
   // rows below it are already answered and stop taking clicks until it is back.
   const messagesHidden = isCategoryHidden(filters, "messages");
 
+  // One row describes itself at a time: the cards float over their neighbours,
+  // so two of them open at once would overlap. Leaving only clears the row that
+  // set it, because the pointer enters the next row before it leaves the last.
+  const baseId = useId();
+  const [describedRow, setDescribedRow] = useState<string | undefined>(undefined);
+  const describe = (key: string) => (described: boolean) =>
+    setDescribedRow((current) => (described ? key : current === key ? undefined : current));
+
   return (
     <div>
       <ul className="space-y-0.5">
@@ -183,7 +257,10 @@ export const ContextLegend = ({
               fillClass={CATEGORY_FILL_CLASS[category]}
               ringClass={CATEGORY_RING_CLASS[category]}
               label={CATEGORY_LABELS[category]}
-              hint={category === "system" ? SYSTEM_CATEGORY_HINT : undefined}
+              description={CATEGORY_DESCRIPTIONS[category]}
+              descriptionId={`${baseId}-category-${category}`}
+              described={describedRow === `category:${category}`}
+              onDescribe={describe(`category:${category}`)}
               tokens={snapshot.byCategory[category]}
               windowSize={windowSize}
               hidden={isCategoryHidden(filters, category)}
@@ -203,7 +280,10 @@ export const ContextLegend = ({
                       fillClass={MESSAGE_KIND_FILL_CLASS[kind]}
                       ringClass={MESSAGE_KIND_RING_CLASS[kind]}
                       label={MESSAGE_KIND_LABELS[kind]}
-                      hint={undefined}
+                      description={MESSAGE_KIND_DESCRIPTIONS[kind]}
+                      descriptionId={`${baseId}-kind-${kind}`}
+                      described={describedRow === `kind:${kind}`}
+                      onDescribe={describe(`kind:${kind}`)}
                       tokens={snapshot.byKind[kind]}
                       windowSize={windowSize}
                       hidden={isMessageKindHidden(filters, kind)}
@@ -219,19 +299,36 @@ export const ContextLegend = ({
           </Fragment>
         ))}
         {/* Free space is not a Category and has nothing to hide: it is what the
-            window has left, which the grid must always show. */}
-        <li className="flex items-baseline gap-2 px-1 py-0.5 text-xs opacity-70">
-          <span
-            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-ui-border ${FREE_FILL_CLASS}`}
-            aria-hidden="true"
-          />
-          <span className="w-24 shrink-0 truncate text-ui-text-muted">Free space</span>
-          <span className="ml-auto w-14 shrink-0 text-right text-ui-text tabular-nums">
-            {formatTokens(free)}
-          </span>
-          <span className="w-12 shrink-0 text-right text-ui-text-muted tabular-nums">
-            {formatPercent(free, windowSize)}
-          </span>
+            window has left, which the grid must always show. It describes
+            itself like the rows above it, but only on hover — it is a reading
+            rather than a control, and giving it a focus stop to carry a
+            description would add a tab stop that does nothing. */}
+        <li
+          className="relative"
+          onMouseEnter={() => describe("free")(true)}
+          onMouseLeave={() => describe("free")(false)}
+        >
+          <div className="flex items-baseline gap-2 px-1 py-0.5 text-xs opacity-70">
+            <span
+              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-ui-border ${FREE_FILL_CLASS}`}
+              aria-hidden="true"
+            />
+            <span className="w-24 shrink-0 truncate text-ui-text-muted">Free space</span>
+            <span className="ml-auto w-14 shrink-0 text-right text-ui-text tabular-nums">
+              {formatTokens(free)}
+            </span>
+            <span className="w-12 shrink-0 text-right text-ui-text-muted tabular-nums">
+              {formatPercent(free, windowSize)}
+            </span>
+          </div>
+          {describedRow === "free" ? (
+            <RowDescription
+              id={`${baseId}-free`}
+              label="Free space"
+              description={FREE_SPACE_DESCRIPTION}
+              disabledReason={undefined}
+            />
+          ) : null}
         </li>
       </ul>
 
