@@ -9,6 +9,7 @@ import {
 } from "../domain/context.ts";
 import * as Fixture from "../fixtures/transcript.ts";
 import { parseTranscript } from "./parse-transcript.ts";
+import { METADATA_RECORD_TYPES } from "./records.ts";
 import { DEFAULT_CONTEXT_WINDOW, LARGE_CONTEXT_WINDOW } from "./window.ts";
 
 const parseSession = (
@@ -276,10 +277,10 @@ describe("parseTranscript", () => {
 
   it("counts unknown Record types and malformed lines instead of failing", () => {
     const jsonl = [
-      JSON.stringify(Fixture.metadataRecord("system")),
+      JSON.stringify(Fixture.metadataRecord("not-yet-invented")),
       "{ not json",
-      JSON.stringify(Fixture.metadataRecord("file-history-snapshot")),
-      JSON.stringify(Fixture.metadataRecord("system")),
+      JSON.stringify(Fixture.metadataRecord("also-new")),
+      JSON.stringify(Fixture.metadataRecord("not-yet-invented")),
       JSON.stringify(Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } })),
     ].join("\n");
 
@@ -287,7 +288,24 @@ describe("parseTranscript", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.session.malformedLines).toBe(1);
-    expect(outcome.session.unknownRecordTypes).toEqual({ system: 2, "file-history-snapshot": 1 });
+    expect(outcome.session.unknownRecordTypes).toEqual({ "not-yet-invented": 2, "also-new": 1 });
+    expect(outcome.session.calls).toHaveLength(1);
+  });
+
+  it("skips known bookkeeping Records without counting them as unknown", () => {
+    // A real session logs hundreds of these; counting them would bury the one
+    // number that means the format moved.
+    const jsonl = [
+      ...[...METADATA_RECORD_TYPES].map((type) => JSON.stringify(Fixture.metadataRecord(type))),
+      JSON.stringify(Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } })),
+    ].join("\n");
+
+    const outcome = parseTranscript("fixture.jsonl", jsonl);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.session.unknownRecordTypes).toEqual({});
+    // Skipped, not dropped: they are still lines the transcript contained.
+    expect(outcome.session.recordCount).toBe(METADATA_RECORD_TYPES.size + 1);
     expect(outcome.session.calls).toHaveLength(1);
   });
 

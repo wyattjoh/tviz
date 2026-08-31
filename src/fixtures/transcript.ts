@@ -267,7 +267,8 @@ export const sidechain = (record: FixtureRecord): FixtureRecord => ({
 });
 
 /**
- * A Record of a type the parser does not account for.
+ * A Record of a type the parser does not account for: either known bookkeeping
+ * (`METADATA_RECORD_TYPES`, skipped silently) or a type it has never seen.
  */
 export const metadataRecord = (type: string): FixtureRecord => ({
   ...next(),

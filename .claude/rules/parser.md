@@ -31,6 +31,10 @@ because a 13 MB in-memory string is fast enough that streaming is not worth it.
   once.
 - **Unknown Record types are skipped and counted, never fatal.** Transcripts span Claude
   Code 2.1.140–2.1.251 and the format keeps growing; a new `type` must not fail a parse.
+  Known bookkeeping types (`METADATA_RECORD_TYPES` in `records.ts`) are skipped *without*
+  being counted, so `unknownRecordTypes` stays a usable "the format moved" signal rather
+  than a tally of the hundreds of `system`/`mode`/`progress` Records every session logs.
+  A type confirmed to be metadata is added to that set, never accounted as context.
 - **`ContextSnapshot.items` is emitted in context order and stays stable across calls.**
   Re-sorting items downstream silently reintroduces the grid re-flow that ADR-0006 exists
   to avoid.

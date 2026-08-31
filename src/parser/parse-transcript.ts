@@ -28,6 +28,7 @@ import {
   type ContentBlock,
   decodeAnyRecord,
   decodeKnownRecord,
+  isMetadataRecordType,
   type KnownRecord,
 } from "./records.ts";
 import { inferContextWindow } from "./window.ts";
@@ -294,6 +295,9 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
     }
 
     const type = Option.isSome(envelope) ? (envelope.value.type ?? "(untyped)") : "(unrecognised)";
+    // Known bookkeeping is skipped silently; only a type this parser has never
+    // seen is worth reporting.
+    if (isMetadataRecordType(type)) continue;
     unknownRecordTypes[type] = (unknownRecordTypes[type] ?? 0) + 1;
   }
 

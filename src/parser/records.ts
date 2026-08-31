@@ -118,6 +118,58 @@ export const AnyRecord = Schema.Struct({
 });
 
 /**
+ * Record types Claude Code writes as session bookkeeping, which never enter the
+ * Context Window (`docs/transcript-format.md`).
+ *
+ * They are skipped exactly like an unrecognised type, but deliberately *not*
+ * counted as one: a session logs hundreds of them, and burying the count that
+ * matters — a Record type this parser has never seen, which is the signal that
+ * the format moved — under that noise is what this list exists to prevent.
+ * Every entry here was observed in a census of the local transcript corpus
+ * (3.3M Records); a type that turns out to be metadata belongs here rather than
+ * in the unknown tally.
+ */
+export const METADATA_RECORD_TYPES: ReadonlySet<string> = new Set([
+  // Session bookkeeping: what the CLI remembers about the session itself.
+  "ai-title",
+  "atis-latch",
+  "bridge-session",
+  "cost-state",
+  "custom-title",
+  "fork-context-ref",
+  "frame-link",
+  "last-prompt",
+  "mode",
+  "permission-mode",
+  "pr-link",
+  "queue-operation",
+  "relocated",
+  "saved_hook_context",
+  "summary",
+  "worktree-state",
+  // File-edit history, kept for undo rather than for the model.
+  "file-history-delta",
+  "file-history-snapshot",
+  // Subagent Sessions: `agent-*` name them, `started`/`result` bracket one in
+  // its sidecar file, and `progress` streams its activity into the parent
+  // transcript. A Subagent Session owns a separate Context Window either way.
+  "agent-color",
+  "agent-name",
+  "agent-setting",
+  "progress",
+  "result",
+  "started",
+  // `system` carries `subtype` (`stop_hook_summary`, `turn_duration`,
+  // `local_command`, `compact_boundary`, …); none of them is sent to the API.
+  "system",
+]);
+
+/**
+ * True when a Record type is known session bookkeeping rather than context.
+ */
+export const isMetadataRecordType = (type: string): boolean => METADATA_RECORD_TYPES.has(type);
+
+/**
  * The Records the parser knows how to account for.
  */
 export const KnownRecord = Schema.Union([AssistantRecord, UserRecord, AttachmentRecord]);
