@@ -63,15 +63,28 @@
   --color-cat-mcp: var(--color-ctp-sapphire);
   --color-cat-messages: var(--color-ctp-blue);
 
-  /* --- Layer 2: one accent per Message Kind --- */
-  --color-kind-user: var(--color-ctp-blue);
+  /* --- Layer 2: one accent per Message Kind ---
+     Every Kind accent differs from the Messages Category accent it replaces, or
+     "colour Messages by kind" would leave part of the grid looking untouched:
+     User was `blue`, the Messages accent itself. `tokens.test.ts` holds the
+     line. */
+  --color-kind-user: var(--color-ctp-pink);
   --color-kind-assistant: var(--color-ctp-sky);
   --color-kind-tool-result: var(--color-ctp-teal);
   --color-kind-reminder: var(--color-ctp-flamingo);
 
-  /* --- Layer 2: Cell states --- */
+  /* --- Layer 2: Cell states ---
+     A blanked Cell is a *recess with an edge*, not a gap: `crust` sinks it
+     below the canvas and `overlay0` draws it back in. Fill alone cannot do
+     this — the deepest neutral is only 1.14:1 against the canvas, so a
+     fill-only blank reads as a hole in the grid rather than as a Cell that
+     still holds tokens. The edge measures 3.36:1 against the canvas, clearing
+     WCAG's 3:1 for non-text, and 2.57:1 against a free Cell — where the outline
+     is itself the second, non-colour cue, since a free Cell has none. Checked
+     with the `catppuccin-interfaces` skill; pinned by `tokens.test.ts`. */
   --color-cell-free: var(--color-ctp-surface0);
-  --color-cell-hidden: var(--color-ctp-mantle);
+  --color-cell-hidden: var(--color-ctp-crust);
+  --color-cell-hidden-edge: var(--color-ctp-overlay0);
 
   --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
   --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;

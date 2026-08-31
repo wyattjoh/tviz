@@ -20,6 +20,10 @@ export default defineConfig({
     // Parser tests are plain Node; component tests opt into jsdom with a
     // `@vitest-environment` docblock.
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "scripts/**/*.test.ts"],
+    // Vitest replaces CSS imports with an empty string unless this is on, and
+    // `src/ui/tokens.test.ts` reads `src/index.css` as text to measure what the
+    // semantic tokens resolve to.
+    css: true,
     restoreMocks: true,
   },
 });
