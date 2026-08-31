@@ -19,7 +19,8 @@
  * same Session list as a dropped file, so there is no demo-only view: only
  * their manifest name and the manifest's synthetic-data note live here.
  */
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { type ReactNode, useCallback, useId, useMemo, useState } from "react";
 import { loadDemoSessions } from "./demo/load-demo-sessions.ts";
 import {
   type Category,
@@ -201,7 +202,7 @@ type LoadedSessionProps = {
  */
 type RailPanelProps = {
   /**
-   * Heading of the panel.
+   * Heading of the panel, and the control that collapses it.
    */
   readonly title: string;
   /**
@@ -216,17 +217,50 @@ type RailPanelProps = {
   readonly children: ReactNode;
 };
 
-const RailPanel = ({ title, action, children }: RailPanelProps) => (
-  <section className="rounded border border-ui-border bg-ui-panel/40 p-3">
-    <div className="flex items-center justify-between gap-2">
-      <h2 className="text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase">
-        {title}
-      </h2>
-      {action}
-    </div>
-    <div className="mt-2">{children}</div>
-  </section>
-);
+/**
+ * A panel in the rail, collapsed to its heading row by clicking that heading.
+ *
+ * The rail stacks four panels in a fixed 340px column, and on a short window
+ * the ones a reader is not using push the ones they are below the fold. Each
+ * panel keeps its own open state rather than lifting it here: nothing else
+ * reads it, and a collapsed panel is a view preference, not Session state.
+ *
+ * Collapsing unmounts the body rather than hiding it, so a collapsed panel
+ * costs no layout — and the `action` control stays in the heading row either
+ * way, because what is in force must stay readable without opening a panel.
+ */
+const RailPanel = ({ title, action, children }: RailPanelProps) => {
+  const bodyId = useId();
+  const [open, setOpen] = useState(true);
+
+  return (
+    <section className="rounded border border-ui-border bg-ui-panel/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase">
+          <button
+            type="button"
+            onClick={() => setOpen((wasOpen) => !wasOpen)}
+            aria-expanded={open}
+            aria-controls={bodyId}
+            className="-m-1 flex cursor-pointer items-center gap-1.5 p-1 hover:text-ui-text"
+          >
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
+              aria-hidden="true"
+            />
+            {title}
+          </button>
+        </h2>
+        {action}
+      </div>
+      {open ? (
+        <div id={bodyId} className="mt-2">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+};
 
 const LoadedSession = ({
   session,

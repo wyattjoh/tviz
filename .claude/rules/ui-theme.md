@@ -66,6 +66,12 @@ buttons in the body, which spends rail height on a control pressed once a Sessio
 in force stays readable without opening the menu: the panel's "(inferred)"/"(override)"
 note names the window whether or not anyone has touched the cog.
 
+A panel's heading is also its collapse toggle, and collapsing unmounts the body so a panel
+the reader is not using costs no rail height. The open state lives in `RailPanel` itself —
+nothing else reads it, and which panels are folded is a view preference rather than
+Session state. The `action` slot stays in the heading row through a collapse, which is the
+same rule as above: a setting in force must not need a panel opened to be seen.
+
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
 "(demo)" rather than the file it is served as), and Close all sessions. There is no session
