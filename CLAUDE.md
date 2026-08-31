@@ -10,7 +10,7 @@ Browser-only visualizer for Claude Code session transcripts. Drop a `.jsonl` tra
 
 ## Hard rules
 
-These apply in every session, including ones that touch none of the scoped rule files below.
+These apply in every session, including ones that touch none of the paths the `.claude/rules/` files scope to.
 
 - **Transcript data never leaves the browser.** No upload, no server-side parsing, no persistence (no IndexedDB/localStorage of session content). The Worker is assets-only.
 - **No real transcript content in the repo, fixtures, tests, or demo data.** Committed data comes only from `scripts/anonymize.ts` or a hand-written synthetic generator, and gets reviewed before it lands — see [`.claude/rules/synthetic-data.md`](.claude/rules/synthetic-data.md).
@@ -55,6 +55,13 @@ stacks/          github.ts — bootstrap stack minting the CI token + GitHub sec
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/            adr/ (decisions), transcript-format.md, rationale.md, agents/
 ```
+
+## Editing these docs
+
+- **`CLAUDE.md` stays short** — constraints, hard rules, stack, commands, layout. File-specific conventions belong in `.claude/rules/*.md`, which Claude loads by path glob. Discover them with `ls .claude/rules/`; there is deliberately no index here to drift.
+- **Merging a branch that adds a convention to `CLAUDE.md`? Re-target it into the matching rule file** instead of growing this file back. Leave an inline pointer only where a hard rule or the stack list depends on it. Branches written before the split put file-specific content here; that is a re-targeting job, not a conflict to resolve in place.
+- **`README.md` and `docs/rationale.md` are hand-written deliverables.** Add to them; do not restructure or re-voice them.
+- oxfmt formats Markdown and pre-commit `format:check` rejects hand-aligned tables — run `bun run format` before committing docs.
 
 ## Docs
 
