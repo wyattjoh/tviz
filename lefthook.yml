@@ -3,6 +3,14 @@ pre-commit:
   commands:
     oxfmt:
       glob: "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts,json,jsonc,yaml,yml,md,mdx,css,scss,html,vue,svelte,astro}"
+      # Mirrors `ignorePatterns` in .oxfmtrc.json. Without this, staging only
+      # files from an ignored directory (a .claude/rules/*.md edit on its own)
+      # hands oxfmt a target list it has ignored away to nothing, and it exits
+      # non-zero on "Expected at least one target file" rather than no-opping.
+      exclude:
+        - '^\.claude/'
+        - '^\.alchemy/'
+        - '^\.scratch/'
       run: bun run format:check {staged_files}
     oxlint:
       glob: "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts,vue,astro,svelte}"
