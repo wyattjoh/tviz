@@ -21,6 +21,14 @@ for the semantic layer only — a component that reaches for `ctp-mauve` has ski
 and a new colour needs a new semantic token instead.
 
 Adding or checking a colour: use the `catppuccin-interfaces` skill for tokens and contrast.
+`src/ui/tokens.test.ts` then pins the result — it reads `src/index.css` and measures what
+the tokens resolve to, which is the only check that can see an invisible or duplicated
+colour (`theme.test.ts` only ever sees class names). Two rules it holds: every Category and
+Message Kind accent is a colour of its own, and a Cell state is perceptible against the
+pane behind the grid. A blanked Cell is a recessed fill **plus** an outline, because the
+fills dark enough to read as blanked sit near 1.1:1 against the canvas — without the
+outline "blanked in place" and "Cell removed" look the same, and the second is the re-flow
+ADR-0006 forbids.
 
 ## Layout
 
@@ -46,8 +54,16 @@ than a promise — no filter can move a Cell, and legend totals come from the Co
 Snapshot rather than from the Cells. Keep it that way: a filter argument on `buildCells`
 would reintroduce the re-flow.
 
-The Inspector is docked in the rail, not a tooltip. Cells are addressed upwards by
-**index**, not as objects, so a pinned Cell keeps meaning something when the Scrubber
+Hiding a Category hides the Message Kinds inside it: `isMessageKindHidden` asks about
+Messages before it asks about the Kind, and the legend disables the Kind rows while their
+Category is off. A row's `aria-pressed` and its filled swatch both promise "these Cells are
+drawn", so a Kind may not claim to be shown while every one of its Cells is blanked.
+
+The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell Share** —
+the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
+never the item's own size: a 40k tool result crosses 40 Cells, and reporting its size in
+each would have a 1,000-token Cell list 40,000 tokens of items. Cells are addressed upwards
+by **index**, not as objects, so a pinned Cell keeps meaning something when the Scrubber
 rebuilds the layout. Grid Cells are buttons on a roving tabindex under a `role="group"`
 block — a 1M window is 1,000 Cells and must not be 1,000 tab stops.
 

@@ -59,10 +59,10 @@ export type Cell = {
    */
   readonly kind: MessageKind | undefined;
   /**
-   * The items overlapping this Cell's range, largest overlap first. Empty for a
-   * free Cell.
+   * The parts of items overlapping this Cell's range, largest part first. Empty
+   * for a free Cell.
    */
-  readonly items: readonly ContextItem[];
+  readonly items: readonly CellItem[];
 };
 
 /**
@@ -75,6 +75,28 @@ export type Cell = {
 export const cellCountFor = (windowSize: number): number => {
   if (!Number.isFinite(windowSize) || windowSize <= 0) return 1;
   return Math.max(1, Math.ceil(windowSize / CELL_TOKENS));
+};
+
+/**
+ * How much of a Cell's range one item covers.
+ *
+ * `tokens` is the *overlap*, never the item's own size: an item far larger than
+ * the quantum — a 40k tool result — is one of these in each of the 40 Cells it
+ * crosses, and each of them reports only the part inside that Cell. Reporting
+ * `item.tokens` instead would let a Cell of 1,000 tokens list items summing to
+ * 40,000, which is why the whole item is kept beside its share rather than in
+ * place of it.
+ */
+export type CellItem = {
+  /**
+   * The item reaching into the Cell, with its own label, Category and total.
+   */
+  readonly item: ContextItem;
+  /**
+   * How many of this Cell's {@link CELL_TOKENS} tokens that item covers.
+   * Always `1 <= tokens <= CELL_TOKENS`.
+   */
+  readonly tokens: number;
 };
 
 /**
@@ -108,14 +130,6 @@ const overlapOf = (span: Span, start: number, end: number): number =>
   Math.min(end, span.end) - Math.max(start, span.start);
 
 /**
- * How much of a Cell's range one item covers.
- */
-type Overlap = {
-  readonly item: ContextItem;
-  readonly overlap: number;
-};
-
-/**
  * Sums a Cell's overlaps per Category, in the order the Categories first reach
  * into the Cell.
  *
@@ -123,10 +137,10 @@ type Overlap = {
  * the first entry is the Category that entered the context first — which is what
  * makes the tie-break below deterministic.
  */
-const tokensByCategory = (overlaps: readonly Overlap[]): ReadonlyMap<Category, number> => {
+const tokensByCategory = (overlaps: readonly CellItem[]): ReadonlyMap<Category, number> => {
   const byCategory = new Map<Category, number>();
-  for (const { item, overlap } of overlaps) {
-    byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + overlap);
+  for (const { item, tokens } of overlaps) {
+    byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + tokens);
   }
   return byCategory;
 };
@@ -168,11 +182,11 @@ const majorityCategory = (byCategory: ReadonlyMap<Category, number>): Category |
  * no Messages item reaches the Cell, which is every Cell of every other
  * Category.
  */
-const majorityMessageKind = (overlaps: readonly Overlap[]): MessageKind | undefined => {
+const majorityMessageKind = (overlaps: readonly CellItem[]): MessageKind | undefined => {
   const byKind = new Map<MessageKind, number>();
-  for (const { item, overlap } of overlaps) {
+  for (const { item, tokens } of overlaps) {
     if (item.category !== "messages" || item.kind === undefined) continue;
-    byKind.set(item.kind, (byKind.get(item.kind) ?? 0) + overlap);
+    byKind.set(item.kind, (byKind.get(item.kind) ?? 0) + tokens);
   }
 
   let winner: MessageKind | undefined;
@@ -322,13 +336,13 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
 
     while (firstSpan < spans.length && (spans[firstSpan]?.end ?? 0) <= start) firstSpan += 1;
 
-    const overlaps: Overlap[] = [];
+    const overlaps: CellItem[] = [];
     const open = new Set<Category>();
     for (let cursor = firstSpan; cursor < spans.length; cursor += 1) {
       const span = spans[cursor];
       if (span === undefined || span.start >= end) break;
       const overlap = overlapOf(span, start, end);
-      if (overlap > 0) overlaps.push({ item: span.item, overlap });
+      if (overlap > 0) overlaps.push({ item: span.item, tokens: overlap });
       if (span.end > end) open.add(span.item.category);
     }
 
@@ -347,11 +361,9 @@ export const buildCells = (items: readonly ContextItem[], windowSize: number): r
       end,
       fill,
       kind: fill === "messages" ? kind : undefined,
-      // Biggest contributor first, so a hover list reads as "mostly this".
-      // `sort` is stable, so equal overlaps keep their context order.
-      items: [...overlaps]
-        .sort((left, right) => right.overlap - left.overlap)
-        .map((entry) => entry.item),
+      // Biggest contributor first, so the Inspector's list reads as "mostly
+      // this". `sort` is stable, so equal shares keep their context order.
+      items: [...overlaps].sort((left, right) => right.tokens - left.tokens),
     });
   }
 

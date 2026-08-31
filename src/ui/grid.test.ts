@@ -111,10 +111,34 @@ describe("buildCells", () => {
 
     expect(cells[0]?.start).toBe(0);
     expect(cells[0]?.end).toBe(1_000);
-    expect(cells[0]?.items.map((entry) => entry.category)).toEqual(["system"]);
+    expect(cells[0]?.items.map((entry) => entry.item.category)).toEqual(["system"]);
     // Cell 1 holds the tail of System and all of Skills; the bigger share leads.
-    expect(cells[1]?.items.map((entry) => entry.category)).toEqual(["system", "skills"]);
+    expect(cells[1]?.items.map((entry) => entry.item.category)).toEqual(["system", "skills"]);
+    expect(cells[1]?.items.map((entry) => entry.tokens)).toEqual([500, 500]);
     expect(cells[199]?.end).toBe(DEFAULT_CONTEXT_WINDOW);
+  });
+
+  it("reports each item's share of the Cell, not the whole item", () => {
+    // A 40k tool result crosses 40 Cells. Reporting its own size in each of
+    // them would have a Cell of 1,000 tokens list 40,000 tokens of items, and
+    // the Inspector reads these straight out.
+    const cells = buildCells([item("system", 5_000), item("messages", 40_000)], 200_000);
+
+    for (const index of [5, 20, 44]) {
+      const cell = cells[index];
+      expect(cell?.items).toHaveLength(1);
+      expect(cell?.items[0]?.tokens).toBe(CELL_TOKENS);
+      // The item itself is still there, whole, for anything that wants its size.
+      expect(cell?.items[0]?.item.tokens).toBe(40_000);
+    }
+
+    // Every share sums to the tokens actually in that Cell — 45k of context
+    // fills 45 Cells, the last of which is the frontier and only partly filled.
+    const shareOf = (cell: Cell | undefined): number =>
+      (cell?.items ?? []).reduce((sum, entry) => sum + entry.tokens, 0);
+    expect(shareOf(cells[44])).toBe(CELL_TOKENS);
+    expect(shareOf(cells[4])).toBe(CELL_TOKENS);
+    expect(shareOf(cells[45])).toBe(0);
   });
 
   it("colours a Cell by the Category holding the majority of its token range", () => {
@@ -144,7 +168,7 @@ describe("buildCells", () => {
     const floored = cells.find((cell) => cell.fill === "mcp");
     // The Cell it took is one it actually reaches into, and it is still the Cell
     // sitting at its own token offset: only the colour changed.
-    expect(floored?.items.map((entry) => entry.category)).toContain("mcp");
+    expect(floored?.items.map((entry) => entry.item.category)).toContain("mcp");
     expect(floored?.start).toBe(20_000);
     expect(cells.map((cell) => cell.start)).toEqual(cells.map((cell) => cell.index * CELL_TOKENS));
     // Nothing was starved to pay for it.

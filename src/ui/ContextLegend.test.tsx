@@ -118,6 +118,23 @@ describe("ContextLegend", () => {
     expect(row(/^Messages/).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("stops a Message Kind claiming to be shown when Messages itself is hidden", () => {
+    const onToggleMessageKind = vi.fn();
+    render(renderLegend(toggleCategory(ALL_SHOWN, "messages"), { onToggleMessageKind }));
+
+    for (const kind of MESSAGE_KIND_ORDER) {
+      const kindRow = row(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`));
+      // None of these Cells are drawn, so none of these rows may say they are.
+      expect.soft(kindRow.getAttribute("aria-pressed")).toBe("false");
+      // And a toggle that cannot change the grid does not quietly record a
+      // state the reader will meet again when they show Messages.
+      expect.soft((kindRow as HTMLButtonElement).disabled).toBe(true);
+    }
+
+    fireEvent.click(row(/^Tool result/));
+    expect(onToggleMessageKind).not.toHaveBeenCalled();
+  });
+
   it("offers colouring Messages by kind", () => {
     const onColourByKind = vi.fn();
     render(renderLegend(ALL_SHOWN, { onColourByKind }));

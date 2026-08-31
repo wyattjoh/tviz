@@ -31,6 +31,11 @@ import {
 } from "./theme.ts";
 
 /**
+ * Why the Message Kind rows stop taking clicks: their Category decides for them.
+ */
+const MESSAGES_HIDDEN_HINT = "Messages is hidden, which blanks every Kind; show Messages to filter";
+
+/**
  * Props for {@link ContextLegend}.
  */
 export type ContextLegendProps = {
@@ -84,6 +89,12 @@ const Swatch = ({ fillClass, ringClass, hidden, small }: SwatchProps) => (
  *
  * `aria-pressed` carries the filter state: pressed means the row's Cells are
  * drawn, which is what the filled swatch says visually.
+ *
+ * A row is `disabled` when something above it already decides the answer — a
+ * Message Kind whose Messages Category is hidden. Its Cells are blanked either
+ * way, so the toggle could not change the grid, and letting it record a state
+ * the reader cannot see would spring that state on them later, when they show
+ * Messages again.
  */
 type FilterRowProps = {
   readonly fillClass: string;
@@ -93,6 +104,8 @@ type FilterRowProps = {
   readonly tokens: number;
   readonly windowSize: number;
   readonly hidden: boolean;
+  readonly disabled: boolean;
+  readonly disabledReason: string | undefined;
   readonly small: boolean;
   readonly onToggle: () => void;
 };
@@ -105,6 +118,8 @@ const FilterRow = ({
   tokens,
   windowSize,
   hidden,
+  disabled,
+  disabledReason,
   small,
   onToggle,
 }: FilterRowProps) => (
@@ -115,7 +130,9 @@ const FilterRow = ({
       type="button"
       onClick={onToggle}
       aria-pressed={!hidden}
-      className={`flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-ui-panel ${
+      disabled={disabled}
+      title={disabledReason}
+      className={`flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-ui-panel disabled:cursor-not-allowed disabled:hover:bg-transparent ${
         hidden ? "opacity-60" : ""
       } ${small ? "text-[11px]" : "text-xs"}`}
     >
@@ -153,6 +170,9 @@ export const ContextLegend = ({
   onColourByKind,
 }: ContextLegendProps) => {
   const free = Math.max(0, windowSize - snapshot.measuredTotal);
+  // Hiding Messages blanks every Cell its Kinds could have blanked, so the Kind
+  // rows below it are already answered and stop taking clicks until it is back.
+  const messagesHidden = isCategoryHidden(filters, "messages");
 
   return (
     <div>
@@ -167,6 +187,8 @@ export const ContextLegend = ({
               tokens={snapshot.byCategory[category]}
               windowSize={windowSize}
               hidden={isCategoryHidden(filters, category)}
+              disabled={false}
+              disabledReason={undefined}
               small={false}
               onToggle={() => onToggleCategory(category)}
             />
@@ -185,6 +207,8 @@ export const ContextLegend = ({
                       tokens={snapshot.byKind[kind]}
                       windowSize={windowSize}
                       hidden={isMessageKindHidden(filters, kind)}
+                      disabled={messagesHidden}
+                      disabledReason={messagesHidden ? MESSAGES_HIDDEN_HINT : undefined}
                       small
                       onToggle={() => onToggleMessageKind(kind)}
                     />

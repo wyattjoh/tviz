@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MESSAGE_KIND_ORDER } from "../domain/context.ts";
 import type { Cell } from "./grid.ts";
 import {
   ALL_SHOWN,
@@ -38,6 +39,19 @@ describe("GridFilters", () => {
     expect(isMessageKindHidden(hidden, "toolResult")).toBe(true);
     expect(isMessageKindHidden(hidden, "user")).toBe(false);
     expect(isMessageKindHidden(toggleMessageKind(hidden, "toolResult"), "toolResult")).toBe(false);
+  });
+
+  it("hides every Message Kind while Messages, the Category they live in, is off", () => {
+    // The Kinds are inside Messages: hiding it blanks their Cells too, so a
+    // Kind reporting itself shown would contradict the grid — and the legend
+    // row that says so, filled swatch and all, would be lying to the reader.
+    const hidden = toggleCategory(ALL_SHOWN, "messages");
+    for (const kind of MESSAGE_KIND_ORDER) expect(isMessageKindHidden(hidden, kind)).toBe(true);
+
+    // The Kind's own toggle survives the Category coming back.
+    const withKind = toggleMessageKind(hidden, "user");
+    expect(isMessageKindHidden(toggleCategory(withKind, "messages"), "user")).toBe(true);
+    expect(isMessageKindHidden(toggleCategory(withKind, "messages"), "assistant")).toBe(false);
   });
 
   it("leaves the filters it was given untouched, so a re-render sees a new value", () => {

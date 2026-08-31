@@ -95,7 +95,7 @@ const describeCell = (cell: Cell, filters: GridFilters): string => {
     filters.colourByKind && cell.kind !== undefined
       ? `${CATEGORY_LABELS[cell.fill]} · ${MESSAGE_KIND_LABELS[cell.kind]}`
       : CATEGORY_LABELS[cell.fill];
-  const items = cell.items.map((item) => item.label).join(", ");
+  const items = cell.items.map((entry) => entry.item.label).join(", ");
   const hidden = isCellHidden(cell, filters) ? " · hidden" : "";
   return `${category} · ${range} · ${items}${hidden}`;
 };

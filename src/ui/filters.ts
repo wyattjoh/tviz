@@ -81,10 +81,16 @@ export const isCategoryHidden = (filters: GridFilters, category: Category): bool
   filters.hiddenCategories.has(category);
 
 /**
- * Whether a Message Kind's Cells are currently blanked.
+ * Whether a Message Kind's Cells are currently blanked — by its own toggle, or
+ * by Messages, the Category it lives in, being hidden.
+ *
+ * The parent Category wins. `isCellHidden` blanks every Messages Cell the
+ * moment the Category is off, so a Kind that only consulted `hiddenKinds` would
+ * report itself shown while none of its Cells were drawn, and the legend row
+ * saying so — filled swatch, `aria-pressed="true"` — would contradict the grid.
  */
 export const isMessageKindHidden = (filters: GridFilters, kind: MessageKind): boolean =>
-  filters.hiddenKinds.has(kind);
+  filters.hiddenCategories.has("messages") || filters.hiddenKinds.has(kind);
 
 /**
  * Whether a Cell is blanked in place.

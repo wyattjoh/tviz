@@ -408,6 +408,28 @@ describe("App", () => {
       expect(row(rail, /^Messages/).getAttribute("aria-pressed")).toBe("true");
     });
 
+    it("stops the Message Kind rows claiming to be shown once Messages is hidden", async () => {
+      const rail = await open();
+      const toolResult = lastFilledCell();
+      expect(row(rail, /^Tool result/).getAttribute("aria-pressed")).toBe("true");
+
+      fireEvent.click(row(rail, /^Messages/));
+
+      // Every Messages Cell is blanked, so no Kind row may still say its Cells
+      // are drawn — and none of them takes a click it could not act on.
+      expect(cellFill(toolResult)).toBe("bg-cell-hidden");
+      for (const kind of ["User", "Assistant", "Tool result", "Reminder"]) {
+        const kindRow = row(rail, new RegExp(`^${kind}`));
+        expect.soft(kindRow.getAttribute("aria-pressed")).toBe("false");
+        expect.soft((kindRow as HTMLButtonElement).disabled).toBe(true);
+      }
+
+      // Showing Messages again hands the Kinds back exactly as they were.
+      fireEvent.click(row(rail, /^Messages/));
+      expect(row(rail, /^Tool result/).getAttribute("aria-pressed")).toBe("true");
+      expect(cellFill(toolResult)).toBe("bg-cat-messages");
+    });
+
     it("recolours Messages Cells with the Kind accents, leaving the Categories alone", async () => {
       await open();
       const toolResult = lastFilledCell();
@@ -435,6 +457,23 @@ describe("App", () => {
       await findContextGrid();
       return screen.getByRole("complementary", { name: "Legend and Inspector" });
     };
+
+    const inspector = (): HTMLElement => {
+      const panel = screen.getByRole("heading", { name: "Inspector" }).closest("section");
+      if (panel === null) throw new Error("the Inspector has no panel");
+      return panel;
+    };
+
+    it("reports an item's share of the hovered Cell, not the item's own size", async () => {
+      await open();
+      // A Cell well inside the tool result, which is far larger than the 1,000
+      // tokens a Cell stands for: the Cell holds 1.0k of it, and the item's own
+      // size is named as context rather than reported as the Cell's contents.
+      const inside = cellTitles().findIndex((title) => title.startsWith("Free ·")) - 2;
+      fireEvent.mouseOver(cellAt(inside));
+
+      expect(inspector().textContent).toMatch(/Tool result1\.0kof \d+\.\dk/);
+    });
 
     it("lists the items overlapping a hovered Cell", async () => {
       const rail = await open();

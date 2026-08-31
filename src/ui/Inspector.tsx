@@ -42,16 +42,28 @@ export type InspectorProps = {
 
 /**
  * One item overlapping the Cell's token range.
+ *
+ * The number is the item's share of *this* Cell, not its own size: a 40k tool
+ * result crosses 40 Cells and holds 1,000 tokens of each. The shares of a Cell
+ * therefore sum to the Cell, which is the only reading that makes the list
+ * answer "what is in this 1,000 tokens". An item that runs past the Cell says
+ * so — `1.0k of 40.0k` — so the Cell's share is never mistaken for the item.
  */
 type ItemRowProps = {
   readonly label: string;
   readonly tokens: number;
+  readonly itemTokens: number;
 };
 
-const ItemRow = ({ label, tokens }: ItemRowProps) => (
+const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
   <li className="flex items-baseline gap-2 rounded bg-ui-canvas px-2 py-1 text-[11px]">
     <span className="truncate text-ui-text-secondary">{label}</span>
     <span className="ml-auto shrink-0 text-ui-text-faint tabular-nums">{formatTokens(tokens)}</span>
+    {itemTokens > tokens ? (
+      <span className="shrink-0 text-[10px] text-ui-text-faint tabular-nums">
+        of {formatTokens(itemTokens)}
+      </span>
+    ) : null}
   </li>
 );
 
@@ -113,10 +125,15 @@ export const Inspector = ({ cell, filters, pinned }: InspectorProps) => {
         </p>
       ) : null}
       <ul className="mt-2 space-y-1">
-        {shown.map((item, order) => (
+        {shown.map((entry, order) => (
           // Two items of one Cell can share a label — two tool results, two
           // reminders — so the position in the Cell is the only stable key.
-          <ItemRow key={`${order}-${item.label}`} label={item.label} tokens={item.tokens} />
+          <ItemRow
+            key={`${order}-${entry.item.label}`}
+            label={entry.item.label}
+            tokens={entry.tokens}
+            itemTokens={entry.item.tokens}
+          />
         ))}
       </ul>
       {rest > 0 ? (

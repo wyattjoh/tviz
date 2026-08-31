@@ -63,13 +63,18 @@ export const MESSAGE_KIND_RING_CLASS: Readonly<Record<MessageKind, string>> = {
 export const FREE_FILL_CLASS = "bg-cell-free";
 
 /**
- * Background utility for a Cell blanked by a filter.
+ * Utilities for a Cell blanked by a filter: a recessed fill *and* an outline.
  *
  * Deliberately distinct from {@link FREE_FILL_CLASS}: a hidden Cell holds
  * tokens and a free one does not, so the grid never claims headroom a Session
- * did not have.
+ * did not have. Distinct from the canvas too, which is the harder half — the
+ * darkest fill available is barely 1.1:1 against the pane behind the grid, so a
+ * fill-only blank reads as a Cell that was *removed*, the re-flow ADR-0006
+ * exists to rule out. The outline puts the Cell back: it clears WCAG's 3:1 for
+ * non-text against the canvas, and being an outline rather than a fill it says
+ * "blanked" by shape as well as by colour.
  */
-export const HIDDEN_FILL_CLASS = "bg-cell-hidden";
+export const HIDDEN_FILL_CLASS = "bg-cell-hidden ring-1 ring-inset ring-cell-hidden-edge";
 
 /**
  * SVG `fill` utility for each Category, used by the Scrubber's stacked bands.
