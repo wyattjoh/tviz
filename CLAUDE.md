@@ -14,6 +14,7 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 
 - **Transcript data never leaves the browser.** No upload, no server-side parsing, no persistence (no IndexedDB/localStorage of session content). The Worker is assets-only.
 - **No real transcript content in the repo, fixtures, tests, or demo data.** Real transcripts contain PII. Fixtures and `public/demo/*.jsonl` come only from `scripts/anonymize.ts` (structure-preserving, all free text replaced) or hand-written synthetic generators. Review anonymizer output before committing it.
+  - The Anonymizer keeps line count, Record `type` sequence, key order, every number/boolean/null (so Measured Tokens stay exact), string lengths and newline positions. It keeps enum-like values (`type`, `role`, `model`, `version`, `timestamp`, tool `name` on tool_use blocks, …) verbatim. Ids and uuids are **rewritten** to same-shape fakes — deterministic per value, so `message.id` grouping and `parentUuid` chains still resolve — because an id can embed free text. Everything else becomes seeded Latin word salad, fake paths, or base64-ish filler. The CLI refuses to write if the structure drifted or if the username/home directory/repo name survived.
 - **Never read real transcript files directly** (they're 0.5–13 MB). Write a Bun script under `.scratch/analysis/` that prints key paths, types, and counts — never string content. Existing survey scripts: `schema.ts`, `attachments.ts`, `derive.ts`, `turns.ts`.
 - The user's transcripts live at `~/.claude/projects/-Users-wyatt-johnson-Code-github-com-wyattjoh-agent-toolkit/` (101 sessions, CC 2.1.140–2.1.251). Use them only through analysis scripts.
 
@@ -32,10 +33,10 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 ```sh
 bun run dev            # vite dev server
 bun run build          # tsc -b && vite build
-bun run test           # vitest run (add when vitest is installed)
+bun run test           # vitest run (src/**/*.test.ts and scripts/**/*.test.ts)
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
-bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
+bun run anonymize <in.jsonl> <out.jsonl> [--seed s] [--force] [--forbid term]
 bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
 bun alchemy deploy --yes --stage prod       # public URL: Worker named `tviz`
@@ -48,7 +49,7 @@ src/parser/      Effect Schema record types, JSONL decode, per-call aggregation 
 src/worker/      Web Worker entry wrapping the parser
 src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber
 src/fixtures/    synthetic JSONL fixtures for tests
-scripts/         anonymize.ts (structure-preserving anonymizer), any generators
+scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/adr/        decisions; docs/rationale.md; write-up
 ```
