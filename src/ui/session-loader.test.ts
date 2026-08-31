@@ -31,6 +31,19 @@ const transcriptFile = (name: string, sessionId?: string): File => {
 const notATranscriptFile = (name: string): File =>
   new File(["hello\n"], name, { type: "text/plain" });
 
+/**
+ * A transcript whose Session ended before its first API call, as Claude Code
+ * leaves behind whenever a session is opened and abandoned.
+ */
+const abandonedFile = (name: string): File => {
+  const text = Fixture.toJsonl([
+    Fixture.metadataRecord("mode"),
+    Fixture.userMessage(300),
+    Fixture.metadataRecord("cost-state"),
+  ]);
+  return new File([text], name, { type: "application/jsonl" });
+};
+
 describe("useSessionLoader", () => {
   it("starts empty and adds nothing until entries are queued", () => {
     const { result } = renderHook(() => useSessionLoader());
@@ -72,6 +85,26 @@ describe("useSessionLoader", () => {
     await waitFor(() => expect(result.current.errors).toHaveLength(1));
     expect(result.current.errors[0]?.fileName).toBe("bad.jsonl");
     expect(result.current.pending).toEqual([]);
+  });
+
+  it("skips an abandoned Session silently instead of reporting it as a failure", async () => {
+    const { result } = renderHook(() => useSessionLoader());
+    const good = transcriptFile("good.jsonl");
+    const abandoned = abandonedFile("abandoned.jsonl");
+    const bad = notATranscriptFile("bad.jsonl");
+
+    act(() => {
+      result.current.addEntries([
+        { file: good, path: good.name },
+        { file: abandoned, path: abandoned.name },
+        { file: bad, path: bad.name },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.pending).toEqual([]));
+    expect(result.current.sessions).toHaveLength(1);
+    // Only the unreadable file is an error; the abandoned one leaves no trace.
+    expect(result.current.errors.map((entry) => entry.fileName)).toEqual(["bad.jsonl"]);
   });
 
   it("merges a Subagent Session count onto its parent regardless of discovery order", async () => {

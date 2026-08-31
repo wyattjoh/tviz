@@ -317,7 +317,7 @@ describe("parseTranscript", () => {
     expect(outcome.message).toContain("empty.jsonl");
   });
 
-  it("reports an error for a file that holds no API Calls", () => {
+  it("reports an error for a file that holds nothing it recognises", () => {
     const outcome = parseTranscript(
       "notes.jsonl",
       "hello, this is not a transcript\nnor is this\n",
@@ -326,6 +326,51 @@ describe("parseTranscript", () => {
     if (outcome.ok) return;
     expect(outcome.reason).toBe("notATranscript");
     expect(outcome.message).toContain("notes.jsonl");
+  });
+
+  it("distinguishes an abandoned Session from a file that is not a transcript", () => {
+    // What Claude Code leaves behind when the user quits before the first
+    // response: prompts and bookkeeping, no `assistant` Record, no `usage`.
+    const outcome = parseTranscript(
+      "abandoned.jsonl",
+      Fixture.toJsonl([
+        Fixture.metadataRecord("mode"),
+        Fixture.metadataRecord("file-history-snapshot"),
+        Fixture.userMessage(400),
+        Fixture.metadataRecord("system"),
+        Fixture.metadataRecord("cost-state"),
+      ]),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBe("noApiCalls");
+    expect(outcome.message).toContain("abandoned.jsonl");
+    // The one wording this must never use: it *is* a Claude Code transcript.
+    expect(outcome.message).not.toContain("not a Claude Code transcript");
+  });
+
+  it("calls a transcript abandoned even when bookkeeping is all it holds", () => {
+    const outcome = parseTranscript(
+      "bookkeeping.jsonl",
+      Fixture.toJsonl([
+        Fixture.metadataRecord("mode"),
+        Fixture.metadataRecord("permission-mode"),
+        Fixture.metadataRecord("cost-state"),
+      ]),
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBe("noApiCalls");
+  });
+
+  it("still calls a file of unknown Record types not a transcript", () => {
+    const outcome = parseTranscript(
+      "other.jsonl",
+      '{"type":"telemetry","value":1}\n{"type":"telemetry","value":2}\n',
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBe("notATranscript");
   });
 
   describe("Context Snapshot items", () => {
