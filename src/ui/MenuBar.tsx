@@ -75,6 +75,9 @@ const PickerMenuItem = ({ label, hint, directory, onFiles, onPicked }: PickerMen
   const inputId = useId();
   return (
     <div className="flex items-baseline gap-3 px-3 py-1.5 text-xs text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text">
+      {/* The empty check gutter `MenuItem` reserves, so every row's label
+          starts on the same column whether or not it can be checked. */}
+      <span className="w-3 shrink-0" aria-hidden="true" />
       <label htmlFor={inputId} className="flex-1 cursor-pointer truncate">
         {label}
       </label>
@@ -258,8 +261,11 @@ const FileMenu = ({
           <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
             Open sessions
           </div>
+          {/* The placeholder and status rows below stand in the session rows'
+              place, so they take the session rows' indent rather than the
+              section heading's. */}
           {sessions.length === 0 ? (
-            <div className="px-3 py-1.5 text-xs text-ui-text-faint">none</div>
+            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">none</div>
           ) : (
             sessions.map((session) => (
               <MenuItem
@@ -280,12 +286,14 @@ const FileMenu = ({
             ))
           )}
           {pending.length === 0 ? null : (
-            <div className="px-3 py-1.5 text-xs text-ui-text-faint">
+            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
               parsing {pending.length} file{pending.length === 1 ? "" : "s"}…
             </div>
           )}
           {!demoBusy ? null : (
-            <div className="px-3 py-1.5 text-xs text-ui-text-faint">loading demo sessions…</div>
+            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
+              loading demo sessions…
+            </div>
           )}
           {errors.length === 0 ? null : (
             <>
@@ -294,7 +302,11 @@ const FileMenu = ({
                 Failed
               </div>
               {errors.map((entry) => (
-                <div key={entry.id} role="alert" className="px-3 py-1.5 text-xs text-ui-danger">
+                <div
+                  key={entry.id}
+                  role="alert"
+                  className="py-1.5 pr-3 pl-9 text-xs text-ui-danger"
+                >
                   {entry.fileName}
                 </div>
               ))}
