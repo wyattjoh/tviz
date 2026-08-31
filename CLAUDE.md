@@ -19,7 +19,7 @@ These apply in every session, including ones that touch none of the paths the `.
 
 ## Stack
 
-- Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha.
+- Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha, `lucide-react` for icons.
 - **Effect v4 beta** for the parser only — `Schema` decoding plus a pure pipeline, no Layers/Services.
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
 - Tests: **Vitest**, beside source, with synthetic fixtures.

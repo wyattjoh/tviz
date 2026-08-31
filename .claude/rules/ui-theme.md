@@ -30,6 +30,19 @@ fills dark enough to read as blanked sit near 1.1:1 against the canvas — witho
 outline "blanked in place" and "Cell removed" look the same, and the second is the re-flow
 ADR-0006 forbids.
 
+## Icons
+
+Icons come from `lucide-react` — never a hand-drawn `<svg>`, never a text glyph standing in
+for one (`✓`, `|<`, `>|`). Import the named component, size it with Tailwind (`h-3.5 w-3.5`
+in the chrome, `h-3 w-3` for a menu row's check), and let it inherit `currentColor` from the
+element's semantic text token rather than setting a colour on it.
+
+Every icon is `aria-hidden="true"`, because a control's accessible name lives on the button
+(`aria-label="Play"`, `aria-label="Context Window override"`) where a state flip can change
+it. That leaves several `<svg>` elements in a region with no accessible name, so a test that
+wants a specific one addresses it by a `data-*` hook — `[data-chart="calls"]` for the
+Scrubber's chart — never by tag.
+
 ## Layout
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
@@ -46,6 +59,12 @@ index, and `close`. It carries no controls: the fill meter and the Context Windo
 are `ContextWindowPanel` in the rail, under Categories, because a strip holding both
 wrapped onto two lines on a narrow window and took the height out of the grid. New
 per-Session state belongs in a rail panel, not back in the strip.
+
+A rail panel is a reading; a setting that changes it rides in the panel's header row
+through `RailPanel`'s `action` slot, as `ContextWindowMenu`'s cog does — not as a row of
+buttons in the body, which spends rail height on a control pressed once a Session. What is
+in force stays readable without opening the menu: the panel's "(inferred)"/"(override)"
+note names the window whether or not anyone has touched the cog.
 
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and

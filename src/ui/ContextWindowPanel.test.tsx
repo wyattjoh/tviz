@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ContextWindowPanel } from "./ContextWindowPanel.tsx";
+import { ContextWindowMenu, ContextWindowPanel } from "./ContextWindowPanel.tsx";
 
 afterEach(cleanup);
+
+const openMenu = (): void => {
+  fireEvent.click(screen.getByRole("button", { name: "Context Window override" }));
+};
+
+const choices = (): HTMLElement | null => screen.queryByRole("group", { name: "Context Window" });
 
 describe("ContextWindowPanel", () => {
   it("reads the fill level off the windowSize prop, not the Session's inferred one", () => {
@@ -13,7 +19,6 @@ describe("ContextWindowPanel", () => {
         windowSize={1_000_000}
         peak={90_000}
         windowChoice={1_000_000}
-        onWindowChoiceChange={vi.fn()}
       />,
     );
 
@@ -21,14 +26,13 @@ describe("ContextWindowPanel", () => {
     expect(screen.getByText(/4\.5% full/)).toBeDefined();
   });
 
-  it("names the window as inferred or overridden, beside the control that sets it", () => {
+  it("names the window as inferred or overridden, without the menu being opened", () => {
     const { rerender } = render(
       <ContextWindowPanel
         measuredTotal={45_000}
         windowSize={200_000}
         peak={90_000}
         windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
       />,
     );
 
@@ -43,42 +47,54 @@ describe("ContextWindowPanel", () => {
         windowSize={1_000_000}
         peak={90_000}
         windowChoice={1_000_000}
-        onWindowChoiceChange={vi.fn()}
       />,
     );
 
     expect(screen.getByText(/window 1000\.0k \(override\)/)).toBeDefined();
   });
+});
 
-  it("marks the selected Context Window choice", () => {
-    render(
-      <ContextWindowPanel
-        measuredTotal={45_000}
-        windowSize={200_000}
-        peak={90_000}
-        windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
-      />,
-    );
+describe("ContextWindowMenu", () => {
+  it("keeps the choices behind the cog until it is clicked", () => {
+    render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={vi.fn()} />);
 
-    const group = screen.getByRole("group", { name: "Context Window" });
-    expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("true");
-    expect(group.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
+    expect(choices()).toBeNull();
+    const cog = screen.getByRole("button", { name: "Context Window override" });
+    expect(cog.getAttribute("aria-expanded")).toBe("false");
+
+    openMenu();
+    expect(choices()).not.toBeNull();
+    expect(cog.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("changes the Context Window override on click", () => {
+  it("marks the selected Context Window choice", () => {
+    render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={vi.fn()} />);
+    openMenu();
+
+    expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("true");
+    expect(choices()?.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
+  });
+
+  it("changes the Context Window override on click, and closes", () => {
     const onWindowChoiceChange = vi.fn();
-    render(
-      <ContextWindowPanel
-        measuredTotal={45_000}
-        windowSize={200_000}
-        peak={90_000}
-        windowChoice="auto"
-        onWindowChoiceChange={onWindowChoiceChange}
-      />,
-    );
+    render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={onWindowChoiceChange} />);
+    openMenu();
 
     fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
+
     expect(onWindowChoiceChange).toHaveBeenCalledWith(1_000_000);
+    expect(choices()).toBeNull();
+  });
+
+  it("closes on Escape and on a click outside, the way the File menu does", () => {
+    render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={vi.fn()} />);
+
+    openMenu();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(choices()).toBeNull();
+
+    openMenu();
+    fireEvent.pointerDown(document.body);
+    expect(choices()).toBeNull();
   });
 });

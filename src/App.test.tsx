@@ -160,10 +160,12 @@ describe("App", () => {
     const rail = screen.getByRole("complementary", { name: "Legend and Inspector" });
     expect(rail.contains(screen.getByText("Free space"))).toBe(true);
     expect(rail.contains(screen.getByText("Inspector"))).toBe(true);
-    // The fill meter and the Context Window override live under the legend,
-    // whose Free space line is the other half of the same number.
+    // The fill meter lives under the legend, whose Free space line is the other
+    // half of the same number; the override is the cog in that panel's header.
     expect(rail.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
-    expect(rail.contains(screen.getByRole("group", { name: "Context Window" }))).toBe(true);
+    expect(rail.contains(screen.getByRole("button", { name: "Context Window override" }))).toBe(
+      true,
+    );
     expect(pane.parentElement?.className).toContain("grid-cols-[minmax(0,1fr)_340px]");
 
     // 5 — the Scrubber across the bottom.
@@ -734,15 +736,19 @@ describe("App", () => {
         "Context grid: 45.0k of 200.0k tokens used",
       );
 
+      openWindowMenu();
       fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
 
       expect(contextGrid().getAttribute("aria-label")).toBe(
         "Context grid: 45.0k of 1000.0k tokens used",
       );
+      // Picking a window closes the menu, the way the File menu's rows do.
+      expect(screen.queryByRole("group", { name: "Context Window" })).toBeNull();
       expect(screen.getByText(/45\.0k \/ 1000\.0k tokens/)).toBeDefined();
       // The legend's free-space line is the overridden window minus the total.
       expect(screen.getByText("955.0k")).toBeDefined();
 
+      openWindowMenu();
       fireEvent.click(screen.getByRole("button", { name: "auto" }));
       expect(contextGrid().getAttribute("aria-label")).toBe(
         "Context grid: 45.0k of 200.0k tokens used",
@@ -871,6 +877,14 @@ const loadDemo = (): void => {
 
 const openFileMenu = (): void => {
   fireEvent.click(screen.getByRole("button", { name: "File" }));
+};
+
+/**
+ * The Context Window override is behind the cog in the rail panel's header, so
+ * reaching a choice takes a click first.
+ */
+const openWindowMenu = (): void => {
+  fireEvent.click(screen.getByRole("button", { name: "Context Window override" }));
 };
 
 const loadDemoFromFileMenu = (): void => {
