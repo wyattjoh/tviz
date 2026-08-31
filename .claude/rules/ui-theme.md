@@ -37,8 +37,9 @@ The main view is the **Workbench** shell the throwaway UI prototype settled on (
 once in `src/App.tsx`: a menu bar carrying the File menu, a Session strip
 (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the flexible left, fixed
 right rail holding the legend-filters and the docked Inspector — and the Scrubber across
-the bottom. The grid pane is the scroll container and its width drives `ContextGrid`'s
-column count. Fill a region; do not restructure the shell.
+the bottom. The grid pane is the scroll container, and both of its dimensions drive
+`ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill it and hands back the column
+count. Fill a region; do not restructure the shell.
 
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
@@ -46,7 +47,11 @@ Load demo sessions, the list of open Sessions (a Demo Session shows its manifest
 sidebar — a new way into the app is a File-menu entry.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
-Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in place; it
+Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a
+fixed number of pixels: it grows to fill the pane, clamped to 8–48px, and bottoms out into
+the scrolling grid the fixed Cell always drew. That geometry is a pure function in
+`src/ui/cell-fit.ts` so the shape of the block is testable without a DOM, the way
+`scrubber.ts` holds the chart's. Filtering blanks Cells in place; it
 never removes them, so legend totals never change when a Category or Message Kind is
 hidden.
 
