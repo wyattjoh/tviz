@@ -1,0 +1,25 @@
+{
+  "name": "tviz-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Alchemy stacks for tviz. Deliberately NOT a workspace of the app so its Effect version stays independent.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "plan": "alchemy plan",
+    "plan:prod": "alchemy plan --stage prod",
+    "deploy": "alchemy deploy --yes",
+    "deploy:prod": "alchemy deploy --stage prod --yes"
+  },
+  "dependencies": {
+    "alchemy": "2.0.0-beta.75",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  },
+  "//": "There is deliberately no `bootstrap:ci` here: `stacks/github.ts` uses Alchemy.localState(), which anchors `.alchemy/state` at the working directory, and `bun run` runs a script from its own package's root. Running it from `infra/` would start from empty state and re-mint the CI token, so the script lives in the ROOT package.json — see ADR-0005 and ADR-0007."
+}

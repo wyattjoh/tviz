@@ -107,6 +107,13 @@ record types where unknown types must be skipped and counted rather than throw, 
 returns plain data to React (ADR-0004). Paying for the full architecture in a 2–3 hour build
 would have bought nothing.
 
+**Deploy tooling installed separately from the app.** Alchemy needs an Effect release
+candidate; the parser is pinned to the beta its `Schema` code was written against. Rather
+than bump one to suit the other, the stacks live in `infra/` with their own lockfile and
+`node_modules`, so each import resolves to the version its importer asked for (ADR-0007).
+It also cuts the app's install from 433 packages to 138 — none of Alchemy's cloud SDKs
+belong in a browser-only build.
+
 ## How I worked with Claude Code
 
 Almost every line of code here was written by Claude Code. The judgment calls were where I

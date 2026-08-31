@@ -27,11 +27,17 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           # Pinned for the same reason, and to match the repo's other exact
-          # pins (alchemy beta.72, effect beta.107).
+          # pins (alchemy beta.75, effect beta.107 in the app and rc.112 in
+          # infra/).
           bun-version: 1.4.0
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # `infra/` is a separate package with its own lockfile so Alchemy's
+      # `effect` (rc) never displaces the app's (beta) — see ADR-0007.
+      - name: Install infra dependencies
+        run: bun run infra:install
 
       - name: Lint
         run: bun run lint
@@ -39,15 +45,23 @@ jobs:
       - name: Check formatting
         run: bun run format:check
 
-      # `--passWithNoTests` only here: locally, an empty `bun run test` should
-      # still fail loudly. Drop this once `src/**/*.test.ts` exists.
       - name: Test
-        run: bun run test --passWithNoTests
+        run: bun run test
 
-      # `bun run build` is not run separately: Alchemy's Website.Vite resource
-      # runs the project's own Vite build (tsc included) as part of the deploy.
+      # Two projects, two typecheck commands. Alchemy's Website.Vite runs
+      # `vite build`, which strips types without checking them, so neither
+      # `tsc` runs as part of the deploy — they have to run here.
+      - name: Typecheck app
+        run: bun run typecheck
+
+      - name: Typecheck infra
+        run: bun run infra:typecheck
+
+      # `vite build` itself is not run separately: Website.Vite runs the app's
+      # own Vite config, so the deploy produces the same bundle `bun run build`
+      # would and uploads it as the Worker's static assets.
       - name: Deploy
-        run: bun alchemy deploy --stage prod --yes
+        run: bun run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

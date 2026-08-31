@@ -15,7 +15,7 @@ These apply in every session, including ones that touch none of the paths the `.
 - **Transcript data never leaves the browser.** No upload, no server-side parsing, no persistence (no IndexedDB/localStorage of session content). The Worker is assets-only.
 - **No real transcript content in the repo, fixtures, tests, or demo data.** Committed data comes only from `scripts/anonymize.ts` or a hand-written synthetic generator, and gets reviewed before it lands — see [`.claude/rules/synthetic-data.md`](.claude/rules/synthetic-data.md).
 - **Never read real transcript files directly** (0.5–13 MB, full of PII). Survey them with a Bun script under `.scratch/analysis/` that prints key paths, types and counts — never string content.
-- **Never print deploy state or the CI token into a transcript.** `.alchemy/state/tviz-ci/*/DeployToken.json` holds a live Cloudflare API token in plaintext: never `cat` it, never `alchemy state get`/`export` the `tviz-ci` stack, and never run `alchemy cloudflare create-token`. See [`.claude/rules/deploy.md`](.claude/rules/deploy.md).
+- **Never print deploy state or the CI token into a transcript.** The **repository root's** `.alchemy/state/tviz-ci/*/DeployToken.json` — not `infra/.alchemy/`, which holds no state — has a live Cloudflare API token in plaintext: never `cat` it, never `alchemy state get`/`export` the `tviz-ci` stack, and never run `alchemy cloudflare create-token`. See [`.claude/rules/deploy.md`](.claude/rules/deploy.md).
 
 ## Stack
 
@@ -23,7 +23,7 @@ These apply in every session, including ones that touch none of the paths the `.
 - **Effect v4 beta** for the parser only — `Schema` decoding plus a pure pipeline, no Layers/Services.
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
 - Tests: **Vitest**, beside source, with synthetic fixtures.
-- Deployment: **Alchemy** → an assets-only Cloudflare Worker; CI deploys `prod` on pushes to `main`.
+- Deployment: **Alchemy** → an assets-only Cloudflare Worker; CI deploys `prod` on pushes to `main`. The stacks live in `infra/`, a **separately installed package** with its own lockfile and `node_modules` so its Effect version stays independent of the parser's (ADR-0007) — see [`.claude/rules/deploy.md`](.claude/rules/deploy.md).
 - Lint/format: oxlint + oxfmt via lefthook pre-commit. Run `bun run lint` and `bun run format` after edits.
 - `effect` and `alchemy` are on coupled prerelease pins — read [`.claude/rules/dependencies.md`](.claude/rules/dependencies.md) before bumping either.
 
@@ -31,15 +31,20 @@ These apply in every session, including ones that touch none of the paths the `.
 
 ```sh
 bun run dev            # vite dev server
-bun run build          # tsc -b && vite build
+bun run typecheck      # tsc -b (src/ + scripts/; not infra/)
+bun run build          # typecheck && vite build
 bun run test           # vitest run (src/**/*.test.{ts,tsx} and scripts/**/*.test.ts)
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
 bun run format:check   # oxfmt --check
 bun run anonymize <in.jsonl> <out.jsonl> [--seed s] [--force] [--forbid term]
-bun alchemy plan       # read-only preview
-bun alchemy deploy --yes [--stage prod]   # remote write: explicit confirmation first
+bun run infra:install  # install the infra package (once per checkout)
+bun run plan           # read-only preview of stage prod
+bun run deploy         # THE deploy — stage prod; remote write, explicit confirmation first
 ```
+
+Everything under `infra/` — the stacks, the CLI, `bootstrap:ci` — is in
+[`.claude/rules/deploy.md`](.claude/rules/deploy.md).
 
 ## Layout
 
@@ -51,8 +56,10 @@ src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/demo/        Demo Session manifest type + decoder, and the loader that fetches them
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
-scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators
-stacks/          github.ts — bootstrap stack minting the CI token + GitHub secrets
+scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators,
+                 infra-isolation.test.ts — the ADR-0007 guard (runs in `bun run test`)
+infra/           separately installed Alchemy package (own package.json/bun.lock/node_modules):
+                 alchemy.run.ts — the app stack; stacks/github.ts — CI-token bootstrap stack
 public/demo/     manifest.json + the bundled anonymized Demo Sessions (small/medium/large)
 docs/            adr/ (decisions), transcript-format.md, rationale.md, agents/
 ```
