@@ -171,6 +171,19 @@ a dozen agents that never shared a context window.
   bucket into prompt / tools / memory, turning the honest one-bucket answer into an exact
   three-part one.
 - **More than Mocha.** Single theme today.
+- **A `?demo` deep link.** "load demo sessions" is one click; `/?demo` would make it zero,
+  landing a reviewer straight on a populated grid. I cut it deliberately to stay inside the
+  time box — the button already gets them to the same place.
+- **The process record as a repo artifact.** The spec, the plan, the tickets, and the
+  survey scripts behind the "surveyed ~57,000 records" claim above only exist in a
+  git-ignored `.scratch/`; committing a scrubbed copy as a process archive would make that
+  evidence visible in a fresh clone instead of just in the submitted transcripts. Also cut
+  to stay inside the time box.
+- **Reconciling the split agent rules.** `CLAUDE.md` was split into path-scoped
+  `.claude/rules/*.md` files partway through the build, and two of them — `synthetic-data.md`
+  and `demo-data.md` — ended up claiming the same `public/demo/**` path, which is exactly the
+  kind of drift the split was supposed to prevent. Deliberately left for later rather than
+  spent inside the box.
 
 ## Time spent
 
