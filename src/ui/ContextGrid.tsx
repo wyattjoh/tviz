@@ -2,8 +2,10 @@
  * The append-only context grid: one Cell per 1,000 tokens of the Context
  * Window, laid out in the order items entered the context (ADR-0006).
  *
- * Cells keep their physical size, so the number of columns comes from the width
- * of the grid pane and the pane scrolls when the block outgrows it.
+ * Cells are sized to fill the grid pane — `fitCells` takes the pane's width and
+ * height and hands back the Cell, the gap and the column count that make the
+ * whole Context Window fill it, clamped at both ends so a small window stops
+ * growing and a big one bottoms out and scrolls.
  *
  * The layout arrives already built (`buildCells`), which is what keeps
  * filtering honest: filters reach the Cell's *colour* and nothing else, so a
@@ -16,10 +18,12 @@ import {
   type MouseEvent,
   type SyntheticEvent,
   useCallback,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { CATEGORY_LABELS, MESSAGE_KIND_LABELS } from "../domain/context.ts";
+import { fitCells } from "./cell-fit.ts";
 import type { GridFilters } from "./filters.ts";
 import { isCellHidden } from "./filters.ts";
 import { formatTokens } from "./format.ts";
@@ -27,48 +31,31 @@ import { type Cell, CELL_TOKENS } from "./grid.ts";
 import { cellFillClass } from "./theme.ts";
 
 /**
- * Physical size of a Cell, in pixels. Constant across Sessions and Context
- * Windows: a bigger window means more Cells, never smaller ones.
+ * The pane the grid is drawn in, in pixels, before it has been measured.
+ * `fitCells` reads this as "not measured yet" and falls back to a fixed Cell.
  */
-const CELL_SIZE_PX = 16;
+const UNMEASURED = { width: 0, height: 0 } as const;
 
 /**
- * Gap between Cells, in pixels.
- */
-const CELL_GAP_PX = 3;
-
-/**
- * Columns to draw before the pane has been measured — the first paint, and any
- * environment without `ResizeObserver` (jsdom).
- */
-const FALLBACK_COLUMNS = 20;
-
-/**
- * Fewest columns to draw, so a very narrow pane scrolls sideways instead of
- * collapsing the grid into a single tall strip.
- */
-const MINIMUM_COLUMNS = 8;
-
-/**
- * Columns that fit in a pane of this width.
- */
-const columnsForWidth = (width: number): number =>
-  Math.max(MINIMUM_COLUMNS, Math.floor((width + CELL_GAP_PX) / (CELL_SIZE_PX + CELL_GAP_PX)));
-
-/**
- * Tracks how many Cells fit across the pane it is attached to.
+ * Tracks the size of the pane the grid is drawn in, both ways: the Cell now
+ * follows the pane's height as well as its width.
  *
  * A callback ref rather than `useRef` + `useEffect`: the pane mounts and
- * unmounts with the Session, long after this hook first runs.
+ * unmounts with the Session, long after this hook first runs. `contentRect` is
+ * the pane's content box, which is the space the block actually has.
  */
-const useColumnCount = (): readonly [(node: HTMLElement | null) => void, number] => {
-  const [columns, setColumns] = useState(FALLBACK_COLUMNS);
+const usePaneSize = (): readonly [
+  (node: HTMLElement | null) => void,
+  { readonly width: number; readonly height: number },
+] => {
+  const [pane, setPane] = useState<{ readonly width: number; readonly height: number }>(UNMEASURED);
   const [observer] = useState(() =>
     typeof ResizeObserver === "undefined"
       ? undefined
       : new ResizeObserver((entries) => {
-          const width = entries[0]?.contentRect.width;
-          if (width !== undefined && width > 0) setColumns(columnsForWidth(width));
+          const rect = entries[0]?.contentRect;
+          if (rect === undefined || rect.width <= 0) return;
+          setPane({ width: rect.width, height: rect.height });
         }),
   );
 
@@ -81,7 +68,7 @@ const useColumnCount = (): readonly [(node: HTMLElement | null) => void, number]
     [observer],
   );
 
-  return [ref, columns] as const;
+  return [ref, pane] as const;
 };
 
 /**
@@ -163,7 +150,18 @@ export const ContextGrid = ({
   onInspect,
   onPin,
 }: ContextGridProps) => {
-  const [paneRef, columns] = useColumnCount();
+  const [paneRef, pane] = usePaneSize();
+  // The Cell is a function of the pane and the size of the window, and of
+  // nothing else — no Session state reaches it, so two Sessions on the same
+  // window in the same pane draw the same grid.
+  const {
+    size: cellSize,
+    gap,
+    columns,
+  } = useMemo(
+    () => fitCells(cells.length, pane.width, pane.height),
+    [cells.length, pane.width, pane.height],
+  );
   const blockRef = useRef<HTMLDivElement>(null);
   // Roving tabindex: one Cell of the grid is in the tab order and the arrow
   // keys move between Cells. A window of 1,000 Cells would otherwise be 1,000
@@ -226,10 +224,11 @@ export const ContextGrid = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* The pane takes whatever height the Workbench's grid region has and
-          scrolls when the block outgrows it. `scrollbarGutter` keeps the column
-          count from oscillating when the grid grows just tall enough to need a
-          scrollbar. */}
+      {/* The pane takes whatever height the Workbench's grid region has, and
+          both of its dimensions size the Cells. It still scrolls, for the
+          windows too big to fit at the minimum Cell. `scrollbarGutter` keeps
+          the width — and so the Cell — from oscillating when the block grows
+          just tall enough to need a scrollbar. */}
       <div
         ref={paneRef}
         className="min-h-0 flex-1 overflow-auto p-5"
@@ -239,8 +238,8 @@ export const ContextGrid = ({
           ref={blockRef}
           className="grid w-fit"
           style={{
-            gridTemplateColumns: `repeat(${columns}, ${CELL_SIZE_PX}px)`,
-            gap: `${CELL_GAP_PX}px`,
+            gridTemplateColumns: `repeat(${columns}, ${cellSize}px)`,
+            gap: `${gap}px`,
           }}
           role="group"
           aria-label={`Context grid: ${formatTokens(measuredTotal)} of ${formatTokens(
@@ -266,7 +265,7 @@ export const ContextGrid = ({
                   cell,
                   filters,
                 )} ${cell.index === pinnedIndex ? "outline-2 outline-ui-focus" : ""}`}
-                style={{ width: CELL_SIZE_PX, height: CELL_SIZE_PX }}
+                style={{ width: cellSize, height: cellSize }}
                 title={label}
               />
             );

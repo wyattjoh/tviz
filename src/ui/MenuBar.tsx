@@ -11,6 +11,7 @@
  * "Load demo sessions" is here too, so a reviewer with no transcript has the
  * same way in once the empty state's drop zone is gone.
  */
+import { Check } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { peakMeasuredTotal, type Session } from "../domain/context.ts";
 import { collectFileListEntries, type PathedFile } from "./collect-files.ts";
@@ -48,8 +49,8 @@ const MenuItem = ({ label, hint, onClick, checked, disabled }: MenuItemProps) =>
     aria-pressed={checked}
     className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left text-xs text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text disabled:opacity-40 disabled:hover:bg-transparent"
   >
-    <span className="w-3 shrink-0 text-ui-focus" aria-hidden="true">
-      {checked === true ? "✓" : ""}
+    <span className="w-3 shrink-0 self-center text-ui-focus" aria-hidden="true">
+      {checked === true ? <Check className="h-3 w-3" /> : null}
     </span>
     <span className="truncate">{label}</span>
     {hint === undefined ? null : (

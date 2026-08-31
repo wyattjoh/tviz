@@ -30,15 +30,41 @@ fills dark enough to read as blanked sit near 1.1:1 against the canvas — witho
 outline "blanked in place" and "Cell removed" look the same, and the second is the re-flow
 ADR-0006 forbids.
 
+## Icons
+
+Icons come from `lucide-react` — never a hand-drawn `<svg>`, never a text glyph standing in
+for one (`✓`, `|<`, `>|`). Import the named component, size it with Tailwind (`h-3.5 w-3.5`
+in the chrome, `h-3 w-3` for a menu row's check), and let it inherit `currentColor` from the
+element's semantic text token rather than setting a colour on it.
+
+Every icon is `aria-hidden="true"`, because a control's accessible name lives on the button
+(`aria-label="Play"`, `aria-label="Context Window override"`) where a state flip can change
+it. That leaves several `<svg>` elements in a region with no accessible name, so a test that
+wants a specific one addresses it by a `data-*` hook — `[data-chart="calls"]` for the
+Scrubber's chart — never by tag.
+
 ## Layout
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
 `wyattjoh/ui-prototype`; see its `src/prototype/README.md`), in four regions established
 once in `src/App.tsx`: a menu bar carrying the File menu, a Session strip
 (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the flexible left, fixed
-right rail holding the legend-filters and the docked Inspector — and the Scrubber across
-the bottom. The grid pane is the scroll container and its width drives `ContextGrid`'s
-column count. Fill a region; do not restructure the shell.
+right rail holding the legend-filters, the Context Window panel and the docked Inspector —
+and the Scrubber across the bottom. The grid pane is the scroll container, and both of its dimensions drive
+`ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill it and hands back the column
+count. Fill a region; do not restructure the shell.
+
+The Session strip is identity plus one action — file name, id, model, CC version, call
+index, and `close`. It carries no controls: the fill meter and the Context Window override
+are `ContextWindowPanel` in the rail, under Categories, because a strip holding both
+wrapped onto two lines on a narrow window and took the height out of the grid. New
+per-Session state belongs in a rail panel, not back in the strip.
+
+A rail panel is a reading; a setting that changes it rides in the panel's header row
+through `RailPanel`'s `action` slot, as `ContextWindowMenu`'s cog does — not as a row of
+buttons in the body, which spends rail height on a control pressed once a Session. What is
+in force stays readable without opening the menu: the panel's "(inferred)"/"(override)"
+note names the window whether or not anyone has touched the cog.
 
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
@@ -46,7 +72,11 @@ Load demo sessions, the list of open Sessions (a Demo Session shows its manifest
 sidebar — a new way into the app is a File-menu entry.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
-Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in place; it
+Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a
+fixed number of pixels: it grows to fill the pane, clamped to 8–48px, and bottoms out into
+the scrolling grid the fixed Cell always drew. That geometry is a pure function in
+`src/ui/cell-fit.ts` so the shape of the block is testable without a DOM, the way
+`scrubber.ts` holds the chart's. Filtering blanks Cells in place; it
 never removes them, so legend totals never change when a Category or Message Kind is
 hidden.
 

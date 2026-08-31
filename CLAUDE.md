@@ -19,7 +19,7 @@ These apply in every session, including ones that touch none of the paths the `.
 
 ## Stack
 
-- Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha.
+- Bun + TypeScript, Vite 8, React 19, Tailwind, Catppuccin Mocha, `lucide-react` for icons.
 - **Effect v4 beta** for the parser only — `Schema` decoding plus a pure pipeline, no Layers/Services.
 - Parsing runs in a **Web Worker** so multi-MB files don't block the UI.
 - Tests: **Vitest**, beside source, with synthetic fixtures.
@@ -52,7 +52,7 @@ Everything under `infra/` — the stacks, the CLI, `bootstrap:ci` — is in
 src/domain/      POD vocabulary shared by parser, worker and UI: Category, MessageKind, ContextSnapshot, Session
 src/parser/      Effect Schema record types, JSONL decode, per-call aggregation → POD snapshots
 src/worker/      Web Worker entry wrapping the parser, plus its main-thread client
-src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, Inspector, Scrubber; grid layout, filters, formatting, theme token maps
+src/ui/          React components: MenuBar, SessionHeader, DropZone, ContextGrid, ContextLegend, ContextWindowPanel, Inspector, Scrubber; grid and Cell-fit layout, filters, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/demo/        Demo Session manifest type + decoder, and the loader that fetches them
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)

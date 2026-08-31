@@ -97,7 +97,9 @@ const Harness = ({
 const renderScrubber = (loaded: Session = session()) => {
   selected = [];
   const view = render(<Harness calls={loaded.calls} windowSize={loaded.windowSize} />);
-  const chart = view.container.querySelector("svg");
+  // By `data-chart`, not by tag: the transport controls are icons, so the
+  // first `<svg>` in the Scrubber is a button's glyph rather than the chart.
+  const chart = view.container.querySelector<SVGSVGElement>('[data-chart="calls"]');
   if (chart === null) throw new Error("the Scrubber has no chart");
   // jsdom reports a zero-sized box for everything, so the chart is given one.
   chart.getBoundingClientRect = () =>

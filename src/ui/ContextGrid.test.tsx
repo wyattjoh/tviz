@@ -27,11 +27,11 @@ class FakeResizeObserver {
   disconnect(): void {}
 }
 
-const resizePaneTo = (width: number): void => {
+const resizePaneTo = (width: number, height: number): void => {
   act(() => {
     for (const callback of resizes) {
       callback(
-        [{ contentRect: { width } } as ResizeObserverEntry],
+        [{ contentRect: { width, height } } as ResizeObserverEntry],
         undefined as unknown as ResizeObserver,
       );
     }
@@ -81,6 +81,15 @@ const grid = (): HTMLElement => screen.getByRole("group", { name: /^Context grid
 
 const gridColumns = (): string => grid().style.getPropertyValue("grid-template-columns");
 
+/**
+ * The one size every Cell is drawn at, as `width×height`.
+ */
+const cellSize = (): string => {
+  const sizes = new Set(cells().map((cell) => `${cell.style.width}×${cell.style.height}`));
+  expect(sizes.size).toBe(1);
+  return [...sizes][0] ?? "";
+};
+
 const cells = (): readonly HTMLElement[] => Array.from(grid().children) as HTMLElement[];
 
 const titles = (): readonly string[] => cells().map((cell) => cell.getAttribute("title") ?? "");
@@ -101,54 +110,74 @@ afterEach(() => {
 });
 
 describe("ContextGrid", () => {
-  it("draws a Cell per 1,000 tokens, so a 1M window is 1,000 Cells at the same size", () => {
+  it("draws a Cell per 1,000 tokens, so a 1M window is five times the Cells", () => {
     const items = [
       { category: "system", kind: undefined, label: "System", tokens: 20_000 },
     ] as const;
 
     const { rerender } = render(renderGrid(items, 200_000));
     expect(grid().childElementCount).toBe(200);
-    expect(gridColumns()).toContain("16px");
 
     rerender(renderGrid(items, 1_000_000));
     expect(grid().childElementCount).toBe(1_000);
-    // Same physical Cell, four times the Cells.
-    expect(gridColumns()).toContain("16px");
   });
 
-  it("follows the width of the grid pane with its column count", () => {
+  it("sizes the Cells to fill the grid pane, in both directions", () => {
     render(renderGrid([], 200_000));
+
+    // Before the pane is measured the grid falls back to the fixed Cell it was
+    // drawn at when Cell size was a constant.
     expect(gridColumns()).toBe("repeat(20, 16px)");
+    expect(cellSize()).toBe("16px\u00d716px");
 
-    // 16px Cells with a 3px gap: 42 of them fit in 800px.
-    resizePaneTo(800);
-    expect(gridColumns()).toBe("repeat(42, 16px)");
+    resizePaneTo(1_360, 660);
+    const wide = cellSize();
+    expect(wide).not.toBe("16px\u00d716px");
 
-    resizePaneTo(400);
-    expect(gridColumns()).toBe("repeat(21, 16px)");
+    // A taller pane is more room for the same 200 Cells, so the Cell grows
+    // until it hits the clamp rather than leaving the space empty.
+    resizePaneTo(1_360, 200);
+    const short = cellSize();
+    expect(Number.parseInt(short, 10)).toBeLessThan(Number.parseInt(wide, 10));
+
+    // Narrowing the pane still takes columns away.
+    const columnsIn = (): number => Number.parseInt(gridColumns().slice("repeat(".length), 10);
+    resizePaneTo(1_360, 660);
+    const columns = columnsIn();
+    resizePaneTo(400, 660);
+    expect(columnsIn()).toBeLessThan(columns);
   });
 
-  it("keeps every Cell at one physical size, in a pane that scrolls", () => {
+  it("gives a bigger Context Window smaller Cells in the same pane", () => {
     const items = [
       { category: "system", kind: undefined, label: "System", tokens: 20_000 },
     ] as const;
 
     const { rerender } = render(renderGrid(items, 200_000));
+    resizePaneTo(1_360, 660);
+    const small = Number.parseInt(cellSize(), 10);
 
-    const sizes = (): ReadonlySet<string> =>
-      new Set(cells().map((cell) => `${cell.style.width}×${cell.style.height}`));
+    rerender(renderGrid(items, 1_000_000));
+    resizePaneTo(1_360, 660);
+    expect(Number.parseInt(cellSize(), 10)).toBeLessThan(small);
+  });
 
-    expect(sizes()).toEqual(new Set(["16px×16px"]));
+  it("keeps every Cell at one size, in a pane that scrolls once they cannot shrink", () => {
+    const items = [
+      { category: "system", kind: undefined, label: "System", tokens: 20_000 },
+    ] as const;
 
-    // The block is 200 Cells tall over 20 columns here and 1,000 over the same
-    // columns at a 1M window, so the pane — not the Cell — absorbs the growth.
+    render(renderGrid(items, 1_000_000));
+
+    // 1,000 Cells cannot fit a pane this short even at the smallest Cell, so
+    // the Cell bottoms out and the pane — not the Cell — absorbs the rest.
+    resizePaneTo(600, 120);
+    expect(cellSize()).toBe("8px\u00d78px");
+
     const pane = grid().parentElement;
     expect(pane?.className).toContain("overflow-auto");
     // The pane fills the Workbench's grid region rather than sizing itself.
     expect(pane?.className).toContain("flex-1");
-
-    rerender(renderGrid(items, 1_000_000));
-    expect(sizes()).toEqual(new Set(["16px×16px"]));
   });
 
   it("draws the cumulative items of the selected API Call, not just what it added", () => {

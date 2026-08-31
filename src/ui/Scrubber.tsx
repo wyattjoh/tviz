@@ -11,6 +11,7 @@
  * the transport buttons, or step the range input with the arrow keys. Playback
  * lives here too; any manual scrub pauses it.
  */
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -219,25 +220,32 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
             type="button"
             onClick={() => scrubTo(0)}
             aria-label="First call"
-            className="rounded px-2 py-1 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+            className="rounded px-2 py-1.5 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
           >
-            {"|<"}
+            {/* The icons are `aria-hidden`: every transport button already
+                carries its own label, and "Play" flipping to "Pause" is what a
+                screen reader follows rather than the glyph. */}
+            <SkipBack aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={play.toggle}
             aria-label={play.playing ? "Pause" : "Play"}
-            className="rounded bg-ui-action px-3 py-1 text-xs font-medium text-ui-shell hover:opacity-90"
+            className="rounded bg-ui-action px-3 py-1.5 text-ui-shell hover:opacity-90"
           >
-            {play.playing ? "||" : ">"}
+            {play.playing ? (
+              <Pause aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+            ) : (
+              <Play aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+            )}
           </button>
           <button
             type="button"
             onClick={() => scrubTo(lastIndex)}
             aria-label="Last call"
-            className="rounded px-2 py-1 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+            className="rounded px-2 py-1.5 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
           >
-            {">|"}
+            <SkipForward aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -277,9 +285,12 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
       <div className="mt-2 rounded border border-ui-border bg-ui-canvas">
         {/* The chart is a drag surface and a picture; the range input below
             carries the slider semantics, so screen readers get one control
-            rather than two that set the same value. */}
+            rather than two that set the same value. That leaves it with no
+            accessible name to be found by, so `data-chart` is how a test
+            addresses it — the transport icons are `<svg>` elements too. */}
         <svg
           ref={chartRef}
+          data-chart="calls"
           aria-hidden="true"
           viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
           preserveAspectRatio="none"

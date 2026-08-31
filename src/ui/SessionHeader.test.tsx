@@ -58,63 +58,11 @@ const identifiableSession: Session = {
 };
 
 describe("SessionHeader", () => {
-  it("reads the fill level off the windowSize prop, not the Session's inferred one", () => {
-    render(
-      <SessionHeader
-        session={session}
-        snapshot={snapshot}
-        windowSize={1_000_000}
-        windowChoice={1_000_000}
-        onWindowChoiceChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText(/45\.0k \/ 1000\.0k tokens/)).toBeDefined();
-  });
-
-  it("marks the selected Context Window choice", () => {
-    render(
-      <SessionHeader
-        session={session}
-        snapshot={snapshot}
-        windowSize={200_000}
-        windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-
-    const group = screen.getByRole("group", { name: "Context Window" });
-    expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("true");
-    expect(group.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
-  });
-
-  it("changes the Context Window override on click", () => {
-    const onWindowChoiceChange = vi.fn();
-    render(
-      <SessionHeader
-        session={session}
-        snapshot={snapshot}
-        windowSize={200_000}
-        windowChoice="auto"
-        onWindowChoiceChange={onWindowChoiceChange}
-        onClose={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
-    expect(onWindowChoiceChange).toHaveBeenCalledWith(1_000_000);
-  });
-
   it("carries the Session's id, model, CC version, call index and timestamp", () => {
     render(
       <SessionHeader
         session={identifiableSession}
         snapshot={identifiableSession.calls[2] as ContextSnapshot}
-        windowSize={200_000}
-        windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -135,9 +83,6 @@ describe("SessionHeader", () => {
       <SessionHeader
         session={identifiableSession}
         snapshot={identifiableSession.calls[0] as ContextSnapshot}
-        windowSize={200_000}
-        windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -149,16 +94,7 @@ describe("SessionHeader", () => {
 
   it("closes this Session, and only this one, when the close button is clicked", () => {
     const onClose = vi.fn();
-    render(
-      <SessionHeader
-        session={session}
-        snapshot={snapshot}
-        windowSize={200_000}
-        windowChoice="auto"
-        onWindowChoiceChange={vi.fn()}
-        onClose={onClose}
-      />,
-    );
+    render(<SessionHeader session={session} snapshot={snapshot} onClose={onClose} />);
 
     fireEvent.click(screen.getByRole("button", { name: "close" }));
     expect(onClose).toHaveBeenCalledTimes(1);
