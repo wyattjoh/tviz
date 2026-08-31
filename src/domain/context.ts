@@ -128,8 +128,9 @@ export type ContextItem = {
 /**
  * The composition of the context by Category as of one API Call.
  *
- * `byCategory` is cumulative and always sums to `measuredTotal`; `added` holds
- * only the items that entered the window on this call.
+ * `byCategory` and `byKind` are cumulative and always sum to `measuredTotal`;
+ * `added` holds only the items that entered the window on this call, and the
+ * cumulative items are derived from it by {@link cumulativeItems}.
  */
 export type ContextSnapshot = {
   /**
@@ -157,7 +158,14 @@ export type ContextSnapshot = {
    */
   readonly byKind: MessageKindTokens;
   /**
-   * Items that entered the context window on this API Call.
+   * Items that entered the context window on this API Call, in the order they
+   * entered it.
+   *
+   * The `added` lists of the calls since the last `reset`, concatenated, are the
+   * cumulative items of this Context Snapshot — see {@link cumulativeItems},
+   * which is what the grid lays Cells out from. The lists are disjoint and each
+   * one is append-only, so the cumulative items of call `n` are a prefix of
+   * those of call `n + 1` and the grid only ever fills Cells at the frontier.
    */
   readonly added: readonly ContextItem[];
   /**
@@ -165,6 +173,46 @@ export type ContextSnapshot = {
    * dropped and attribution restarted from this call.
    */
   readonly reset: boolean;
+};
+
+/**
+ * Every item in the context window as of one API Call, in the order the items
+ * entered it — the sequence the grid lays Cells out from (ADR-0006).
+ *
+ * Derived on demand rather than stored on every Context Snapshot: a long Session
+ * has thousands of API Calls over thousands of items, so a cumulative copy per
+ * call is quadratic in memory and in the cost of moving the Session across the
+ * Worker boundary. The `added` lists are disjoint, so the cumulative list is
+ * their concatenation from the last compaction (`reset`) through `index`.
+ *
+ * Items that were scaled down to zero tokens are left out: they cover no part of
+ * the grid and would only pad a Cell's hover list.
+ *
+ * @param calls - Context Snapshots of one Session, in transcript order
+ * @param index - Which API Call to describe; out of range yields no items
+ * @returns The cumulative items, oldest first
+ */
+export const cumulativeItems = (
+  calls: readonly ContextSnapshot[],
+  index: number,
+): readonly ContextItem[] => {
+  if (index < 0 || index >= calls.length) return [];
+
+  let start = 0;
+  for (let cursor = index; cursor >= 0; cursor -= 1) {
+    if (calls[cursor]?.reset === true) {
+      start = cursor;
+      break;
+    }
+  }
+
+  const items: ContextItem[] = [];
+  for (let cursor = start; cursor <= index; cursor += 1) {
+    for (const item of calls[cursor]?.added ?? []) {
+      if (item.tokens > 0) items.push(item);
+    }
+  }
+  return items;
 };
 
 /**

@@ -6,7 +6,7 @@ paths:
 alwaysApply: false
 ---
 
-# UI: semantic tokens and the Console layout
+# UI: semantic tokens and the Workbench layout
 
 ## Colour
 
@@ -24,10 +24,22 @@ Adding or checking a colour: use the `catppuccin-interfaces` skill for tokens an
 
 ## Layout
 
-The main view follows the "Console" variant of the throwaway UI prototype (branch
-`wyattjoh/ui-prototype`, see `src/prototype/README.md` there): one centred monospace
-column on `ui-shell`, the grid as the page, the legend as an aligned text table.
+The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
+`wyattjoh/ui-prototype`; see its `src/prototype/README.md`), in four regions established
+once in `src/App.tsx`: a menu bar carrying the File menu, a Session strip
+(`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the flexible left, fixed
+right rail holding the legend-filters and the docked Inspector — and the Scrubber across
+the bottom. The grid pane is the scroll container and its width drives `ContextGrid`'s
+column count. Fill a region; do not restructure the shell.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in place; it
-never removes them.
+never removes them, so legend totals never change when a Category or Message Kind is
+hidden.
+
+The Scrubber is a stacked-area chart of Category totals over every API Call, dragged to
+scrub, with transport controls, a 0.5x-4x speed control and a range input for keyboard
+stepping; compactions are dashed rules on the chart. Its geometry lives in
+`src/ui/scrubber.ts` so the shape of the chart is testable without a DOM. The chart is a
+drag surface rather than a control: it hands focus to the range input so the arrow keys
+keep stepping after a drag.

@@ -32,10 +32,8 @@ export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
   const isBusy = parsing !== undefined;
 
   return (
-    <div className="flex min-h-full items-center justify-center p-8 font-mono">
+    <div className="flex h-full min-h-full items-center justify-center p-8 font-mono">
       <div className="w-full max-w-[560px] space-y-6 text-center">
-        <div className="text-sm text-ui-text-muted">tviz</div>
-
         <section
           onDragOver={(event) => {
             event.preventDefault();

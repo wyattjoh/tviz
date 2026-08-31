@@ -36,22 +36,28 @@ type LegendRowProps = {
 };
 
 const LegendRow = ({ swatchClass, label, hint, tokens, windowSize, dim }: LegendRowProps) => (
-  <li className={`flex items-baseline gap-3 px-1 py-0.5 ${dim ? "opacity-70" : ""}`}>
-    <span
-      className={`inline-block h-2.5 w-2.5 shrink-0 translate-y-px rounded-[2px] ${swatchClass}`}
-      aria-hidden="true"
-    />
-    <span className={`w-36 shrink-0 ${dim ? "text-ui-text-muted" : "text-ui-text-secondary"}`}>
-      {label}
-    </span>
-    <span className="w-16 shrink-0 text-right text-ui-text tabular-nums">
-      {formatTokens(tokens)}
-    </span>
-    <span className="w-16 shrink-0 text-right text-ui-text-muted tabular-nums">
-      {formatPercent(tokens, windowSize)}
-    </span>
+  // Laid out for the 340px rail: the hint sits under its row rather than
+  // beside it, so the numbers stay in their columns.
+  <li className={`px-1 py-0.5 ${dim ? "opacity-70" : ""}`}>
+    <div className="flex items-baseline gap-2 text-xs">
+      <span
+        className={`inline-block h-2.5 w-2.5 shrink-0 translate-y-px rounded-[2px] ${swatchClass}`}
+        aria-hidden="true"
+      />
+      <span
+        className={`w-24 shrink-0 truncate ${dim ? "text-ui-text-muted" : "text-ui-text-secondary"}`}
+      >
+        {label}
+      </span>
+      <span className="ml-auto w-14 shrink-0 text-right text-ui-text tabular-nums">
+        {formatTokens(tokens)}
+      </span>
+      <span className="w-12 shrink-0 text-right text-ui-text-muted tabular-nums">
+        {formatPercent(tokens, windowSize)}
+      </span>
+    </div>
     {hint === undefined ? null : (
-      <span className="hidden text-[11px] text-ui-text-faint md:inline">{hint}</span>
+      <p className="mt-0.5 ml-[18px] text-[10px] leading-snug text-ui-text-faint">{hint}</p>
     )}
   </li>
 );
