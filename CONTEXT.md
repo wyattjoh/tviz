@@ -58,6 +58,10 @@ _Avoid_: message type, role
 
 ### Visualization
 
+**Workbench**:
+The loaded view as a whole, in four regions: the Menu Bar, the Session Strip, a body of grid pane plus right rail, and the Scrubber across the bottom.
+_Avoid_: dashboard, console, main view
+
 **Cell**:
 One box in the grid, representing a fixed quantum of tokens and coloured by the Category that fills it.
 _Avoid_: box, tile, block
@@ -81,6 +85,18 @@ _Avoid_: group by kind, kind mode
 **Inspector**:
 The panel docked in the right rail describing one Cell — what fills it, the token range it covers, and the items reaching into it. Filled by hovering a Cell and held by clicking one (pinning).
 _Avoid_: tooltip, popover, details pane
+
+**Session Strip**:
+The horizontal band under the Menu Bar naming the Session on screen — file name, id, model, Claude Code version, API Call position, fill level, and the Context Window override.
+_Avoid_: header, toolbar, breadcrumb
+
+**Menu Bar**:
+The top region of the Workbench, holding the wordmark and the File menu.
+_Avoid_: navbar, toolbar
+
+**File menu**:
+The only way into the app besides a drop: Open files…, Open folder…, Load demo sessions, the list of open Sessions, and Close all sessions. It is where Sessions are switched, so there is no session sidebar.
+_Avoid_: session list, sidebar, session picker
 
 **Cell Share**:
 How many of a Cell's tokens one item covers. An item larger than the Cell quantum has a Share in each Cell it crosses, and the Shares of a Cell sum to the Cell — which is what the Inspector lists, rather than the items' own sizes.
