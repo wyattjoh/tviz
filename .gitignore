@@ -26,5 +26,8 @@ dist-ssr
 # Agent scratch space / local issue tracker
 .scratch/
 
+# Local git worktrees (.claude/rules/ is tracked)
+.claude/worktrees/
+
 # Alchemy local state
 .alchemy/

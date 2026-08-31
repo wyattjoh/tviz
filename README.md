@@ -47,4 +47,6 @@ bun run anonymize <in.jsonl> <out.jsonl>
 - [`docs/rationale.md`](docs/rationale.md) — why this, what was non-obvious about
   transcripts, the trade-offs, and what I'd do next.
 - [`CONTEXT.md`](CONTEXT.md) — domain vocabulary.
+- [`docs/transcript-format.md`](docs/transcript-format.md) — what a Claude Code transcript
+  records, what it doesn't, and what tviz derives.
 - [`docs/adr/`](docs/adr/) — decision records.
