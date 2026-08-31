@@ -26,6 +26,22 @@ ADR-0003 (estimates scaled to measured tokens).
 | `<session>/subagents/agent-*.jsonl` + `.meta.json` (`agentType`, `spawnDepth`)                                                                                                                                                                                              | Separate context windows. MVP: count only.                                                                                                                            |
 | `<session>/tool-results/*.txt`                                                                                                                                                                                                                                              | Offloaded outputs, not in context. Ignore.                                                                                                                            |
 
+## Sessions with no API calls
+
+Claude Code writes the transcript as the session happens, so a session that is opened and
+abandoned still leaves a file: `mode`, `file-history-snapshot`, the `user` prompt, a
+`cost-state`, and no `assistant` record at all. Six of the 35 files in this project's own
+transcript folder are that shape.
+
+Such a file has no `usage` anywhere, so there is no measured total, so there is no Context
+Snapshot tviz could honestly draw — the whole grid is anchored on measured tokens
+(ADR-0003). It is still a Claude Code transcript, though, and calling it "not a Claude
+Code transcript" is wrong. The parser therefore separates the two by asking whether it
+recognised _any_ record: a file it recognises but that never reached an API call fails
+with `NoApiCallsError` (`reason: "noApiCalls"`), and the session list skips those silently
+rather than listing them as failures. A file it recognises nothing in stays
+`NotATranscriptError` and is still reported.
+
 ## Context window size
 
 Also not recorded. Default from a model→window table (Claude 5 family = 1M, older = 200k),

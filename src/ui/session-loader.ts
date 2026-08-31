@@ -34,6 +34,8 @@ export type PendingEntry = {
 /**
  * A transcript that failed to parse, with the parser's user-visible message.
  * `id` carries the same per-entry uniqueness {@link PendingEntry.id} does.
+ *
+ * An abandoned Session is not one of these — see {@link SessionLoader.addEntries}.
  */
 export type LoadErrorEntry = {
   readonly id: string;
@@ -66,6 +68,12 @@ export type SessionLoader = {
    * Queues a batch of dropped or picked entries: `.jsonl` files are parsed,
    * Subagent Session sidecars are counted onto their parent, and everything
    * else is dropped silently.
+   *
+   * A transcript whose Session ended before its first API call is dropped
+   * silently too. Claude Code writes a file per session start, so a real
+   * project folder holds a steady tail of them; they contain no `usage` and so
+   * no Context Snapshot to show, and listing each as a failure would bury the
+   * files that genuinely could not be read.
    */
   readonly addEntries: (entries: readonly PathedFile[]) => void;
   /**
@@ -156,12 +164,18 @@ export const useSessionLoader = (): SessionLoader => {
             return next;
           });
           setSelectedId((current) => current ?? session.id);
-        } else {
-          setErrors((current) => [
-            ...current,
-            { id, path: entry.path, fileName: entry.file.name, message: outcome.message },
-          ]);
+          return;
         }
+
+        // An abandoned Session parsed fine; there is simply nothing in it to
+        // draw. It is skipped rather than reported, so `errors` stays a list
+        // of files that are actually wrong.
+        if (outcome.reason === "noApiCalls") return;
+
+        setErrors((current) => [
+          ...current,
+          { id, path: entry.path, fileName: entry.file.name, message: outcome.message },
+        ]);
       });
     }
   }, []);

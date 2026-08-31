@@ -42,8 +42,8 @@ export class EmptyTranscriptError extends Schema.TaggedError<EmptyTranscriptErro
 ) {}
 
 /**
- * Raised when a file parsed but contained no API Calls, so it is not a Claude
- * Code transcript.
+ * Raised when nothing in a file was recognisable as a Claude Code Record, so it
+ * is not a transcript at all.
  */
 export class NotATranscriptError extends Schema.TaggedError<NotATranscriptError>()(
   "NotATranscriptError",
@@ -51,9 +51,23 @@ export class NotATranscriptError extends Schema.TaggedError<NotATranscriptError>
 ) {}
 
 /**
+ * Raised when a file *is* a Claude Code transcript but holds no API Calls.
+ *
+ * Claude Code writes the transcript as the Session happens, so quitting before
+ * the first response leaves a file of prompts and bookkeeping with no
+ * `usage` anywhere. Without a measured total there is no Context Snapshot to
+ * build and nothing honest to draw, so these are skipped rather than shown —
+ * see {@link ParseFailureReason}.
+ */
+export class NoApiCallsError extends Schema.TaggedError<NoApiCallsError>()("NoApiCallsError", {
+  fileName: Schema.String,
+  recordCount: Schema.Number,
+}) {}
+
+/**
  * Everything that can stop a transcript from producing a Session.
  */
-export type TranscriptParseError = EmptyTranscriptError | NotATranscriptError;
+export type TranscriptParseError = EmptyTranscriptError | NoApiCallsError | NotATranscriptError;
 
 /**
  * The parser's plain-data result, safe to send through `postMessage`.
@@ -67,8 +81,12 @@ export type ParseOutcome =
  *
  * `unreadable` is raised by the Worker rather than the parser, when the file
  * itself could not be read.
+ *
+ * `noApiCalls` is the one reason that is not a defect in the file: it marks an
+ * abandoned Session, which the Session list skips silently rather than
+ * reporting (`session-loader.ts`).
  */
-export type ParseFailureReason = "empty" | "notATranscript" | "unreadable";
+export type ParseFailureReason = "empty" | "noApiCalls" | "notATranscript" | "unreadable";
 
 /**
  * A piece of context seen since the previous API Call, still carrying its raw
@@ -84,6 +102,7 @@ type PendingItem = {
 type DecodedTranscript = {
   readonly records: readonly KnownRecord[];
   readonly recordCount: number;
+  readonly recognisedRecords: number;
   readonly malformedLines: number;
   readonly unknownRecordTypes: Record<string, number>;
   readonly sessionId: string | undefined;
@@ -265,6 +284,7 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
   const records: KnownRecord[] = [];
   const unknownRecordTypes: Record<string, number> = {};
   let recordCount = 0;
+  let recognisedRecords = 0;
   let malformedLines = 0;
   let sessionId: string | undefined;
   let claudeCodeVersion: string | undefined;
@@ -290,6 +310,7 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
 
     const known = decodeKnownRecord(json);
     if (Option.isSome(known)) {
+      recognisedRecords += 1;
       records.push(known.value);
       continue;
     }
@@ -297,13 +318,17 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
     const type = Option.isSome(envelope) ? (envelope.value.type ?? "(untyped)") : "(unrecognised)";
     // Known bookkeeping is skipped silently; only a type this parser has never
     // seen is worth reporting.
-    if (isMetadataRecordType(type)) continue;
+    if (isMetadataRecordType(type)) {
+      recognisedRecords += 1;
+      continue;
+    }
     unknownRecordTypes[type] = (unknownRecordTypes[type] ?? 0) + 1;
   }
 
   return {
     records,
     recordCount,
+    recognisedRecords,
     malformedLines,
     unknownRecordTypes,
     sessionId: sessionId ?? fileName.replace(/\.jsonl$/i, ""),
@@ -489,6 +514,12 @@ export const parseTranscriptEffect = Effect.fn("parseTranscript")(function* (
   const calls = aggregateCalls(parentSessionRecords(decoded.records));
 
   if (calls.length === 0) {
+    // Telling the two apart is what keeps an abandoned Session from being
+    // called "not a Claude Code transcript": a file whose lines this parser
+    // recognises is one, it just never reached an API Call.
+    if (decoded.recognisedRecords > 0) {
+      return yield* new NoApiCallsError({ fileName, recordCount: decoded.recordCount });
+    }
     return yield* new NotATranscriptError({
       fileName,
       recordCount: decoded.recordCount,
@@ -518,10 +549,22 @@ export const parseTranscriptEffect = Effect.fn("parseTranscript")(function* (
 /**
  * User-visible sentence for a parse failure.
  */
-const describe = (error: TranscriptParseError): string =>
-  error._tag === "EmptyTranscriptError"
-    ? `${error.fileName} is empty.`
-    : `${error.fileName} is not a Claude Code transcript: no API calls found in ${error.recordCount} record(s), ${error.malformedLines} malformed line(s).`;
+const describe = (error: TranscriptParseError): string => {
+  switch (error._tag) {
+    case "EmptyTranscriptError":
+      return `${error.fileName} is empty.`;
+    case "NoApiCallsError":
+      return `${error.fileName} ended before its first API call, so it holds no context to show.`;
+    case "NotATranscriptError":
+      return `${error.fileName} is not a Claude Code transcript: no API calls found in ${error.recordCount} record(s), ${error.malformedLines} malformed line(s).`;
+  }
+};
+
+const REASON_BY_TAG = {
+  EmptyTranscriptError: "empty",
+  NoApiCallsError: "noApiCalls",
+  NotATranscriptError: "notATranscript",
+} as const satisfies Record<TranscriptParseError["_tag"], ParseFailureReason>;
 
 /**
  * Parses a transcript and returns plain data, never throwing.
@@ -534,7 +577,7 @@ export const parseTranscript = (fileName: string, text: string): ParseOutcome =>
   if (Result.isSuccess(outcome)) return { ok: true, session: outcome.success };
   return {
     ok: false,
-    reason: outcome.failure._tag === "EmptyTranscriptError" ? "empty" : "notATranscript",
+    reason: REASON_BY_TAG[outcome.failure._tag],
     message: describe(outcome.failure),
   };
 };
