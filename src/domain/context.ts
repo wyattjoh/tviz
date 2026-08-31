@@ -128,8 +128,8 @@ export type ContextItem = {
 /**
  * The composition of the context by Category as of one API Call.
  *
- * `byCategory` is cumulative and always sums to `measuredTotal`; `added` holds
- * only the items that entered the window on this call.
+ * `byCategory` and `items` are cumulative and always sum to `measuredTotal`;
+ * `added` holds only the items that entered the window on this call.
  */
 export type ContextSnapshot = {
   /**
@@ -160,6 +160,18 @@ export type ContextSnapshot = {
    * Items that entered the context window on this API Call.
    */
   readonly added: readonly ContextItem[];
+  /**
+   * Every item in the context window as of this API Call, in the order the
+   * items entered it.
+   *
+   * Cumulative and stable: the items of call `n` are a prefix of the items of
+   * call `n + 1`, so the grid can lay Cells out append-only and only fill Cells
+   * at the frontier as a Session grows. A compaction (`reset`) is the one event
+   * that replaces the list rather than extending it. Sums to `measuredTotal`,
+   * the same way `byCategory` does. Re-sorting it downstream reintroduces the
+   * re-flow ADR-0006 exists to avoid.
+   */
+  readonly items: readonly ContextItem[];
   /**
    * True when the context shrank (compaction): every item except System was
    * dropped and attribution restarted from this call.

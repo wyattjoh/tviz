@@ -18,6 +18,7 @@ Theme 1, Exploration & Understanding. Claude Code transcripts are an unfamiliar 
 - **One System category** (ADR-0001) instead of a heuristic split via cache boundaries or user calibration.
 - **Synthetic demo data via a structure-preserving anonymizer** (ADR-0002): real growth curves, zero PII.
 - **Fixed-quantum grid like `/context`** rather than a treemap: familiar to Claude Code users, and filtering keeps cells in place so proportions stay comparable.
+- **Append-only cells on a fixed 1k-token quantum** (ADR-0006) rather than cells grouped by category: stepping through calls then reads as growth at the frontier instead of a re-flow, and a 1M window renders 1,000 cells rather than 200 smaller ones. Cost: category colours interleave, so proportions are read from the legend — a lone green cell in a field of blue is a skill that loaded mid-session, which the grouped layout threw away.
 - **Effect v4 beta limited to Schema + a pure pipeline** (ADR-0004): typed lenient decoding without paying for Layers/Services in a 2–3h build.
 
 ## With more time

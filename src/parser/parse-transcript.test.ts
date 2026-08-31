@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   CATEGORY_ORDER,
+  type ContextItem,
   type ContextSnapshot,
   MESSAGE_KIND_ORDER,
   type Session,
@@ -26,6 +27,9 @@ const kindTotal = (snapshot: ContextSnapshot): number =>
 
 const labels = (snapshot: ContextSnapshot): readonly string[] =>
   snapshot.added.map((item) => item.label);
+
+const itemTotal = (snapshot: ContextSnapshot): number =>
+  snapshot.items.reduce((sum, item) => sum + item.tokens, 0);
 
 beforeEach(() => {
   Fixture.resetFixtureSequence();
@@ -213,6 +217,91 @@ describe("parseTranscript", () => {
     if (outcome.ok) return;
     expect(outcome.reason).toBe("notATranscript");
     expect(outcome.message).toContain("notes.jsonl");
+  });
+
+  describe("Context Snapshot items", () => {
+    it("carries every item in the window, in the order it entered, summing to the measured total", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.nestedMemory(4_000),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+      ]);
+
+      const first = session.calls[0] as ContextSnapshot;
+      expect(first.items.map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "memoryFiles",
+        "messages",
+      ]);
+      expect(itemTotal(first)).toBe(first.measuredTotal);
+    });
+
+    it("extends the previous API Call's items rather than re-ordering them", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(20_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 55_000 } }),
+        // A Skill loading mid-Session appends; it does not jump ahead of the
+        // Messages already in the window (ADR-0006).
+        Fixture.skillListing(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 62_000 } }),
+      ]);
+
+      let previous: readonly ContextItem[] = [];
+      for (const call of session.calls) {
+        expect(call.reset).toBe(false);
+        expect(call.items.slice(0, previous.length)).toEqual(previous);
+        expect(itemTotal(call)).toBe(call.measuredTotal);
+        previous = call.items;
+      }
+
+      const last = session.calls.at(-1) as ContextSnapshot;
+      expect(last.items.map((entry) => entry.category)).toEqual([
+        "system",
+        "skills",
+        "messages",
+        "skills",
+      ]);
+    });
+
+    it("replaces the items on a compaction, keeping System at the front", () => {
+      const session = parseSession([
+        Fixture.skillListing(8_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 40_000 } }),
+        Fixture.toolResult(120_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 90_000 } }),
+        Fixture.compactSummary(6_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 45_000 } }),
+      ]);
+
+      const before = session.calls[1] as ContextSnapshot;
+      const compacted = session.calls[2] as ContextSnapshot;
+      expect(compacted.reset).toBe(true);
+      expect(compacted.items.length).toBeLessThan(before.items.length);
+      expect(compacted.items[0]?.category).toBe("system");
+      expect(compacted.items.map((entry) => entry.category)).toEqual(["system", "messages"]);
+      expect(itemTotal(compacted)).toBe(compacted.measuredTotal);
+    });
+
+    it("leaves out an item scaling left with no tokens", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        // Too small to win a token once the delta is split.
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 12_000 } }),
+        Fixture.userMessage(400_000),
+        Fixture.mcpInstructions(1),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 12_002 } }),
+      ]);
+
+      const second = session.calls[1] as ContextSnapshot;
+      expect(second.added.some((entry) => entry.tokens === 0)).toBe(true);
+      expect(second.items.every((entry) => entry.tokens > 0)).toBe(true);
+      expect(itemTotal(second)).toBe(second.measuredTotal);
+    });
   });
 
   describe("Context Window inference", () => {

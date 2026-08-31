@@ -64,19 +64,40 @@ describe("App", () => {
     expect(screen.getByText("155.0k")).toBeDefined();
   });
 
-  it("gives every Category the legend lists at least one Cell", async () => {
+  it("lays Cells out in the order items entered the context", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await screen.findByRole("img");
 
-    for (const label of ["System", "Custom agents", "Memory files", "Skills", "MCP", "Messages"]) {
-      expect
-        .soft(
-          cellTitles().some((title) => title.startsWith(`${label} ·`)),
-          `${label} has no Cell in the grid`,
-        )
-        .toBe(true);
+    // System is the front of every request, and the Skill listing that arrived
+    // before the first API Call sits directly behind it — Categories are not
+    // gathered into blocks (ADR-0006).
+    const [first, ...rest] = cellTitles();
+    expect(first).toMatch(/^System · 0–1\.0k/);
+    expect(rest.find((title) => !title.startsWith("System ·"))).toMatch(/^Skills ·/);
+    expect(cellTitles().at(-1)).toMatch(/^Free · 199\.0k–200\.0k/);
+  });
+
+  it("reads legend totals from the Context Snapshot, not from the Cell layout", async () => {
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await screen.findByRole("img");
+
+    // Custom agents (375 tokens) and MCP (175) are each smaller than a Cell, so
+    // the append-only grid has no Cell to spare for them; giving them one would
+    // have to steal it from a neighbour and shift everything after it. The
+    // legend still reports their exact totals, which is where proportions are
+    // read from (ADR-0006).
+    const inGrid = (label: string): boolean =>
+      cellTitles().some((title) => title.startsWith(`${label} ·`));
+    expect(inGrid("Custom agents")).toBe(false);
+    expect(inGrid("MCP")).toBe(false);
+
+    for (const label of ["Custom agents", "MCP"]) {
+      expect(screen.getByText(label)).toBeDefined();
     }
+    expect(screen.getByText("375")).toBeDefined();
+    expect(screen.getByText("175")).toBeDefined();
   });
 
   it("does not claim a Subagent Session count nobody measured", async () => {
