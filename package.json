@@ -11,6 +11,7 @@
     "format:check": "oxfmt --check",
     "preview": "vite preview",
     "test": "vitest run",
+    "anonymize": "bun scripts/anonymize.ts",
     "bootstrap:ci": "alchemy deploy stacks/github.ts --profile admin --yes"
   },
   "dependencies": {

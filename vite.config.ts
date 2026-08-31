@@ -19,7 +19,7 @@ export default defineConfig({
   test: {
     // Parser tests are plain Node; component tests opt into jsdom with a
     // `@vitest-environment` docblock.
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "scripts/**/*.test.ts"],
     restoreMocks: true,
   },
 });

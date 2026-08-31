@@ -14,6 +14,7 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 
 - **Transcript data never leaves the browser.** No upload, no server-side parsing, no persistence (no IndexedDB/localStorage of session content). The Worker is assets-only.
 - **No real transcript content in the repo, fixtures, tests, or demo data.** Real transcripts contain PII. Fixtures and `public/demo/*.jsonl` come only from `scripts/anonymize.ts` (structure-preserving, all free text replaced) or hand-written synthetic generators. Review anonymizer output before committing it.
+  - The Anonymizer keeps line count, Record `type` sequence, key order, line endings, every number/boolean/null (so Measured Tokens stay exact), string lengths and newline positions. Values under enum-like keys (`type`, `role`, `model`, `version`, tool `name` on tool_use blocks, …) are kept only when the value is _also_ enum-shaped (one short token, no whitespace) — a key name is not a promise that its value is an enum. Timestamps and uuids are kept (a uuid carries no free text, and keeping it means a Demo Session's `sessionId` still matches its file name); non-uuid ids (`msg_`/`toolu_`/`req_`) are rewritten to same-shape fakes, deterministic per value, so `message.id` grouping and `tool_use_id` pairing still resolve. Object **keys** are kept only when they are known schema keys (surveyed over the 101 real sessions); any other key is renamed, because a key can be content (a file-backup map is keyed by file name). Everything else becomes seeded Latin word salad, fake paths, or base64-ish filler. The CLI refuses to write if the structure drifted or if the username, its parts, the home directory or a known repo name survived.
 - **Never read real transcript files directly** (they're 0.5–13 MB). Write a Bun script under `.scratch/analysis/` that prints key paths, types, and counts — never string content. Existing survey scripts: `schema.ts`, `attachments.ts`, `derive.ts`, `turns.ts`.
 - The user's transcripts live at `~/.claude/projects/-Users-wyatt-johnson-Code-github-com-wyattjoh-agent-toolkit/` (101 sessions, CC 2.1.140–2.1.251). Use them only through analysis scripts.
 - **Never print deploy state or the CI token into a transcript.** Alchemy's state encoder unwraps `Redacted` and writes the **plaintext** value to disk (`State/StateEncoding.ts`), so `.alchemy/state/tviz-ci/*/DeployToken.json` holds a live Cloudflare API token. It is gitignored, but `cat`, `alchemy state get`, and `alchemy state export` on the `tviz-ci` stack would paste it into the session log — and this project's transcripts are a deliverable. Never run **`alchemy cloudflare create-token`**: it `Console.log`s the raw token to stdout by design. Mint tokens only through `stacks/github.ts`, which keeps the value `Redacted` end-to-end.
@@ -37,11 +38,11 @@ Read `CONTEXT.md` for vocabulary and `docs/adr/` before changing the model or th
 ```sh
 bun run dev            # vite dev server
 bun run build          # tsc -b && vite build
-bun run test           # vitest run
+bun run test           # vitest run (src/**/*.test.{ts,tsx} and scripts/**/*.test.ts)
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt
 bun run format:check   # oxfmt --check
-bun run anonymize <in.jsonl> <out.jsonl>   # scripts/anonymize.ts (to add)
+bun run anonymize <in.jsonl> <out.jsonl> [--seed s] [--force] [--forbid term]
 bun alchemy plan                            # read-only preview (builds via Vite)
 bun alchemy deploy --yes                    # after explicit confirmation only
 bun alchemy deploy --yes --stage prod       # public URL: Worker named `tviz`
@@ -58,7 +59,7 @@ src/worker/      Web Worker entry wrapping the parser, plus its main-thread clie
 src/ui/          React components: DropZone, SessionList, ContextGrid, Legend/Filters, Scrubber; grid layout, formatting, theme token maps
 src/fixtures/    synthetic JSONL fixture builders for tests
 src/index.css    Catppuccin Mocha palette adapter + semantic tokens (the only place colours are named)
-scripts/         anonymize.ts (structure-preserving anonymizer), any generators
+scripts/         anonymizer.ts (Anonymizer library + tests), anonymize.ts (CLI), any generators
 stacks/          github.ts — bootstrap stack minting the CI token + GitHub secrets
 public/demo/     bundled anonymized demo sessions (small/medium/large)
 docs/adr/        decisions; docs/rationale.md; write-up
