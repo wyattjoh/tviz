@@ -1,5 +1,6 @@
 /**
- * Empty state: drop a `.jsonl` transcript, or pick one.
+ * Empty state: drop a `.jsonl` transcript, pick one, or load the bundled
+ * Demo Sessions.
  */
 import { useId, useState } from "react";
 
@@ -12,7 +13,11 @@ export type DropZoneProps = {
    */
   readonly onFile: (file: File) => void;
   /**
-   * Name of the file being parsed, or `undefined` when idle.
+   * Called when the reviewer asks for the bundled Demo Sessions.
+   */
+  readonly onLoadDemo: () => void;
+  /**
+   * What is being loaded right now, or `undefined` when idle.
    */
   readonly parsing: string | undefined;
   /**
@@ -26,16 +31,14 @@ const firstFile = (list: FileList | null): File | undefined => list?.item(0) ?? 
 /**
  * Drop target and file picker for a single transcript.
  */
-export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
+export const DropZone = ({ onFile, onLoadDemo, parsing, error }: DropZoneProps) => {
   const [isOver, setIsOver] = useState(false);
   const inputId = useId();
   const isBusy = parsing !== undefined;
 
   return (
-    <div className="flex min-h-full items-center justify-center p-8 font-mono">
+    <div className="flex flex-1 items-center justify-center p-8 font-mono">
       <div className="w-full max-w-[560px] space-y-6 text-center">
-        <div className="text-sm text-ui-text-muted">tviz</div>
-
         <section
           onDragOver={(event) => {
             event.preventDefault();
@@ -59,7 +62,7 @@ export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
             a session file from ~/.claude/projects/
           </div>
 
-          <div className="mt-6 flex justify-center gap-2 text-xs">
+          <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs">
             <label
               htmlFor={inputId}
               className="cursor-pointer rounded border border-ui-border px-3 py-1.5 text-ui-text-secondary hover:bg-ui-panel"
@@ -77,6 +80,18 @@ export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
                 event.target.value = "";
               }}
             />
+            <button
+              type="button"
+              onClick={onLoadDemo}
+              disabled={isBusy}
+              className="rounded border border-ui-focus px-3 py-1.5 text-ui-focus hover:bg-ui-panel disabled:opacity-50"
+            >
+              load demo sessions
+            </button>
+          </div>
+
+          <div className="mt-2 text-[11px] text-ui-text-faint">
+            no transcript to hand? three bundled sessions, small to large
           </div>
 
           {error === undefined ? null : (
@@ -88,6 +103,13 @@ export const DropZone = ({ onFile, parsing, error }: DropZoneProps) => {
 
         <p className="text-xs leading-relaxed text-ui-text-faint">
           transcripts are parsed in this tab only — nothing is uploaded, nothing is stored.
+        </p>
+        {/* Short by necessity: the manifest, which carries the full statement,
+            is only fetched once the reviewer asks for the Demo Sessions. Its
+            `note` is what the loaded view shows. */}
+        <p className="text-xs leading-relaxed text-ui-text-faint">
+          the demo sessions are synthetic: real record structure and token counts, every word
+          replaced with placeholder text.
         </p>
       </div>
     </div>

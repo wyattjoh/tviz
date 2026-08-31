@@ -5,6 +5,8 @@ import {
   DEFAULT_SEED,
   defaultForbiddenTerms,
   findForbiddenTerms,
+  findRealText,
+  findRealWords,
   findStructuralDifferences,
 } from "./anonymizer.ts";
 
@@ -600,5 +602,63 @@ describe("findForbiddenTerms", () => {
     expect(findForbiddenTerms("path /Users/Zebracorn/x", ["zebracorn"])).toEqual(["zebracorn"]);
     expect(findForbiddenTerms("nothing here", ["zebracorn"])).toEqual([]);
     expect(findForbiddenTerms("aaa", ["a"])).toEqual([]);
+  });
+});
+
+describe("findRealWords", () => {
+  it("accepts salad and its truncated tail, and rejects prose", () => {
+    expect(findRealWords("lorem ipsum dolor amet")).toEqual([]);
+    // The last word of a salad is cut to length, or ends in a stray letter.
+    expect(findRealWords("consectetur adipiscing eli")).toEqual([]);
+    expect(findRealWords("consectetur adipiscingz")).toEqual([]);
+    expect(findRealWords("deploy the parser on Friday")).toEqual(["deploy", "parser", "Friday"]);
+  });
+});
+
+describe("findRealText", () => {
+  const line = (record: unknown): string => JSON.stringify(record);
+
+  it("passes an anonymized transcript", () => {
+    const anonymized = anonymizeTranscript(
+      `${line(assistantRecord())}\n${line(skillListingRecord())}`,
+      DEFAULT_SEED,
+    );
+
+    expect(findRealText(anonymized.text)).toEqual([]);
+  });
+
+  it("reports prose that names nobody, which the forbidden-term scan cannot", () => {
+    const leaked = line({
+      type: "user",
+      message: { role: "user", content: [{ type: "text", text: "Rerun the failing migration." }] },
+    });
+
+    expect(findForbiddenTerms(leaked, PLANTED)).toEqual([]);
+    expect(findRealText(leaked)).toEqual([
+      'line 1.message.content[0].text is not synthetic: "Rerun", "failing", "migration"',
+    ]);
+  });
+
+  it("reports a leaked path and a key that is content", () => {
+    expect(findRealText(line({ type: "assistant", cwd: "/Users/someone/Code/checkout" }))).toEqual([
+      'line 1.cwd is not synthetic: "Users", "someone", "Code"',
+    ]);
+    expect(
+      findRealText(line({ type: "x", trackedFileBackups: { "src/components/Dashboard.tsx": 1 } })),
+    ).toEqual([
+      "line 1.trackedFileBackups.src/components/Dashboard.tsx is a key that is not synthetic",
+    ]);
+  });
+
+  it("leaves the values the Anonymizer keeps alone", () => {
+    const kept = line({
+      type: "assistant",
+      uuid: "6f1e2b3c-4d5e-4f60-8a91-b2c3d4e5f607",
+      timestamp: "2026-02-11T09:15:00.000Z",
+      version: "2.1.251",
+      message: { role: "assistant", model: "claude-opus-4-8", id: "msg_01lorem" },
+    });
+
+    expect(findRealText(kept)).toEqual([]);
   });
 });

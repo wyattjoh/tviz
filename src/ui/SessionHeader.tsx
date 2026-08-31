@@ -17,24 +17,19 @@ export type SessionHeaderProps = {
    * The Context Snapshot currently on screen.
    */
   readonly snapshot: ContextSnapshot;
-  /**
-   * Clears the Session and returns to the drop zone.
-   */
-  readonly onClear: () => void;
 };
 
 /**
  * Session identity, then model, Claude Code version, API Call and fill level.
+ *
+ * The actions that used to sit here — loading the Demo Sessions, closing what
+ * is open — moved into the File menu on the menu bar.
  */
-export const SessionHeader = ({ session, snapshot, onClear }: SessionHeaderProps) => (
+export const SessionHeader = ({ session, snapshot }: SessionHeaderProps) => (
   <header>
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-ui-text-faint">
-      <span className="text-ui-text">tviz</span>
       <span className="text-ui-focus underline underline-offset-4">{session.fileName}</span>
       <span className="truncate">{session.id}</span>
-      <button type="button" onClick={onClear} className="ml-auto hover:text-ui-text-secondary">
-        clear
-      </button>
     </div>
 
     <div className="mt-6 text-ui-text-secondary">

@@ -28,6 +28,10 @@ The main view follows the "Console" variant of the throwaway UI prototype (branc
 `wyattjoh/ui-prototype`, see `src/prototype/README.md` there): one centred monospace
 column on `ui-shell`, the grid as the page, the legend as an aligned text table.
 
+Above it sits the Workbench variant's menu bar (`src/ui/MenuBar.tsx`) with the File menu,
+which so far carries "load demo sessions" and "close all sessions"; the folder ticket adds
+the open/pick entries and the list of open Sessions to it.
+
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. Filtering blanks Cells in place; it
 never removes them.
