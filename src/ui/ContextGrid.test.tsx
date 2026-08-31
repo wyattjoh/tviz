@@ -46,9 +46,13 @@ const snapshotOf = (
   byCategory: emptyCategoryTokens(),
   byKind: emptyMessageKindTokens(),
   added: items,
-  items,
   reset: false,
 });
+
+/**
+ * The one-API-Call Session the grid draws in most of these cases.
+ */
+const callsOf = (items: readonly ContextItem[]): readonly ContextSnapshot[] => [snapshotOf(items)];
 
 const gridColumns = (): string =>
   screen.getByRole("img").style.getPropertyValue("grid-template-columns");
@@ -69,18 +73,20 @@ describe("ContextGrid", () => {
       { category: "system", kind: undefined, label: "System", tokens: 20_000 },
     ] as const;
 
-    const { rerender } = render(<ContextGrid snapshot={snapshotOf(items)} windowSize={200_000} />);
+    const { rerender } = render(
+      <ContextGrid calls={callsOf(items)} callIndex={0} windowSize={200_000} />,
+    );
     expect(screen.getByRole("img").childElementCount).toBe(200);
     expect(gridColumns()).toContain("16px");
 
-    rerender(<ContextGrid snapshot={snapshotOf(items)} windowSize={1_000_000} />);
+    rerender(<ContextGrid calls={callsOf(items)} callIndex={0} windowSize={1_000_000} />);
     expect(screen.getByRole("img").childElementCount).toBe(1_000);
     // Same physical Cell, four times the Cells.
     expect(gridColumns()).toContain("16px");
   });
 
   it("follows the width of the grid pane with its column count", () => {
-    render(<ContextGrid snapshot={snapshotOf([])} windowSize={200_000} />);
+    render(<ContextGrid calls={callsOf([])} callIndex={0} windowSize={200_000} />);
     expect(gridColumns()).toBe("repeat(20, 16px)");
 
     // 16px Cells with a 3px gap: 42 of them fit in 800px.
@@ -91,13 +97,62 @@ describe("ContextGrid", () => {
     expect(gridColumns()).toBe("repeat(21, 16px)");
   });
 
+  it("keeps every Cell at one physical size, in a pane that scrolls", () => {
+    const items = [
+      { category: "system", kind: undefined, label: "System", tokens: 20_000 },
+    ] as const;
+
+    const { rerender } = render(
+      <ContextGrid calls={callsOf(items)} callIndex={0} windowSize={200_000} />,
+    );
+
+    const sizes = (): ReadonlySet<string> =>
+      new Set(
+        Array.from(
+          screen.getByRole("img").children,
+          (cell) => `${(cell as HTMLElement).style.width}×${(cell as HTMLElement).style.height}`,
+        ),
+      );
+
+    expect(sizes()).toEqual(new Set(["16px×16px"]));
+
+    // The block is 200 Cells tall over 20 columns here and 1,000 over the same
+    // columns at a 1M window, so the pane — not the Cell — absorbs the growth.
+    const pane = screen.getByRole("img").parentElement;
+    expect(pane?.className).toContain("overflow-y-auto");
+    expect(pane?.className).toContain("max-h-[60vh]");
+
+    rerender(<ContextGrid calls={callsOf(items)} callIndex={0} windowSize={1_000_000} />);
+    expect(sizes()).toEqual(new Set(["16px×16px"]));
+  });
+
+  it("draws the cumulative items of the selected API Call, not just what it added", () => {
+    const system = { category: "system", kind: undefined, label: "System", tokens: 2_000 } as const;
+    const skill = { category: "skills", kind: undefined, label: "Skill", tokens: 1_000 } as const;
+    const calls = [snapshotOf([system]), { ...snapshotOf([skill]), index: 1 }];
+
+    render(<ContextGrid calls={calls} callIndex={1} windowSize={200_000} />);
+
+    const titles = Array.from(
+      screen.getByRole("img").children,
+      (cell) => cell.getAttribute("title") ?? "",
+    );
+    expect(titles.slice(0, 4)).toEqual([
+      "System · 0–1.0k · System",
+      "System · 1.0k–2.0k · System",
+      "Skills · 2.0k–3.0k · Skill",
+      "Free · 3.0k–4.0k",
+    ]);
+  });
+
   it("names the Category and token range of every Cell, and the items in it", () => {
     render(
       <ContextGrid
-        snapshot={snapshotOf([
+        calls={callsOf([
           { category: "system", kind: undefined, label: "System prompt", tokens: 1_000 },
           { category: "skills", kind: undefined, label: "Skill listing", tokens: 1_000 },
         ])}
+        callIndex={0}
         windowSize={200_000}
       />,
     );

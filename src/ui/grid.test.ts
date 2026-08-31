@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { Category, ContextItem, MessageKind } from "../domain/context.ts";
+import {
+  type Category,
+  type ContextItem,
+  cumulativeItems,
+  type MessageKind,
+} from "../domain/context.ts";
 import * as Fixture from "../fixtures/transcript.ts";
 import { parseTranscript } from "../parser/parse-transcript.ts";
 import { DEFAULT_CONTEXT_WINDOW, LARGE_CONTEXT_WINDOW } from "../parser/window.ts";
@@ -127,6 +132,42 @@ describe("buildCells", () => {
     expect(countOf(cells, "free")).toBe(199);
   });
 
+  it("gives a Category smaller than a Cell one Cell of its own", () => {
+    const cells = buildCells(
+      [item("system", 20_000), item("mcp", 175), item("messages", 5_000, "toolResult")],
+      DEFAULT_CONTEXT_WINDOW,
+    );
+
+    // MCP holds 175 of Cell 20's 1,000 tokens and would lose every majority
+    // vote, leaving a Category the legend lists with nothing on the grid.
+    expect(countOf(cells, "mcp")).toBe(1);
+    const floored = cells.find((cell) => cell.fill === "mcp");
+    // The Cell it took is one it actually reaches into, and it is still the Cell
+    // sitting at its own token offset: only the colour changed.
+    expect(floored?.items.map((entry) => entry.category)).toContain("mcp");
+    expect(floored?.start).toBe(20_000);
+    expect(cells.map((cell) => cell.start)).toEqual(cells.map((cell) => cell.index * CELL_TOKENS));
+    // Nothing was starved to pay for it.
+    expect(countOf(cells, "system")).toBe(20);
+    expect(countOf(cells, "messages")).toBe(5);
+  });
+
+  it("never takes the only Cell another Category holds", () => {
+    // Three Categories smaller than a Cell inside two Cells: the grid cannot
+    // show them all, and shuffling one colour onto another's only Cell would
+    // just move the problem. The legend still carries every total.
+    const cells = buildCells(
+      [item("system", 900), item("skills", 600), item("mcp", 500)],
+      DEFAULT_CONTEXT_WINDOW,
+    );
+
+    // Cell 1 is split evenly between Skills and MCP, so Skills takes it as the
+    // earlier arrival and MCP — the only Category left without a Cell — has no
+    // donor holding a second one.
+    expect(fills(cells).slice(0, 2)).toEqual(["system", "skills"]);
+    expect(countOf(cells, "mcp")).toBe(0);
+  });
+
   it("gives a tied Cell to the Category that entered the context first", () => {
     const cells = buildCells(
       [item("system", 500), item("skills", 500), item("mcp", 500), item("memoryFiles", 500)],
@@ -166,15 +207,36 @@ describe("buildCells", () => {
       if (first === undefined || second === undefined) throw new Error("expected two API Calls");
       expect(second.reset).toBe(false);
 
-      const before = fills(buildCells(first.items, session.windowSize));
-      const after = fills(buildCells(second.items, session.windowSize));
+      const before = fills(buildCells(cumulativeItems(session.calls, 0), session.windowSize));
+      const after = fills(buildCells(cumulativeItems(session.calls, 1), session.windowSize));
 
+      // Everything the first call fully covered is untouched. Its last Cell is
+      // only partly covered, so it belongs to the frontier the second call
+      // advances — see "recolours only the partly-filled frontier Cell".
       const frontier = Math.floor(first.measuredTotal / CELL_TOKENS);
       expect(after.slice(0, frontier)).toEqual(before.slice(0, frontier));
-      // The frontier itself moved: the call added context.
-      expect(countOf(buildCells(second.items, session.windowSize), "free")).toBeLessThan(
-        countOf(buildCells(first.items, session.windowSize), "free"),
+      expect(
+        countOf(buildCells(cumulativeItems(session.calls, 1), session.windowSize), "free"),
+      ).toBeLessThan(
+        countOf(buildCells(cumulativeItems(session.calls, 0), session.windowSize), "free"),
       );
+    });
+
+    it("recolours only the partly-filled frontier Cell as the context grows", () => {
+      const before = buildCells([item("system", 1_300)], DEFAULT_CONTEXT_WINDOW);
+      // 300 tokens of System sit in Cell 1; the next call fills the other 700.
+      const after = buildCells(
+        [item("system", 1_300), item("messages", 700, "user")],
+        DEFAULT_CONTEXT_WINDOW,
+      );
+
+      expect(before[0]?.fill).toBe("system");
+      expect(before[1]?.fill).toBe("system");
+      // The fully covered Cell keeps its colour; the frontier Cell changes hands
+      // because the majority of its range changed hands. No Cell moved.
+      expect(after[0]?.fill).toBe("system");
+      expect(after[1]?.fill).toBe("messages");
+      expect(after[1]?.start).toBe(before[1]?.start);
     });
 
     it("rewrites earlier Cells only when the API Call is a compaction", () => {
@@ -183,8 +245,8 @@ describe("buildCells", () => {
       if (second === undefined || third === undefined) throw new Error("expected three API Calls");
       expect(third.reset).toBe(true);
 
-      const before = fills(buildCells(second.items, session.windowSize));
-      const after = fills(buildCells(third.items, session.windowSize));
+      const before = fills(buildCells(cumulativeItems(session.calls, 1), session.windowSize));
+      const after = fills(buildCells(cumulativeItems(session.calls, 2), session.windowSize));
 
       const frontier = Math.floor(second.measuredTotal / CELL_TOKENS);
       expect(after.slice(0, frontier)).not.toEqual(before.slice(0, frontier));

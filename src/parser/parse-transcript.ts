@@ -334,24 +334,16 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
   const calls: ContextSnapshot[] = [];
   const cumulativeByCategory = emptyCategoryTokens();
   const cumulativeByKind = emptyMessageKindTokens();
-  // Every item in the window, in the order it entered: the append-only order
-  // the grid lays Cells out in (ADR-0006). Extended by each call, replaced only
-  // by a compaction.
-  let cumulativeItems: ContextItem[] = [];
   let pending: PendingItem[] = [];
   let systemTokens = 0;
   let previousTotal = 0;
   let currentCallId: string | undefined;
   let compactionAhead = false;
 
-  const commit = (added: readonly ContextItem[], isReset: boolean) => {
-    if (isReset) cumulativeItems = [];
+  const commit = (added: readonly ContextItem[]) => {
     for (const item of added) {
       cumulativeByCategory[item.category] += item.tokens;
       if (item.kind !== undefined) cumulativeByKind[item.kind] += item.tokens;
-      // A zero-token item covers no part of the grid and would only pad the
-      // hover list, so it never enters the context order.
-      if (item.tokens > 0) cumulativeItems.push(item);
     }
   };
 
@@ -447,7 +439,7 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
               : [];
       }
 
-      commit(added, isReset);
+      commit(added);
       calls.push({
         index: calls.length,
         timestamp: record.timestamp,
@@ -455,10 +447,10 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
         measuredTotal,
         byCategory: { ...cumulativeByCategory },
         byKind: { ...cumulativeByKind },
+        // Only this call's items. The cumulative sequence the grid needs is
+        // `cumulativeItems(calls, index)`: storing a copy per call would make
+        // the Session quadratic in size and in postMessage cost.
         added,
-        // A copy per call: the grid needs each Context Snapshot to keep the
-        // items it had, and later calls only ever append to this list.
-        items: [...cumulativeItems],
         reset: isReset,
       });
 

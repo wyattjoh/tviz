@@ -6,7 +6,7 @@
  * of the grid pane and the pane scrolls when the block outgrows it.
  */
 import { useCallback, useMemo, useState } from "react";
-import { CATEGORY_LABELS, type ContextSnapshot } from "../domain/context.ts";
+import { CATEGORY_LABELS, type ContextSnapshot, cumulativeItems } from "../domain/context.ts";
 import { formatTokens } from "./format.ts";
 import { buildCells, type Cell, CELL_TOKENS } from "./grid.ts";
 import { CATEGORY_FILL_CLASS, FREE_FILL_CLASS } from "./theme.ts";
@@ -85,9 +85,15 @@ const describeCell = (cell: Cell): string => {
  */
 export type ContextGridProps = {
   /**
-   * The Context Snapshot to draw.
+   * Context Snapshots of the Session, in transcript order. The grid needs the
+   * calls before the selected one to rebuild its cumulative items, which the
+   * parser does not store per call.
    */
-  readonly snapshot: ContextSnapshot;
+  readonly calls: readonly ContextSnapshot[];
+  /**
+   * Which API Call to draw.
+   */
+  readonly callIndex: number;
   /**
    * The Context Window used as the grid's denominator.
    */
@@ -97,11 +103,16 @@ export type ContextGridProps = {
 /**
  * Draws one Context Snapshot as a grid of Cells.
  */
-export const ContextGrid = ({ snapshot, windowSize }: ContextGridProps) => {
+export const ContextGrid = ({ calls, callIndex, windowSize }: ContextGridProps) => {
   const [paneRef, columns] = useColumnCount();
   // The Scrubber re-renders this on every step, and the layout is the same for
   // the same Context Snapshot.
-  const cells = useMemo(() => buildCells(snapshot.items, windowSize), [snapshot, windowSize]);
+  const cells = useMemo(
+    () => buildCells(cumulativeItems(calls, callIndex), windowSize),
+    [calls, callIndex, windowSize],
+  );
+  const snapshot = calls[callIndex];
+  if (snapshot === undefined) return null;
 
   return (
     <div>

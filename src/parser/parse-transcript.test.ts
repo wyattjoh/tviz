@@ -3,6 +3,7 @@ import {
   CATEGORY_ORDER,
   type ContextItem,
   type ContextSnapshot,
+  cumulativeItems,
   MESSAGE_KIND_ORDER,
   type Session,
 } from "../domain/context.ts";
@@ -28,8 +29,11 @@ const kindTotal = (snapshot: ContextSnapshot): number =>
 const labels = (snapshot: ContextSnapshot): readonly string[] =>
   snapshot.added.map((item) => item.label);
 
-const itemTotal = (snapshot: ContextSnapshot): number =>
-  snapshot.items.reduce((sum, item) => sum + item.tokens, 0);
+const itemsOf = (session: Session, index: number): readonly ContextItem[] =>
+  cumulativeItems(session.calls, index);
+
+const itemTotal = (session: Session, index: number): number =>
+  itemsOf(session, index).reduce((sum, item) => sum + item.tokens, 0);
 
 beforeEach(() => {
   Fixture.resetFixtureSequence();
@@ -229,13 +233,13 @@ describe("parseTranscript", () => {
       ]);
 
       const first = session.calls[0] as ContextSnapshot;
-      expect(first.items.map((entry) => entry.category)).toEqual([
+      expect(itemsOf(session, 0).map((entry) => entry.category)).toEqual([
         "system",
         "skills",
         "memoryFiles",
         "messages",
       ]);
-      expect(itemTotal(first)).toBe(first.measuredTotal);
+      expect(itemTotal(session, 0)).toBe(first.measuredTotal);
     });
 
     it("extends the previous API Call's items rather than re-ordering them", () => {
@@ -253,13 +257,13 @@ describe("parseTranscript", () => {
       let previous: readonly ContextItem[] = [];
       for (const call of session.calls) {
         expect(call.reset).toBe(false);
-        expect(call.items.slice(0, previous.length)).toEqual(previous);
-        expect(itemTotal(call)).toBe(call.measuredTotal);
-        previous = call.items;
+        const items = itemsOf(session, call.index);
+        expect(items.slice(0, previous.length)).toEqual(previous);
+        expect(itemTotal(session, call.index)).toBe(call.measuredTotal);
+        previous = items;
       }
 
-      const last = session.calls.at(-1) as ContextSnapshot;
-      expect(last.items.map((entry) => entry.category)).toEqual([
+      expect(itemsOf(session, session.calls.length - 1).map((entry) => entry.category)).toEqual([
         "system",
         "skills",
         "messages",
@@ -277,13 +281,11 @@ describe("parseTranscript", () => {
         Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 45_000 } }),
       ]);
 
-      const before = session.calls[1] as ContextSnapshot;
       const compacted = session.calls[2] as ContextSnapshot;
       expect(compacted.reset).toBe(true);
-      expect(compacted.items.length).toBeLessThan(before.items.length);
-      expect(compacted.items[0]?.category).toBe("system");
-      expect(compacted.items.map((entry) => entry.category)).toEqual(["system", "messages"]);
-      expect(itemTotal(compacted)).toBe(compacted.measuredTotal);
+      expect(itemsOf(session, 2).length).toBeLessThan(itemsOf(session, 1).length);
+      expect(itemsOf(session, 2).map((entry) => entry.category)).toEqual(["system", "messages"]);
+      expect(itemTotal(session, 2)).toBe(compacted.measuredTotal);
     });
 
     it("leaves out an item scaling left with no tokens", () => {
@@ -299,8 +301,30 @@ describe("parseTranscript", () => {
 
       const second = session.calls[1] as ContextSnapshot;
       expect(second.added.some((entry) => entry.tokens === 0)).toBe(true);
-      expect(second.items.every((entry) => entry.tokens > 0)).toBe(true);
-      expect(itemTotal(second)).toBe(second.measuredTotal);
+      expect(itemsOf(session, 1).every((entry) => entry.tokens > 0)).toBe(true);
+      expect(itemTotal(session, 1)).toBe(second.measuredTotal);
+    });
+
+    it("keeps a Session linear in the number of API Calls", () => {
+      // A cumulative copy of the items on every Context Snapshot is quadratic:
+      // it is what makes a 13 MB transcript freeze the tab when the Worker
+      // structured-clones the Session back to the page. Four times the API
+      // Calls must not cost anywhere near sixteen times the Session.
+      const sessionOf = (callCount: number): Session =>
+        parseSession(
+          Array.from({ length: callCount }, (_unused, call) => [
+            Fixture.userMessage(400),
+            Fixture.assistantMessage({
+              id: `m${call}`,
+              usage: { cacheRead: 10_000 + call * 100 },
+            }),
+          ]).flat(),
+        );
+
+      const small = JSON.stringify(sessionOf(50)).length;
+      const large = JSON.stringify(sessionOf(200)).length;
+
+      expect(large).toBeLessThan(small * 6);
     });
   });
 

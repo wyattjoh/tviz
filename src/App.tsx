@@ -59,7 +59,8 @@ type LoadedSessionProps = {
 };
 
 const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
-  const snapshot = session.calls.at(-1);
+  const callIndex = session.calls.length - 1;
+  const snapshot = session.calls[callIndex];
   if (snapshot === undefined) return null;
 
   return (
@@ -68,7 +69,11 @@ const LoadedSession = ({ session, onClear }: LoadedSessionProps) => {
         <SessionHeader session={session} snapshot={snapshot} onClear={onClear} />
 
         <div className="mt-7">
-          <ContextGrid snapshot={snapshot} windowSize={session.windowSize} />
+          <ContextGrid
+            calls={session.calls}
+            callIndex={callIndex}
+            windowSize={session.windowSize}
+          />
         </div>
 
         <div className="mt-8">

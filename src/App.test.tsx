@@ -21,13 +21,14 @@ const LAST_CALL_TOKENS = 45_000;
 
 /**
  * A Session whose last API Call holds every Category, including two Categories
- * smaller than one Cell.
+ * smaller than one Cell — Custom agents (375 tokens) and MCP (175) — which land
+ * in different Cells, the case the grid's one-Cell floor exists for.
  */
 const transcript = (): string =>
   Fixture.toJsonl([
     Fixture.skillListing(9_000),
     Fixture.agentListing(1_500),
-    Fixture.nestedMemory(3_000),
+    Fixture.nestedMemory(6_000),
     Fixture.mcpInstructions(700),
     Fixture.userMessage(2_000),
     Fixture.assistantMessage({
@@ -78,20 +79,37 @@ describe("App", () => {
     expect(cellTitles().at(-1)).toMatch(/^Free · 199\.0k–200\.0k/);
   });
 
-  it("reads legend totals from the Context Snapshot, not from the Cell layout", async () => {
+  it("gives every Category the legend lists at least one Cell", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await screen.findByRole("img");
 
     // Custom agents (375 tokens) and MCP (175) are each smaller than a Cell, so
-    // the append-only grid has no Cell to spare for them; giving them one would
-    // have to steal it from a neighbour and shift everything after it. The
-    // legend still reports their exact totals, which is where proportions are
-    // read from (ADR-0006).
-    const inGrid = (label: string): boolean =>
-      cellTitles().some((title) => title.startsWith(`${label} ·`));
-    expect(inGrid("Custom agents")).toBe(false);
-    expect(inGrid("MCP")).toBe(false);
+    // they lose every majority vote; the one-Cell floor still gives them the
+    // Cell they have the strongest claim on, which changes that Cell's colour
+    // without moving any Cell (ADR-0006).
+    for (const label of ["System", "Custom agents", "Memory files", "Skills", "MCP", "Messages"]) {
+      expect
+        .soft(
+          cellTitles().some((title) => title.startsWith(`${label} ·`)),
+          `${label} has no Cell in the grid`,
+        )
+        .toBe(true);
+    }
+  });
+
+  it("reads legend totals from the Context Snapshot, not from the Cell layout", async () => {
+    render(<App />);
+    drop(transcriptFile("session-a.jsonl", transcript()));
+    await screen.findByRole("img");
+
+    // Both Categories hold a single Cell — 1,000 tokens of grid — while the
+    // legend reports their exact totals. Proportions are read from the legend,
+    // never counted off the grid (ADR-0006).
+    const cellsFor = (label: string): number =>
+      cellTitles().filter((title) => title.startsWith(`${label} ·`)).length;
+    expect(cellsFor("Custom agents")).toBe(1);
+    expect(cellsFor("MCP")).toBe(1);
 
     for (const label of ["Custom agents", "MCP"]) {
       expect(screen.getByText(label)).toBeDefined();
