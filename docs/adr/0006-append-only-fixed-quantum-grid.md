@@ -16,4 +16,9 @@ Grouping Cells by Category — System first, then Custom Agents, Memory Files, S
 - Only the frontier Cell can change colour as a Session grows. A fully covered Cell keeps its majority for ever, but the partly-filled Cell at the end of the context is finished by the next API Call, and the majority of its range can change hands. That is the frontier advancing, not a re-flow.
 - The grid always spans the whole Context Window, empty Cells included, so two Sessions on the same window are visually comparable and headroom stays legible.
 - Column count follows the width of the grid pane while Cells keep their physical size, so a wider window gives a shorter block and the pane scrolls when the block outgrows it. Cell size is a constant the reader can trust across Sessions.
-- Validated in the UI prototype on branch `wyattjoh/ui-prototype` (see `src/prototype/README.md` there).
+- Validated in a throwaway UI prototype on branch `wyattjoh/ui-prototype`, which compared
+  this layout against a category-grouped one with fake data; see `docs/rationale.md`'s "How
+  I worked with Claude Code" section for what the comparison showed. That branch was never
+  pushed to the deliverable's GitHub remote, so its `src/prototype/README.md` is not
+  reachable from a fresh clone — the rationale and the submitted transcripts are the record
+  a reviewer can actually read.

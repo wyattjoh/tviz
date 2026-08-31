@@ -33,7 +33,7 @@ independent of the parser's.
 ```sh
 bun install
 bun run dev            # vite dev server
-bun run build          # tsc -b && vite build
+bun run build          # typecheck && vite build
 bun run test           # vitest run
 bun run lint           # oxlint --deny-warnings
 bun run format         # oxfmt

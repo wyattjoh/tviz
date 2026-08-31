@@ -104,8 +104,8 @@ than removing keeps the answer readable against the same window.
 **Effect v4 for the parser only.** `Schema` gives lenient decoding of a format with ~20
 record types where unknown types must be skipped and counted rather than throw, and
 `Effect.gen` structures the parse-and-aggregate pipeline. No Layers, no Services: the parser
-returns plain data to React (ADR-0004). Paying for the full architecture in a 2–3 hour build
-would have bought nothing.
+returns plain data to React (ADR-0004). Paying for the full architecture in a build
+measured in hours, not days, would have bought nothing.
 
 **Deploy tooling installed separately from the app.** Alchemy needs an Effect release
 candidate; the parser is pinned to the beta its `Schema` code was written against. Rather
@@ -133,8 +133,9 @@ The one-bucket System decision (ADR-0001) and the scale-to-measured rule (ADR-00
 came out of that session, not out of implementation.
 
 **A throwaway prototype that overturned the design.** Once the parser existed, I had three
-UI shapes built side by side on a branch with fake data — a terminal-faithful console, an
-editorial filmstrip, and a workbench — purely to answer "what should this look like". The
+UI shapes built side by side on branch `wyattjoh/ui-prototype` with fake data — a
+terminal-faithful console, an editorial filmstrip, and a workbench — purely to answer "what
+should this look like". The
 workbench won, but the more important outcome was that stepping through the prototype's
 scrubber showed the category-grouped grid _re-flowing_ on every call. That killed the layout
 the first implementation ticket had already shipped, became ADR-0006 (append-only cells on
@@ -142,11 +143,18 @@ a fixed 1k-token quantum), and turned into a delta ticket rather than a rewrite.
 prototype code was never promoted.
 
 **Tickets, adversarial review, and an integrator.** The spec was cut into nine tickets and
-run as a workflow: one agent per ticket in an isolated worktree, a second agent told to
-_refute_ the claim that the ticket was done, one repair round, and an integrator merging
-into `main` and re-running every check. Both wave-one tickets failed their first review on
-real defects — the anonymizer leaked free text through object keys and enum-looking values;
-the grid didn't cover the drop path — and were fixed before merging. I read every review
+run as a workflow: one agent per ticket, a second agent told to _refute_ the claim that the
+ticket was done, a repair round, and an integrator merging into `main` and re-running every
+check. Wave one ran it as designed — ticket 01 and ticket 05 each in its own isolated
+worktree — and both failed their first review on real defects: the anonymizer leaked free
+text through object keys and enum-looking values, and the grid didn't cover the drop path.
+Wave two didn't stay isolated: ticket 09's append-only relayout had to land before tickets
+02, 03 and 04 could build on top of it, so each of those worktrees merged the one ahead of
+it before starting — 09 into 02's, 02 into 03's, then 09/02/03 together again before 04.
+Ticket 02's repair round turned into more than a defect fix: it rebuilt the Workbench shell
+and settled the one-Cell floor for good, because the first pass had gotten both wrong.
+Across both waves, ticket 06 (demo mode) was the only one to pass review on the first try;
+every other ticket needed at least one repair commit before it merged. I read every review
 verdict and every integration report; the workflow ran the mechanics, I decided what
 counted as done.
 
