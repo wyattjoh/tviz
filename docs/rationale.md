@@ -22,7 +22,7 @@ nothing reads it.
 
 tviz answers that question after the fact: drop a finished transcript in your browser and
 see where its context window went, call by call. It draws the same picture `/context`
-draws — a grid of fixed-size cells coloured by category — but for every API call in the
+draws — a grid of fixed-token cells coloured by category — but for every API call in the
 session, so you can watch the window fill, see what a compaction cost, and see which
 categories were fixed overhead versus which ones grew.
 
@@ -74,10 +74,16 @@ the user's machine with no caching, which is why parsing is off the main thread 
 
 **Synthetic demo data.** A reviewer must be able to evaluate this with no data of their own,
 and shipping real transcripts is out of the question. `scripts/anonymize.ts` is a
-structure-preserving anonymizer: it replaces every string — including object keys, enum-ish
-values, and ids — while preserving record structure and the real token counts. The demo
-sessions have real growth curves and zero private content, and they load through exactly the
-same code path as a dropped file (ADR-0002). Three ship in `public/demo/` — 0.1 MB / 0.7 MB
+structure-preserving anonymizer: it replaces every string — including object keys and ids —
+while preserving record structure and the real token counts. The only values kept verbatim
+are the ones that are identical for every user: protocol enums like record types and roles,
+and built-in tool names. Drawing that line turned out to be the whole problem — hook names
+and MCP tool names are enum-_shaped_ but are per-user vocabulary, so allow-listing by shape
+leaked 19 real names into the first cut of the demo data. An audit caught it before it
+shipped, and the allow-lists are now judged on whether a value is the same for everyone
+rather than on whether it looks like an identifier. The demo sessions have real growth
+curves and zero private content, and they load through exactly the same code path as a
+dropped file (ADR-0002). Three ship in `public/demo/` — 0.1 MB / 0.7 MB
 / 1.5 MB, three models, three Claude Code versions, both window sizes, one compaction — and
 a test re-parses the committed files on every run, checks them against the manifest, and
 scans them for private content.

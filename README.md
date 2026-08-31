@@ -4,7 +4,7 @@ Drop a finished Claude Code transcript in your browser and see where its context
 went, call by call.
 
 `/context` answers that question live, for the session you're in. tviz answers it for any
-session that has already ended, from its `.jsonl` transcript: the same grid of fixed-size
+session that has already ended, from its `.jsonl` transcript: the same grid of fixed-token
 cells coloured by category — System, Custom Agents, Memory Files, Skills, MCP, Messages —
 drawn for every API call, with a scrubber to watch the window fill, a legend of tokens and
 percent-of-window that doubles as category and message-kind filters, and an inspector that
