@@ -1,5 +1,7 @@
 # tviz
 
+This is a local project, do not push changes to remote unless explicitly requested to do so. Merges will be peformed by performing the merge command locally. This is also a time constrained project, so perform work in parallel wherever possible.
+
 ## Agent skills
 
 ### Issue tracker
