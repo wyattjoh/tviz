@@ -4,6 +4,16 @@
 
 Theme 1, Exploration & Understanding.
 
+I picked this theme because the thing I most wanted to understand was sitting on my own
+disk. A Claude Code session accretes context in a way that is hard to see while it happens:
+the system prompt and tool schemas arrive up front, skills and agent listings load on first
+use, memory files get pulled in lazily as directories are touched, and every tool result
+lands in the window and stays there. Each of those is invisible in the moment, and the sum
+of them is what decides when a session starts compacting. `/context` gives a single live
+snapshot; it can't show the creep, and it can't show it for a session that is already over.
+The transcript records enough to reconstruct it — that was the bet — and once reconstructed,
+the creep is obvious in a way no amount of reading the file could make it.
+
 Claude Code transcripts are an unfamiliar artifact. A single session is a 0.5–13 MB JSONL
 file with around twenty record types, and the one question every user asks of it — "where
 did my context go?" — is only answerable _live_, via `/context`, for the session you are
@@ -82,6 +92,48 @@ record types where unknown types must be skipped and counted rather than throw, 
 returns plain data to React (ADR-0004). Paying for the full architecture in a 2–3 hour build
 would have bought nothing.
 
+## How I worked with Claude Code
+
+Almost every line of code here was written by Claude Code. The judgment calls were where I
+spent my own time, and the transcripts submitted alongside this document show them in
+order. The ones that mattered:
+
+**Surveying, not reading.** Real transcripts are megabytes of my own code and prompts. I
+never let an agent open one; instead the first hour was throwaway Bun scripts that print key
+paths, record types and counts and nothing else. That rule is written into `CLAUDE.md` and
+it is why the "breakdown is not in the transcript" finding above exists — you only discover
+what a format _doesn't_ contain by counting everything it does.
+
+**Grilling before building.** Before any code, I had Claude interrogate the idea: what
+`/context` actually shows, what a transcript can and cannot support, what a reviewer with no
+data would see. That produced the spec, a glossary (`CONTEXT.md`) and the first four ADRs.
+The one-bucket System decision (ADR-0001) and the scale-to-measured rule (ADR-0003) both
+came out of that session, not out of implementation.
+
+**A throwaway prototype that overturned the design.** Once the parser existed, I had three
+UI shapes built side by side on a branch with fake data — a terminal-faithful console, an
+editorial filmstrip, and a workbench — purely to answer "what should this look like". The
+workbench won, but the more important outcome was that stepping through the prototype's
+scrubber showed the category-grouped grid _re-flowing_ on every call. That killed the layout
+the first implementation ticket had already shipped, became ADR-0006 (append-only cells on
+a fixed 1k-token quantum), and turned into a delta ticket rather than a rewrite. The
+prototype code was never promoted.
+
+**Tickets, adversarial review, and an integrator.** The spec was cut into nine tickets and
+run as a workflow: one agent per ticket in an isolated worktree, a second agent told to
+_refute_ the claim that the ticket was done, one repair round, and an integrator merging
+into `main` and re-running every check. Both wave-one tickets failed their first review on
+real defects — the anonymizer leaked free text through object keys and enum-looking values;
+the grid didn't cover the drop path — and were fixed before merging. I read every review
+verdict and every integration report; the workflow ran the mechanics, I decided what
+counted as done.
+
+**Hard rules as the anchor.** `CLAUDE.md` carries the non-negotiables — transcript data
+never leaves the browser, no real transcript content anywhere in the repo, never print the
+deploy token into a session log because the session logs are a deliverable. Agents read it
+first; reviewers check against it. It was the cheapest way to keep my vision intact across
+a dozen agents that never shared a context window.
+
 ## With more time
 
 - **Subagent context windows.** `<session>/subagents/agent-*.jsonl` files are entirely
@@ -99,4 +151,6 @@ would have bought nothing.
 
 ## Time spent
 
-_TODO_ — research and grilling (~1h, 2026-08-31), implementation, deploy, write-up and video.
+_TODO_ — first session opened at 03:30 on 2026-08-31. Research and grilling (~1h), then
+implementation, deploy, write-up and video; fill in the total from the transcript
+timestamps before submitting.
