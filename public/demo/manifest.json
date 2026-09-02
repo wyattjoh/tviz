@@ -26,11 +26,11 @@
       "id": "large",
       "file": "large.jsonl",
       "name": "Large session",
-      "description": "Eighty-one API Calls in a 1M window, with one compaction part-way through: the context drops and attribution restarts from the summary.",
-      "bytes": 1505516,
-      "calls": 81,
-      "model": "claude-fable-5",
-      "claudeCodeVersion": "2.1.217"
+      "description": "Two hundred sixty-one API Calls in a 1M window, with four compactions along the way: the context drops and attribution restarts from each summary.",
+      "bytes": 3413365,
+      "calls": 261,
+      "model": "claude-opus-5",
+      "claudeCodeVersion": "2.1.257"
     }
   ]
 }

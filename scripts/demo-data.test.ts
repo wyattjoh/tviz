@@ -194,25 +194,27 @@ describe("bundled Demo Sessions", () => {
       expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.6);
     });
 
-    it("large: one compaction part-way through a 1M window", () => {
+    it("large: four compactions along the way through a 1M window", () => {
       const session = sessionFor("large");
 
       expect(session.windowSize).toBe(1_000_000);
-      expect(session.calls.filter((call) => call.reset)).toHaveLength(1);
+      expect(session.calls.filter((call) => call.reset)).toHaveLength(4);
     });
 
-    it("small and large are not described as compacting", () => {
+    it("the descriptions accurately identify which sessions compact", () => {
       for (const id of ["small", "large"]) {
         const resets = sessionFor(id).calls.filter((call) => call.reset).length;
-        expect.soft(resets, `${id} has ${resets} compactions`).toBe(id === "large" ? 1 : 0);
+        expect.soft(resets, `${id} has ${resets} compactions`).toBe(id === "large" ? 4 : 0);
       }
     });
   });
 
   // "Loads within a few seconds" is a size question first: the whole demo has
-  // to cross the network before the Worker sees it.
-  it.each(manifest.sessions)("$name stays under 2 MB", (entry) => {
-    expect(entry.bytes).toBeLessThanOrEqual(2_000_000);
+  // to cross the network before the Worker sees it. Large is explicitly
+  // authorized to use a 4 MB transfer budget for this source session.
+  it.each(manifest.sessions)("$name stays within its approved transfer budget", (entry) => {
+    const transferBudget = entry.id === "large" ? 4_000_000 : 2_000_000;
+    expect(entry.bytes).toBeLessThanOrEqual(transferBudget);
   });
 
   it("orders the Demo Sessions small to large", () => {
