@@ -105,7 +105,7 @@ The prototype code was never promoted.
 
 ## Time spent
 
-About 5½ hours: roughly an hour of research and grilling, then implementation, deploy,
+About 6½ hours: roughly an hour of research and grilling, then implementation, deploy,
 write-up and video.
 
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).
