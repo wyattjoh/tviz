@@ -1,0 +1,10 @@
+# Vite fingerprints everything under /assets/, so those URLs can never change
+# content. Cloudflare's default for static assets is
+# `public, max-age=0, must-revalidate`, which costs a conditional round-trip per
+# asset per page load; `immutable` removes it.
+#
+# Deliberately scoped to /assets/ only. `index.html` and the demo transcripts
+# under /demo/ are not fingerprinted, so they must keep revalidating or a
+# redeploy would strand browsers on a stale bundle or stale Demo Sessions.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

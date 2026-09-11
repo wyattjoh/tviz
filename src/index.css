@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/*
+ * Two layers, per the catppuccin-interfaces skill.
+ *
+ * Layer 1 — palette adapter: the only place Catppuccin Mocha values appear.
+ *   Swapping this block swaps the flavour.
+ * Layer 2 — semantic tokens: the only colours components are allowed to name.
+ *   No component contains a hex literal or a `ctp-` utility.
+ */
+@theme {
+  /* --- Layer 1: Catppuccin Mocha palette adapter --- */
+  --color-ctp-crust: #11111b;
+  --color-ctp-mantle: #181825;
+  --color-ctp-base: #1e1e2e;
+  --color-ctp-surface0: #313244;
+  --color-ctp-surface1: #45475a;
+  --color-ctp-surface2: #585b70;
+  --color-ctp-overlay0: #6c7086;
+  --color-ctp-overlay1: #7f849c;
+  --color-ctp-overlay2: #9399b2;
+  --color-ctp-subtext0: #a6adc8;
+  --color-ctp-subtext1: #bac2de;
+  --color-ctp-text: #cdd6f4;
+  --color-ctp-lavender: #b4befe;
+  --color-ctp-blue: #89b4fa;
+  --color-ctp-sapphire: #74c7ec;
+  --color-ctp-sky: #89dceb;
+  --color-ctp-teal: #94e2d5;
+  --color-ctp-green: #a6e3a1;
+  --color-ctp-yellow: #f9e2af;
+  --color-ctp-peach: #fab387;
+  --color-ctp-maroon: #eba0ac;
+  --color-ctp-red: #f38ba8;
+  --color-ctp-mauve: #cba6f7;
+  --color-ctp-pink: #f5c2e7;
+  --color-ctp-flamingo: #f2cdcd;
+  --color-ctp-rosewater: #f5e0dc;
+
+  /* --- Layer 2: neutral ramp and interface state --- */
+  --color-ui-canvas: var(--color-ctp-base);
+  --color-ui-sunken: var(--color-ctp-mantle);
+  --color-ui-shell: var(--color-ctp-crust);
+  --color-ui-panel: var(--color-ctp-surface0);
+  --color-ui-panel-hover: var(--color-ctp-surface1);
+  --color-ui-panel-active: var(--color-ctp-surface2);
+  --color-ui-border: var(--color-ctp-surface1);
+  --color-ui-border-strong: var(--color-ctp-overlay0);
+  --color-ui-text: var(--color-ctp-text);
+  --color-ui-text-secondary: var(--color-ctp-subtext1);
+  --color-ui-text-muted: var(--color-ctp-subtext0);
+  --color-ui-text-faint: var(--color-ctp-overlay1);
+  --color-ui-action: var(--color-ctp-blue);
+  --color-ui-focus: var(--color-ctp-lavender);
+  --color-ui-warning: var(--color-ctp-yellow);
+  --color-ui-danger: var(--color-ctp-red);
+
+  /* --- Layer 2: one accent per Category --- */
+  --color-cat-system: var(--color-ctp-mauve);
+  --color-cat-agents: var(--color-ctp-peach);
+  --color-cat-memory: var(--color-ctp-yellow);
+  --color-cat-skills: var(--color-ctp-green);
+  --color-cat-mcp: var(--color-ctp-sapphire);
+  --color-cat-messages: var(--color-ctp-blue);
+
+  /* --- Layer 2: one accent per Message Kind ---
+     Every Kind accent differs from the Messages Category accent it replaces, or
+     "colour Messages by kind" would leave part of the grid looking untouched:
+     User was `blue`, the Messages accent itself. `tokens.test.ts` holds the
+     line. */
+  --color-kind-user: var(--color-ctp-pink);
+  --color-kind-assistant: var(--color-ctp-sky);
+  --color-kind-tool-result: var(--color-ctp-teal);
+  --color-kind-reminder: var(--color-ctp-flamingo);
+
+  /* --- Layer 2: Cell states ---
+     A blanked Cell is a *recess with an edge*, not a gap: `crust` sinks it
+     below the canvas and `overlay0` draws it back in. Fill alone cannot do
+     this — the deepest neutral is only 1.14:1 against the canvas, so a
+     fill-only blank reads as a hole in the grid rather than as a Cell that
+     still holds tokens. The edge measures 3.36:1 against the canvas, clearing
+     WCAG's 3:1 for non-text, and 2.57:1 against a free Cell — where the outline
+     is itself the second, non-colour cue, since a free Cell has none. Checked
+     with the `catppuccin-interfaces` skill; pinned by `tokens.test.ts`. */
+  --color-cell-free: var(--color-ctp-surface0);
+  --color-cell-hidden: var(--color-ctp-crust);
+  --color-cell-hidden-edge: var(--color-ctp-overlay0);
+  /* A lifted Cell — hovered, focused or pinned — casts a shadow of the
+     deepest neutral onto the canvas, which is what makes the lift read as
+     depth rather than as a colour change. */
+  --color-cell-lift: var(--color-ctp-crust);
+
+  --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ui-shell);
+    color: var(--color-ui-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-ui-focus) 35%, transparent);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-ui-focus);
+    outline-offset: 2px;
+  }
+}
