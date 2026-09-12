@@ -45,6 +45,19 @@ const transcript = (): string =>
     Fixture.assistantMessage({ id: "m2", usage: { cacheRead: LAST_CALL_TOKENS } }),
   ]);
 
+/**
+ * One of the app's two stacked layers. Neither ever unmounts — that is what
+ * lets the drop panel fade rather than blink away — so tests address them by
+ * their `data-layer` hook and read which one is live off `inert`/`aria-hidden`.
+ */
+const layer = (name: "workbench" | "drop-panel"): HTMLElement => {
+  const found = document.querySelector<HTMLElement>(`[data-layer="${name}"]`);
+  if (found === null) throw new Error(`no ${name} layer`);
+  return found;
+};
+
+const dropPanelLayer = (): HTMLElement => layer("drop-panel");
+
 const drop = (file: File): void => {
   const target = screen.getByText("drop a .jsonl transcript").closest("section");
   if (target === null) throw new Error("the drop zone has no drop target");
@@ -773,6 +786,57 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
     });
 
+    it("hands the keyboard from the drop panel to the Workbench when a Session loads, without unmounting either", async () => {
+      render(<App />);
+
+      // Nothing loaded: the panel is the live layer and the Workbench behind
+      // it — a Demo Session preview, or nothing if the preview never arrived —
+      // is scenery.
+      expect(dropPanelLayer().hasAttribute("inert")).toBe(false);
+      expect(layer("workbench").hasAttribute("inert")).toBe(true);
+      expect(layer("workbench").getAttribute("aria-hidden")).toBe("true");
+
+      drop(transcriptFile("session-a.jsonl", transcript()));
+      await findContextGrid();
+
+      // Exactly one of the two is reachable at a time, and the swap is the
+      // only thing that changed: both layers are still in the tree, which is
+      // what lets the panel fade out instead of blinking away.
+      expect(layer("workbench").hasAttribute("inert")).toBe(false);
+      expect(layer("workbench").hasAttribute("aria-hidden")).toBe(false);
+      expect(dropPanelLayer().hasAttribute("inert")).toBe(true);
+      expect(dropPanelLayer().getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("fades the drop panel back in when the last Session is closed", async () => {
+      render(<App />);
+      drop(transcriptFile("session-a.jsonl", transcript()));
+      await findContextGrid();
+
+      fireEvent.click(screen.getByRole("button", { name: "close" }));
+
+      await waitFor(() => expect(dropPanelLayer().hasAttribute("inert")).toBe(false));
+      expect(layer("workbench").hasAttribute("inert")).toBe(true);
+    });
+
+    it("opens a transcript dropped anywhere on the landing page, not just on the panel", async () => {
+      render(<App />);
+
+      // The landing page's root, which is what a drop onto the blurred preview
+      // — or onto the empty canvas beside the panel — lands on. The dashed
+      // panel owns no drop handler of its own any more.
+      const landing = screen.getByRole("banner", { name: "tviz" }).closest("div");
+      if (landing === null) throw new Error("the landing page has no root element");
+
+      const file = transcriptFile("session-a.jsonl", transcript());
+      fireEvent.drop(landing, { dataTransfer: { files: fileListOf(file) } });
+
+      await findContextGrid();
+      expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
+        "session-a.jsonl",
+      );
+    });
+
     it("adds a second drop onto the loaded Workbench instead of losing it to the browser's default file-drop", async () => {
       render(<App />);
       Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000e1");
@@ -1113,6 +1177,10 @@ describe("App demo mode", () => {
       "session-a.jsonl",
     );
     expect(queryContextGrid()).not.toBeNull();
-    expect(screen.queryByText("drop a .jsonl transcript")).toBeNull();
+    // The drop panel never unmounts — it has to stay in the tree to fade — so
+    // what says the visitor was not dropped back to it is that its layer is
+    // hidden and unreachable, not that it is gone.
+    expect(dropPanelLayer().getAttribute("aria-hidden")).toBe("true");
+    expect(dropPanelLayer().hasAttribute("inert")).toBe(true);
   });
 });

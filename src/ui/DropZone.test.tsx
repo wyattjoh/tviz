@@ -1,19 +1,21 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DropZone } from "./DropZone.tsx";
 import { fileListOf, transcriptFile } from "./test-dom.ts";
 
 afterEach(cleanup);
 
-const dropTarget = (): HTMLElement => {
+const panel = (): HTMLElement => {
   const target = screen.getByText("drop a .jsonl transcript").closest("section");
-  if (target === null) throw new Error("the drop zone has no drop target");
+  if (target === null) throw new Error("the drop zone has no panel");
   return target;
 };
 
 const base = {
   onFiles: vi.fn(),
+  isOver: false,
+  previewing: false,
   pending: [],
   errors: [],
   onLoadDemo: vi.fn(),
@@ -22,16 +24,23 @@ const base = {
 } as const;
 
 describe("DropZone", () => {
-  it("hands a dropped transcript to its caller", async () => {
-    const onFiles = vi.fn();
-    render(<DropZone {...base} onFiles={onFiles} />);
+  // The drop itself belongs to `App`'s root — the whole window is the target,
+  // not this panel — so what is pinned here is only that the panel draws the
+  // state it is handed. `App.test.tsx` covers the drop.
+  it("marks itself as a target while a drag is over the window", () => {
+    const { rerender } = render(<DropZone {...base} isOver={false} />);
+    expect(panel().className).not.toContain("border-ui-focus");
 
-    const file = transcriptFile("session-a.jsonl", "{}\n");
-    fireEvent.drop(dropTarget(), { dataTransfer: { files: fileListOf(file) } });
+    rerender(<DropZone {...base} isOver={true} />);
+    expect(panel().className).toContain("border-ui-focus");
+  });
 
-    // Collecting a drop's entries is async even for a flat file list, so the
-    // recursive-folder walk always goes through one code path.
-    await waitFor(() => expect(onFiles).toHaveBeenCalledWith([{ file, path: "session-a.jsonl" }]));
+  it("names the session behind it only while one is previewing", () => {
+    const { rerender } = render(<DropZone {...base} previewing={false} />);
+    expect(screen.queryByText(/session behind this panel/)).toBeNull();
+
+    rerender(<DropZone {...base} previewing={true} />);
+    expect(screen.getByText(/session behind this panel/)).toBeDefined();
   });
 
   it("hands every picked transcript to its caller", () => {
@@ -67,6 +76,8 @@ describe("DropZone", () => {
     render(
       <DropZone
         onFiles={vi.fn()}
+        isOver={false}
+        previewing={false}
         onLoadDemo={vi.fn()}
         demoProgress={undefined}
         demoError={undefined}
@@ -82,6 +93,8 @@ describe("DropZone", () => {
     render(
       <DropZone
         onFiles={vi.fn()}
+        isOver={false}
+        previewing={false}
         onLoadDemo={vi.fn()}
         demoProgress={undefined}
         demoError={undefined}
@@ -100,6 +113,8 @@ describe("DropZone", () => {
     render(
       <DropZone
         onFiles={vi.fn()}
+        isOver={false}
+        previewing={false}
         onLoadDemo={vi.fn()}
         demoProgress={undefined}
         demoError={undefined}

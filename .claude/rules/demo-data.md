@@ -23,6 +23,20 @@ The manifest's `note` is the app's own statement that the Demo Sessions are synt
 it is rendered in the right rail's Transcript panel whenever a Demo Session is on screen:
 regenerating the data can change what the app says about itself.
 
+## The landing page fetches one of them on load
+
+`loadPreviewSession(PREVIEW_SESSION_ID)` — `small`, and `small.jsonl` is 110 KB — is fetched
+on **every** landing view, before anyone has asked for anything, to fill the blurred
+Workbench behind the drop panel. It is the one Demo Session whose bytes are spent
+unconditionally, so keep `PREVIEW_SESSION_ID` pointed at the smallest file; switching it to
+`medium` is a 7x bandwidth decision, not a cosmetic one.
+
+It goes through the same `fetchManifest`/`loadOne` and so the same Worker client. It reports
+nothing: a missing manifest, an unknown id or a parse failure all return `undefined` and the
+landing page falls back to a plain drop panel. Only a demo load someone clicked for earns an
+alert. The preview is never an open Session — it is not in the loader, not in the File menu,
+and a dropped transcript replaces it.
+
 ## Regenerating a Demo Session
 
 ```sh

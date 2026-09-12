@@ -1,13 +1,31 @@
 /**
- * App shell: drop transcripts (files or a whole project folder), then step
- * through the selected Session's API Calls.
+ * App shell: drop transcripts (files or a whole project folder) anywhere in the
+ * window, then step through the selected Session's API Calls.
  *
- * The loaded view is the Workbench layout the throwaway UI prototype settled on
- * (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a menu bar and a
- * Session strip across the top, the grid pane on the flexible left, a fixed
- * 340px right rail holding the legend and the Inspector, and the Scrubber
- * docked across the bottom. The four regions are established here once, so the
- * filter and Inspector work fills the rail instead of re-laying out the app.
+ * The loaded view fills `Workbench`, the shell the throwaway UI prototype
+ * settled on (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a
+ * menu bar above it, then a Session strip, the grid pane on the flexible left,
+ * a fixed 340px right rail holding the legend and the Inspector, and the
+ * Scrubber docked across the bottom. The regions live in `src/ui/Workbench.tsx`
+ * so the filter and Inspector work fills a region instead of re-laying out the
+ * app — and so the landing page's preview is the same shell rather than a
+ * drawing of it.
+ *
+ * There is no separate landing view. The app is always this shell: a menu bar
+ * over a positioned stack of the Workbench and the drop panel. With nothing
+ * loaded the Workbench holds a Demo Session — blurred, `inert`, auto-scrubbing
+ * — and the panel is opaque over it, so someone arriving at the deployed
+ * prototype with no transcript of their own sees what the tool does before
+ * deciding to spend a file on it. Selecting a Session swaps in that Session,
+ * fades the panel out and the blur off, and hands the keyboard back. Closing
+ * every Session runs it in reverse.
+ *
+ * Both layers stay mounted across that change, which is the only reason it can
+ * be a fade rather than a swap, and `inert` moves between them so that exactly
+ * one of the two is reachable at a time.
+ *
+ * The root is the drop target, so the whole window takes a transcript and the
+ * browser never gets the chance to navigate the tab to a dropped file.
  *
  * Pinning a Cell focuses the rail: the legend, the Context Window panel and
  * the Transcript panel step aside and the Inspector is the only panel until
@@ -25,9 +43,13 @@
  * same Session list as a dropped file, so there is no demo-only view: only
  * their manifest name and the manifest's synthetic-data note live here.
  */
-import { ChevronDown, X } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from "react";
-import { loadDemoSessions } from "./demo/load-demo-sessions.ts";
+import { X } from "lucide-react";
+import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  loadDemoSessions,
+  loadPreviewSession,
+  PREVIEW_SESSION_ID,
+} from "./demo/load-demo-sessions.ts";
 import {
   type Category,
   cumulativeItems,
@@ -35,7 +57,7 @@ import {
   peakMeasuredTotal,
   type Session,
 } from "./domain/context.ts";
-import { collectDataTransferEntries, type PathedFile } from "./ui/collect-files.ts";
+import { collectDataTransferEntries } from "./ui/collect-files.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
 import { ContextWindowMenu, ContextWindowPanel } from "./ui/ContextWindowPanel.tsx";
 import { ContextLegend } from "./ui/ContextLegend.tsx";
@@ -49,11 +71,13 @@ import {
 } from "./ui/filters.ts";
 import { buildCells } from "./ui/grid.ts";
 import { Inspector } from "./ui/Inspector.tsx";
-import { MenuBar, type MenuBarProps } from "./ui/MenuBar.tsx";
+import { LandingPreview } from "./ui/LandingPreview.tsx";
+import { MenuBar } from "./ui/MenuBar.tsx";
 import { Scrubber } from "./ui/Scrubber.tsx";
 import { SessionHeader } from "./ui/SessionHeader.tsx";
 import { useSessionLoader } from "./ui/session-loader.ts";
 import { effectiveWindowSize, type WindowChoice } from "./ui/window-choice.ts";
+import { RailPanel, Workbench } from "./ui/Workbench.tsx";
 
 const unknownRecordCount = (session: Session): number =>
   Object.values(session.unknownRecordTypes).reduce((sum, count) => sum + count, 0);
@@ -97,6 +121,28 @@ const App = () => {
   // against.
   const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
   const [demo, setDemo] = useState<DemoState>(NO_DEMO);
+  // The landing page's background. Held here rather than in `useSessionLoader`
+  // on purpose: it must not be an open Session. Putting it in the loader would
+  // put it in the File menu, and — because `addEntries` only selects a parsed
+  // Session when nothing is selected yet — would leave a dropped transcript
+  // sitting behind a demo the visitor never asked to open.
+  const [preview, setPreview] = useState<Session | undefined>(undefined);
+  // Purely visual, and never load-bearing on either branch: the drop is
+  // handled regardless of whether the highlight is showing when it lands.
+  const [isDropOver, setIsDropOver] = useState(false);
+
+  // Kept across a load rather than discarded: closing every Session comes back
+  // to this page, and a second fetch of a file already in memory would be the
+  // visitor paying twice for the same decoration.
+  useEffect(() => {
+    let cancelled = false;
+    loadPreviewSession(PREVIEW_SESSION_ID).then((session) => {
+      if (!cancelled) setPreview(session);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const addParsedSessions = loader.addParsedSessions;
   const loadDemo = useCallback(() => {
@@ -131,6 +177,29 @@ const App = () => {
     closeAll();
   }, [closeAll]);
 
+  const addEntries = loader.addEntries;
+  // The app's one drop implementation, on the root: the whole window is the
+  // target rather than the dashed panel, and without a handler here the
+  // browser's own file-drop behaviour navigates the tab to the file and takes
+  // every open Session with it.
+  const dropTargetProps = useMemo(
+    () => ({
+      onDragOver: (event: DragEvent<HTMLElement>) => {
+        event.preventDefault();
+        setIsDropOver(true);
+      },
+      onDragLeave: () => setIsDropOver(false),
+      onDrop: (event: DragEvent<HTMLElement>) => {
+        event.preventDefault();
+        setIsDropOver(false);
+        // Must read `dataTransfer` synchronously in this handler; the walk of
+        // a dropped folder's entries is what stays async.
+        collectDataTransferEntries(event.dataTransfer).then(addEntries);
+      },
+    }),
+    [addEntries],
+  );
+
   const selectedSession = loader.sessions.find((session) => session.id === loader.selectedId);
 
   const menuBarProps = {
@@ -147,36 +216,89 @@ const App = () => {
   };
   const onCloseSession = loader.closeSession;
 
-  if (selectedSession === undefined) {
-    return (
-      <div className="grid h-full min-h-full grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px]">
-        <MenuBar {...menuBarProps} />
-        <DropZone
-          onFiles={loader.addEntries}
-          pending={loader.pending}
-          errors={loader.errors}
-          onLoadDemo={loadDemo}
-          demoProgress={demo.progress}
-          demoError={demo.error}
-        />
-      </div>
-    );
-  }
+  // One view, two states. Nothing loaded shows the Demo Session preview under
+  // the drop panel; a Session loaded shows that Session and lets the panel
+  // fade off it. Both layers stay mounted in the same positioned stack across
+  // the change, which is the only reason the change can be a fade rather than
+  // a swap — and closing every Session fades the panel back on.
+  const previewing = selectedSession === undefined;
+  const shown = selectedSession ?? preview;
 
-  // Keying on the Session restarts the Scrubber at the last API Call of
-  // whatever is selected, rather than carrying the previous Session's
-  // position into a Session that may not even have that many API Calls.
   return (
-    <LoadedSession
-      key={selectedSession.id}
-      session={selectedSession}
-      windowChoice={windowChoice}
-      onWindowChoiceChange={setWindowChoice}
-      menuBarProps={menuBarProps}
-      onFiles={loader.addEntries}
-      onCloseSession={onCloseSession}
-      demoNote={demo.labels.has(selectedSession.id) ? demo.note : undefined}
-    />
+    <div
+      {...dropTargetProps}
+      className={`grid h-full min-h-full grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px] ${
+        isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
+      }`}
+    >
+      {/* Outside the blur: the File menu is how someone with no transcript
+          reaches the Demo Sessions, so it stays sharp and reachable on the
+          landing page. */}
+      <MenuBar {...menuBarProps} />
+
+      <div className="relative min-h-0">
+        {/* While nothing is loaded this is scenery, and `inert` is what makes
+            that structural rather than a promise: without it the grid's Cell
+            buttons and the Scrubber's transport are real tab stops sitting
+            behind a blur, and the first Tab off the menu bar lands in a
+            control nobody can see. `aria-hidden` keeps the same content out of
+            the accessibility tree. Both are dropped the moment a Session is
+            selected, and the blur transitions off rather than cutting.
+
+            Laid out at exactly the size the real Workbench gets — no scaling,
+            no inset. The point of the landing page is that this *is* the
+            interface, so anything that shifted it would be showing a layout
+            the loaded view never has. */}
+        <div
+          data-layer="workbench"
+          aria-hidden={previewing || undefined}
+          inert={previewing}
+          className={`absolute inset-0 grid transition-[filter,opacity] duration-500 motion-reduce:transition-none ${
+            previewing ? "pointer-events-none opacity-50 blur-[3px] select-none" : "opacity-100"
+          }`}
+        >
+          {shown === undefined ? null : previewing ? (
+            <LandingPreview session={shown} />
+          ) : (
+            // Keying on the Session restarts the Scrubber at the last API Call
+            // of whatever is selected, rather than carrying the previous
+            // Session's position into a Session that may not even have that
+            // many API Calls.
+            <LoadedSession
+              key={shown.id}
+              session={shown}
+              windowChoice={windowChoice}
+              onWindowChoiceChange={setWindowChoice}
+              onCloseSession={onCloseSession}
+              demoNote={demo.labels.has(shown.id) ? demo.note : undefined}
+            />
+          )}
+        </div>
+
+        {/* Never unmounted, so it has something to fade between. Faded out it
+            is `inert` too: an invisible panel covering the Workbench must not
+            hold tab stops or take a click. */}
+        <div
+          data-layer="drop-panel"
+          aria-hidden={previewing ? undefined : true}
+          inert={!previewing}
+          className={`absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${
+            previewing ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        >
+          <DropZone
+            onFiles={loader.addEntries}
+            isOver={isDropOver}
+            previewing={preview !== undefined}
+            pending={loader.pending}
+            errors={loader.errors}
+            onLoadDemo={loadDemo}
+            demoProgress={demo.progress}
+            demoError={demo.error}
+          />
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -184,14 +306,6 @@ type LoadedSessionProps = {
   readonly session: Session;
   readonly windowChoice: WindowChoice;
   readonly onWindowChoiceChange: (choice: WindowChoice) => void;
-  readonly menuBarProps: MenuBarProps;
-  /**
-   * Queues dropped or picked entries the same way the empty state's
-   * `DropZone` does — the Workbench itself is a drop target once a Session is
-   * loaded, so a second transcript or folder adds to what is open instead of
-   * the browser's default file-drop navigating the tab away from it.
-   */
-  readonly onFiles: (entries: readonly PathedFile[]) => void;
   /**
    * Closes one Session, leaving the rest of the loaded Sessions open.
    */
@@ -203,88 +317,10 @@ type LoadedSessionProps = {
   readonly demoNote: string | undefined;
 };
 
-/**
- * One docked panel of the right rail.
- */
-type RailPanelProps = {
-  /**
-   * Heading of the panel, and the control that collapses it.
-   */
-  readonly title: string;
-  /**
-   * A control for the panel, drawn at the right of the heading row. For a
-   * setting the panel reports but is not itself — the Context Window override
-   * beside the fill meter it changes.
-   */
-  readonly action?: ReactNode;
-  /**
-   * Whether the heading folds the panel. Off for the one panel the rail holds
-   * while a Cell is pinned: folding it would leave an empty rail under a lone
-   * heading row. Defaults to on.
-   */
-  readonly collapsible?: boolean;
-  /**
-   * What the panel holds.
-   */
-  readonly children: ReactNode;
-};
-
-/**
- * A panel in the rail, collapsed to its heading row by clicking that heading.
- *
- * The rail stacks four panels in a fixed 340px column, and on a short window
- * the ones a reader is not using push the ones they are below the fold. Each
- * panel keeps its own open state rather than lifting it here: nothing else
- * reads it, and a collapsed panel is a view preference, not Session state.
- *
- * Collapsing unmounts the body rather than hiding it, so a collapsed panel
- * costs no layout — and the `action` control stays in the heading row either
- * way, because what is in force must stay readable without opening a panel.
- */
-const RailPanel = ({ title, action, collapsible = true, children }: RailPanelProps) => {
-  const bodyId = useId();
-  const [folded, setFolded] = useState(false);
-  const open = !collapsible || !folded;
-
-  return (
-    <section className="rounded border border-ui-border bg-ui-panel/40 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase">
-          {collapsible ? (
-            <button
-              type="button"
-              onClick={() => setFolded((wasFolded) => !wasFolded)}
-              aria-expanded={open}
-              aria-controls={bodyId}
-              className="-m-1 flex cursor-pointer items-center gap-1.5 p-1 hover:text-ui-text"
-            >
-              <ChevronDown
-                className={`h-3 w-3 shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
-                aria-hidden="true"
-              />
-              {title}
-            </button>
-          ) : (
-            <span className="flex items-center gap-1.5 p-1 -m-1">{title}</span>
-          )}
-        </h2>
-        {action}
-      </div>
-      {open ? (
-        <div id={bodyId} className="mt-2">
-          {children}
-        </div>
-      ) : null}
-    </section>
-  );
-};
-
 const LoadedSession = ({
   session,
   windowChoice,
   onWindowChoiceChange,
-  menuBarProps,
-  onFiles,
   onCloseSession,
   demoNote,
 }: LoadedSessionProps) => {
@@ -298,9 +334,6 @@ const LoadedSession = ({
   // across API Calls instead of going stale.
   const [inspectedIndex, setInspectedIndex] = useState<number | undefined>(undefined);
   const [pinnedIndex, setPinnedIndex] = useState<number | undefined>(undefined);
-  // Purely visual, and never load-bearing: the drop is handled regardless of
-  // whether this is showing when it lands.
-  const [isDropOver, setIsDropOver] = useState(false);
 
   const windowSize = effectiveWindowSize(session, windowChoice);
 
@@ -353,147 +386,123 @@ const LoadedSession = ({
   const shownIndex = inspectedIndex ?? pinnedIndex;
 
   return (
-    <div
-      // A Session loaded is not the end of the drop path: the empty state's
-      // `DropZone` is unmounted once one is, so without a handler here the
-      // browser's own file-drop behaviour (navigating the tab to the file)
-      // takes over and every open Session, plus the Scrubber and filter
-      // state, is lost.
-      onDragOver={(event) => {
-        event.preventDefault();
-        setIsDropOver(true);
-      }}
-      onDragLeave={() => setIsDropOver(false)}
-      onDrop={(event) => {
-        event.preventDefault();
-        setIsDropOver(false);
-        collectDataTransferEntries(event.dataTransfer).then(onFiles);
-      }}
-      className={`grid h-full min-h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-ui-canvas font-mono text-[13px] ${
-        isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
-      }`}
-    >
-      <MenuBar {...menuBarProps} />
-      <SessionHeader
-        session={session}
-        snapshot={snapshot}
-        onClose={() => onCloseSession(session.id)}
-      />
-
-      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px]">
-        <main aria-label="Context grid" className="min-h-0 border-r border-ui-border">
-          <ContextGrid
-            cells={cells}
-            windowSize={windowSize}
-            measuredTotal={snapshot.measuredTotal}
-            filters={filters}
-            pinnedIndex={pinnedIndex}
-            onInspect={setInspectedIndex}
-            onPin={onPin}
-          />
-        </main>
-
-        <aside
-          aria-label="Legend and Inspector"
-          className="min-h-0 space-y-3 overflow-y-auto bg-ui-sunken p-3"
-        >
-          {/* A pinned Cell takes the whole rail: the Inspector is the only
-              panel until it is unpinned. The heading's close control is the
-              rail's own way out; Escape and clicking the Cell again are the
-              other two. */}
-          {pinned ? (
-            <RailPanel
-              title="Inspector"
-              collapsible={false}
-              action={
-                <button
-                  type="button"
-                  onClick={unpin}
-                  aria-label="Unpin cell"
-                  title="Unpin cell · Esc"
-                  className="-my-1 rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
-                >
-                  <X aria-hidden="true" className="h-3.5 w-3.5" />
-                </button>
-              }
-            >
-              <Inspector
-                cell={shownIndex === undefined ? undefined : cells[shownIndex]}
+    <Workbench
+      header={
+        <SessionHeader
+          session={session}
+          snapshot={snapshot}
+          onClose={() => onCloseSession(session.id)}
+        />
+      }
+      grid={
+        <ContextGrid
+          cells={cells}
+          windowSize={windowSize}
+          measuredTotal={snapshot.measuredTotal}
+          filters={filters}
+          pinnedIndex={pinnedIndex}
+          onInspect={setInspectedIndex}
+          onPin={onPin}
+        />
+      }
+      rail={
+        /* A pinned Cell takes the whole rail: the Inspector is the only
+             panel until it is unpinned. The heading's close control is the
+             rail's own way out; Escape and clicking the Cell again are the
+             other two. */
+        pinned ? (
+          <RailPanel
+            title="Inspector"
+            collapsible={false}
+            action={
+              <button
+                type="button"
+                onClick={unpin}
+                aria-label="Unpin cell"
+                title="Unpin cell · Esc"
+                className="-my-1 rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
+              >
+                <X aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            }
+          >
+            <Inspector
+              cell={shownIndex === undefined ? undefined : cells[shownIndex]}
+              filters={filters}
+              pinned={shownIndex === pinnedIndex}
+            />
+          </RailPanel>
+        ) : (
+          <>
+            <RailPanel title="Categories">
+              <ContextLegend
+                snapshot={snapshot}
+                windowSize={windowSize}
                 filters={filters}
-                pinned={shownIndex === pinnedIndex}
+                onToggleCategory={onToggleCategory}
+                onToggleMessageKind={onToggleMessageKind}
+                onColourByKind={onColourByKind}
               />
             </RailPanel>
-          ) : (
-            <>
-              <RailPanel title="Categories">
-                <ContextLegend
-                  snapshot={snapshot}
-                  windowSize={windowSize}
-                  filters={filters}
-                  onToggleCategory={onToggleCategory}
-                  onToggleMessageKind={onToggleMessageKind}
-                  onColourByKind={onColourByKind}
-                />
-              </RailPanel>
 
-              {/* Fill level and the window override sit under the legend: the
+            {/* Fill level and the window override sit under the legend: the
               legend's Free space line is the other half of the same number,
               and the Session strip stayed one line on a narrow window once
               they left it. */}
-              <RailPanel
-                title="Context Window"
-                action={
-                  <ContextWindowMenu
-                    windowChoice={windowChoice}
-                    onWindowChoiceChange={onWindowChoiceChange}
-                  />
-                }
-              >
-                <ContextWindowPanel
-                  measuredTotal={snapshot.measuredTotal}
-                  windowSize={windowSize}
-                  peak={peakMeasuredTotal(session.calls)}
+            <RailPanel
+              title="Context Window"
+              action={
+                <ContextWindowMenu
                   windowChoice={windowChoice}
+                  onWindowChoiceChange={onWindowChoiceChange}
                 />
-              </RailPanel>
+              }
+            >
+              <ContextWindowPanel
+                measuredTotal={snapshot.measuredTotal}
+                windowSize={windowSize}
+                peak={peakMeasuredTotal(session.calls)}
+                windowChoice={windowChoice}
+              />
+            </RailPanel>
 
-              {/* The Inspector docks here rather than following the pointer as a
+            {/* The Inspector docks here rather than following the pointer as a
               tooltip; the panel holds its place until it is filled. Nothing is
               pinned on this branch, so it only ever previews. */}
-              <RailPanel title="Inspector">
-                <Inspector
-                  cell={shownIndex === undefined ? undefined : cells[shownIndex]}
-                  filters={filters}
-                  pinned={false}
-                />
-              </RailPanel>
+            <RailPanel title="Inspector">
+              <Inspector
+                cell={shownIndex === undefined ? undefined : cells[shownIndex]}
+                filters={filters}
+                pinned={false}
+              />
+            </RailPanel>
 
-              <RailPanel title="Transcript">
-                {/* The window and its peak moved up to the Context Window panel,
+            <RailPanel title="Transcript">
+              {/* The window and its peak moved up to the Context Window panel,
                 beside the control that sets them; what is left here is what the
                 parse itself found. */}
-                <p className="text-[11px] leading-snug text-ui-text-faint">
-                  {session.recordCount} records · {session.malformedLines} malformed ·{" "}
-                  {unknownRecordCount(session)} unknown
-                </p>
-                {/* The manifest's own statement, so what someone reads about the
+              <p className="text-[11px] leading-snug text-ui-text-faint">
+                {session.recordCount} records · {session.malformedLines} malformed ·{" "}
+                {unknownRecordCount(session)} unknown
+              </p>
+              {/* The manifest's own statement, so what someone reads about the
                 Demo Sessions is the file that produced them rather than a copy. */}
-                {demoNote === undefined ? null : (
-                  <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
-                )}
-              </RailPanel>
-            </>
-          )}
-        </aside>
-      </div>
-
-      <Scrubber
-        calls={session.calls}
-        windowSize={windowSize}
-        callIndex={callIndex}
-        onSelectCall={setCallIndex}
-      />
-    </div>
+              {demoNote === undefined ? null : (
+                <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
+              )}
+            </RailPanel>
+          </>
+        )
+      }
+      scrubber={
+        <Scrubber
+          calls={session.calls}
+          windowSize={windowSize}
+          callIndex={callIndex}
+          onSelectCall={setCallIndex}
+        />
+      }
+    />
   );
 };
 

@@ -1,18 +1,17 @@
 /**
- * Empty state: drop a `.jsonl` transcript or a whole project folder, pick
- * files with a picker, or load the bundled Demo Sessions.
+ * Empty state: the panel that invites a transcript — pick files with a picker,
+ * load the bundled Demo Sessions, or drop a file anywhere in the window.
  *
- * A dropped folder is walked recursively (`collectDataTransferEntries`);
+ * The drop itself is not handled here. The whole landing page is the drop
+ * target, so `App`'s root owns the drag handlers and hands this panel `isOver`
+ * to draw with; a second handler on this section would bubble to that root and
+ * import every dropped file twice. What is left here is the pickers, which
+ * forward raw paired files, and the progress and errors it is handed —
  * `partitionEntries` downstream (in `useSessionLoader`) is what tells a
- * transcript apart from a Subagent Session sidecar, so this component only
- * ever forwards raw paired files and reports progress/errors it is handed.
+ * transcript apart from a Subagent Session sidecar.
  */
-import { useId, useState } from "react";
-import {
-  collectDataTransferEntries,
-  collectFileListEntries,
-  type PathedFile,
-} from "./collect-files.ts";
+import { useId } from "react";
+import { collectFileListEntries, type PathedFile } from "./collect-files.ts";
 import type { LoadErrorEntry, PendingEntry } from "./session-loader.ts";
 
 /**
@@ -20,10 +19,21 @@ import type { LoadErrorEntry, PendingEntry } from "./session-loader.ts";
  */
 export type DropZoneProps = {
   /**
-   * Called with every file the user dropped or picked, paired with its path
-   * (folder-relative when it came from a directory).
+   * Called with every file the user picked, paired with its path
+   * (folder-relative when it came from a directory). Dropped files arrive
+   * through `App`'s root instead.
    */
   readonly onFiles: (entries: readonly PathedFile[]) => void;
+  /**
+   * Whether a drag is currently over the window, so the panel can show it is
+   * a target. Purely visual: the drop is handled whether or not this is on.
+   */
+  readonly isOver: boolean;
+  /**
+   * Whether a Demo Session is showing behind the panel, so the note below it
+   * can name that Session rather than describe demo data in the abstract.
+   */
+  readonly previewing: boolean;
   /**
    * Transcripts still parsing.
    */
@@ -48,17 +58,18 @@ export type DropZoneProps = {
 };
 
 /**
- * Drop target and file/folder pickers for one or more transcripts.
+ * The panel that invites a transcript: pickers, the demo, and what is loading.
  */
 export const DropZone = ({
   onFiles,
+  isOver,
+  previewing,
   pending,
   errors,
   onLoadDemo,
   demoProgress,
   demoError,
 }: DropZoneProps) => {
-  const [isOver, setIsOver] = useState(false);
   const filesInputId = useId();
   const folderInputId = useId();
   const isBusy = pending.length > 0 || demoProgress !== undefined;
@@ -67,20 +78,8 @@ export const DropZone = ({
     <div className="flex h-full min-h-full items-center justify-center p-8 font-mono">
       <div className="w-full max-w-[560px] space-y-6 text-center">
         <section
-          onDragOver={(event) => {
-            event.preventDefault();
-            setIsOver(true);
-          }}
-          onDragLeave={() => setIsOver(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setIsOver(false);
-            // Must read `dataTransfer` synchronously in this handler; the walk
-            // of a dropped folder's entries is what stays async.
-            collectDataTransferEntries(event.dataTransfer).then(onFiles);
-          }}
-          className={`rounded border border-dashed px-6 py-14 transition-colors ${
-            isOver ? "border-ui-focus bg-ui-panel/40" : "border-ui-border-strong bg-ui-canvas"
+          className={`rounded border border-dashed px-6 py-14 backdrop-blur-sm transition-colors ${
+            isOver ? "border-ui-focus bg-ui-panel/80" : "border-ui-border-strong bg-ui-canvas/90"
           }`}
         >
           <div className="text-ui-text">
@@ -93,7 +92,7 @@ export const DropZone = ({
                 : "drop a .jsonl transcript"}
           </div>
           <div className="mt-2 text-xs text-ui-text-muted">
-            or a whole project folder — session files from ~/.claude/projects/
+            anywhere in this window — a file, or a whole project folder from ~/.claude/projects/
           </div>
 
           <div className="mt-6 flex justify-center gap-2 text-xs">
@@ -167,10 +166,17 @@ export const DropZone = ({
         </p>
         {/* Short by necessity: the manifest, which carries the full statement,
             is only fetched once someone asks for the Demo Sessions. Its
-            `note` is what the loaded view shows. */}
+            `note` is what the loaded view shows.
+
+            When the preview is up it is named here rather than left to be
+            guessed at: a blurred session behind a drop panel must not be
+            mistaken for anyone's own transcript. */}
         <p className="text-xs leading-relaxed text-ui-text-faint">
-          the demo sessions are synthetic: real record structure and token counts, every word
-          replaced with placeholder text.
+          {previewing
+            ? "the session behind this panel, like every demo session, is"
+            : "the demo sessions are"}{" "}
+          synthetic: real record structure and token counts, every word replaced with placeholder
+          text.
         </p>
       </div>
     </div>

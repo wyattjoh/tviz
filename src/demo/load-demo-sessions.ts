@@ -7,7 +7,7 @@
  * and no demo-only shortcut, so what someone sees is what a dropped
  * transcript produces. Nothing is stored (ADR-0002); a reload fetches again.
  */
-import type { LoadedSession } from "../domain/context.ts";
+import type { LoadedSession, Session } from "../domain/context.ts";
 import { parseTranscriptFile } from "../worker/parse-client.ts";
 import {
   DEMO_DIRECTORY,
@@ -155,4 +155,39 @@ export const loadDemoSessions = async (
   if (selectedId === undefined) return failure("The demo manifest lists no sessions.");
 
   return { ok: true, sessions, selectedId, note: manifest.note };
+};
+
+/**
+ * The Demo Session the landing page shows behind its drop panel.
+ *
+ * The smallest one: it is fetched on every landing view, before anyone has
+ * asked for anything, so it is the one Demo Session whose bytes are spent
+ * unconditionally.
+ */
+export const PREVIEW_SESSION_ID = "small";
+
+/**
+ * Fetches one Demo Session by its manifest id, for the landing page preview.
+ *
+ * Goes through the same manifest and the same Worker client as
+ * {@link loadDemoSessions} — a preview that parsed differently from a dropped
+ * file would stop being evidence that the real thing works.
+ *
+ * Never rejects and never reports: the preview is decoration, so a missing
+ * manifest, an unknown id or an unparsable Session all come back `undefined`
+ * and the landing page simply shows its drop panel on an empty canvas. Only a
+ * demo load someone actually asked for earns an alert.
+ *
+ * @param id - Manifest id of the Demo Session to fetch.
+ * @returns The parsed Session, or `undefined` if anything went wrong.
+ */
+export const loadPreviewSession = async (id: string): Promise<Session | undefined> => {
+  const manifest = await fetchManifest();
+  if (typeof manifest === "string") return undefined;
+
+  const entry = manifest.sessions.find((session) => session.id === id);
+  if (entry === undefined) return undefined;
+
+  const loaded = await loadOne(entry);
+  return typeof loaded === "string" ? undefined : loaded.session;
 };

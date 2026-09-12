@@ -54,13 +54,58 @@ Scrubber's chart — never by tag.
 ## Layout
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
-`wyattjoh/ui-prototype`; see its `src/prototype/README.md`), in four regions established
-once in `src/App.tsx`: a menu bar carrying the File menu, a Session strip
-(`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the flexible left, fixed
-right rail holding the legend-filters, the Context Window panel and the docked Inspector —
-and the Scrubber across the bottom. The grid pane is the scroll container, and both of its dimensions drive
-`ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill it and hands back the column
-count. Fill a region; do not restructure the shell.
+`wyattjoh/ui-prototype`; see its `src/prototype/README.md`): a menu bar carrying the File
+menu, a Session strip (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the
+flexible left, fixed right rail holding the legend-filters, the Context Window panel and the
+docked Inspector — and the Scrubber across the bottom. The grid pane is the scroll container,
+and both of its dimensions drive `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill
+it and hands back the column count. Fill a region; do not restructure the shell.
+
+The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
+`scrubber`) plus `RailPanel`, with no state and no handlers. The menu bar sits above it, in
+`src/App.tsx`, and so does the drop handling — neither belongs to a Session. Two callers fill
+the same shell, `LoadedSession` and `LandingPreview`, so the geometry cannot drift between
+the interface and the landing state that claims to show it.
+
+## The landing page
+
+**There is no landing view — there is one view in two states.** `src/App.tsx` always renders
+a menu bar over a positioned stack of two layers, each carrying a `data-layer` hook:
+
+- `data-layer="workbench"` — `LoadedSession` for the selected Session, or `LandingPreview`
+  (the same Workbench filled with a Demo Session) when nothing is selected.
+- `data-layer="drop-panel"` — the `DropZone`, `absolute inset-0` over it.
+
+Neither layer ever unmounts. That is the whole point: with nothing loaded the Workbench is
+`opacity-50 blur-[3px]` under an opaque panel, and selecting a Session transitions the blur
+off and the panel's opacity to zero over 500ms (`motion-reduce:transition-none`). A branch
+that swapped one view for the other could only blink. Closing the last Session runs it
+backwards.
+
+**`inert` and `aria-hidden` move between the layers so that exactly one is reachable.**
+Without `inert` on the blurred Workbench, the grid's Cell buttons and the Scrubber's
+transport are real tab stops behind a blur and the first Tab off the menu bar lands in a
+control nobody can see; without it on the faded panel, an invisible layer covering the
+Workbench keeps its tab stops. Tests read which state the app is in off those attributes
+rather than off what is mounted.
+
+The menu bar sits *outside* the stack and stays sharp: the File menu is how a visitor with
+no transcript reaches the Demo Sessions.
+
+Keep the Workbench layer at exactly the size and position the real one gets — no scaling, no
+inset, nothing that would show a layout the loaded view never has. `LandingPreview` uses the
+real components with no-op handlers, including the Session strip's close button, rather than
+omitting controls.
+
+`src/ui/preview-scrub.ts` drives the preview's API Call index: `nextPreviewIndex` and
+`previewStepDelay` are pure so the cycle is testable without a render, and `usePreviewScrub`
+parks on the last API Call with **no timer** under `prefers-reduced-motion`. It is
+deliberately not `Scrubber`'s `usePlayback`, which stops at the end and answers to a
+transport.
+
+**Drag and drop is `App`'s, on the root of both branches** — the whole window is the target,
+and `DropZone` only draws the `isOver` it is handed. A second drop handler anywhere inside
+would bubble to that root and import every dropped file twice.
 
 The Session strip is identity plus one action — file name, id, model, CC version, call
 index, and `close`. It carries no controls: the fill meter and the Context Window override

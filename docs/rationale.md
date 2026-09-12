@@ -53,6 +53,20 @@ content. The hard part was deciding what to keep verbatim: only values identical
 user. The first cut allow-listed by shape instead and leaked real names; review caught it
 before it shipped.
 
+**The landing page is the tool, not a description of it.** A first-time visitor used to get
+a dashed box on an empty canvas and had to decide whether the thing was worth a click
+before seeing anything it did. Now there is no landing page as such — there's one view in
+two states. The app always renders the workbench; with nothing loaded it holds a demo
+session, blurred and stepping through its own API calls so the grid visibly fills, under an
+opaque drop panel. Drop a transcript anywhere in the window and the panel fades out while
+the blur lifts off the session underneath. Because neither layer ever unmounts, that
+transition is a fade rather than a blink, and closing the last session runs it backwards.
+The preview is the smallest demo session, since unlike the rest of the demo it is fetched
+whether or not anyone asked; it's inert and hidden from assistive tech, because scenery
+with tab stops in it is a trap; and it stops animating under `prefers-reduced-motion`. The
+cost is 110 KB on every first view and a preview thin enough — five API calls — that the
+loop reads as a slow pulse rather than a session filling up.
+
 **A fixed-cell grid, not a treemap.** A treemap packs more into each pixel, but the grid is
 the picture Claude Code users already have in their heads, and because every cell is the
 same number of tokens, two sessions or two points in time compare directly by eye. Cells
