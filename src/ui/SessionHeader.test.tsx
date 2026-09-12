@@ -20,6 +20,7 @@ const snapshot: ContextSnapshot = {
   byKind: emptyMessageKindTokens(),
   added: [],
   reset: false,
+  compaction: false,
 };
 
 const session: Session = {

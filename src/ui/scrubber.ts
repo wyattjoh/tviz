@@ -135,4 +135,4 @@ export const bandsFor = (
  * says the drop is a compaction rather than a smaller request.
  */
 export const compactionIndices = (calls: readonly ContextSnapshot[]): readonly number[] =>
-  calls.filter((call) => call.reset).map((call) => call.index);
+  calls.filter((call) => call.compaction).map((call) => call.index);

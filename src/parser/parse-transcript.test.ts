@@ -138,7 +138,7 @@ describe("parseTranscript", () => {
     expect(labels(session.calls[1] as ContextSnapshot)).toContain("Tool use: Bash");
   });
 
-  it("excludes thinking blocks, which are never re-sent", () => {
+  it("excludes thinking blocks, whose text the transcript does not record", () => {
     const session = parseSession([
       Fixture.assistantMessage({
         id: "m1",
@@ -207,7 +207,26 @@ describe("parseTranscript", () => {
       ]);
     });
 
-    it("reads a user text block wrapping a system reminder as Reminder, not User", () => {
+    it("splits a block of prompt plus reminder between User and Reminder", () => {
+      // Claude Code concatenates an injected reminder into the same text block
+      // as the prompt it wraps, and the prompt is usually the bulk of it.
+      // 36k characters of prompt is 9,000 Estimated Tokens; the reminder span,
+      // tags included, is 1,009. The delta is their sum, so scaling is a no-op
+      // and the split is readable.
+      const session = parseSession([
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
+        Fixture.mixedReminderMessage(36_000, 4_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_009 } }),
+      ]);
+
+      const call = session.calls[1] as ContextSnapshot;
+      expect(call.byKind.user).toBe(9_000);
+      expect(call.byKind.reminder).toBe(1_009);
+      expect(labels(call)).toEqual(["User message", "System reminder"]);
+      expect(kindTotal(call)).toBe(call.byCategory.messages);
+    });
+
+    it("reads a block that is only a system reminder as Reminder, not User", () => {
       const session = parseSession([
         Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 10_000 } }),
         Fixture.reminderMessage(4_000),
@@ -256,7 +275,7 @@ describe("parseTranscript", () => {
       expect(second.byKind.assistant).toBe(10_000);
     });
 
-    it("leaves thinking out of every Message Kind, because it is never re-sent", () => {
+    it("leaves thinking out of every Message Kind, having nothing to measure", () => {
       const session = parseSession([
         Fixture.assistantMessage({
           id: "m1",
@@ -486,15 +505,46 @@ describe("parseTranscript", () => {
       expect(session.windowSize).toBe(DEFAULT_CONTEXT_WINDOW);
     });
 
-    it("uses 1M for the Claude 5 family", () => {
-      const session = parseSession([
-        Fixture.assistantMessage({
-          id: "m1",
-          model: "claude-opus-5-20260401",
-          usage: { cacheRead: 10_000 },
-        }),
-      ]);
-      expect(session.windowSize).toBe(LARGE_CONTEXT_WINDOW);
+    it("reads the native window off the model id", () => {
+      // The window is a property of the model, not of the family number:
+      // `claude-opus-4-5` is 200k and `claude-opus-4-6` is 1M.
+      const windows: Readonly<Record<string, number>> = {
+        "claude-opus-5": LARGE_CONTEXT_WINDOW,
+        "claude-sonnet-5": LARGE_CONTEXT_WINDOW,
+        "claude-fable-5-1": LARGE_CONTEXT_WINDOW,
+        "claude-opus-4-8": LARGE_CONTEXT_WINDOW,
+        "claude-opus-4-6": LARGE_CONTEXT_WINDOW,
+        "claude-sonnet-4-6": LARGE_CONTEXT_WINDOW,
+        "claude-opus-4-5-20251101": DEFAULT_CONTEXT_WINDOW,
+        "claude-sonnet-4-5-20250929": DEFAULT_CONTEXT_WINDOW,
+        "claude-haiku-4-5-20251001": DEFAULT_CONTEXT_WINDOW,
+        "claude-something-nobody-has-shipped": DEFAULT_CONTEXT_WINDOW,
+      };
+
+      for (const [model, windowSize] of Object.entries(windows)) {
+        Fixture.resetFixtureSequence();
+        const session = parseSession([
+          Fixture.assistantMessage({ id: "m1", model, usage: { cacheRead: 10_000 } }),
+        ]);
+        expect.soft(session.windowSize, model).toBe(windowSize);
+      }
+    });
+
+    it("reads through the release stamp and the [1m] suffix Claude Code strips", () => {
+      for (const model of [
+        "claude-opus-5-20260401",
+        "claude-opus-5[1m]",
+        "claude-opus-5-v2",
+        "claude-opus-5-v1:0",
+        "us.anthropic.claude-opus-5",
+        "anthropic.claude-opus-5-20260401",
+      ]) {
+        Fixture.resetFixtureSequence();
+        const session = parseSession([
+          Fixture.assistantMessage({ id: "m1", model, usage: { cacheRead: 10_000 } }),
+        ]);
+        expect.soft(session.windowSize, model).toBe(LARGE_CONTEXT_WINDOW);
+      }
     });
 
     it("uses 1M for a [1m] model id", () => {
@@ -517,7 +567,7 @@ describe("parseTranscript", () => {
   });
 
   describe("compaction", () => {
-    it("resets every Category but System when the context shrinks", () => {
+    it("resets every Category but System at a compaction", () => {
       const session = parseSession([
         Fixture.skillListing(4_000),
         Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
@@ -529,10 +579,102 @@ describe("parseTranscript", () => {
 
       const compacted = session.calls[2] as ContextSnapshot;
       expect(compacted.reset).toBe(true);
+      expect(compacted.compaction).toBe(true);
       expect(compacted.byCategory.system).toBe(session.calls[0]?.byCategory.system);
       expect(compacted.byCategory.skills).toBe(0);
       expect(categoryTotal(compacted)).toBe(compacted.measuredTotal);
       expect(session.calls[1]?.reset).toBe(false);
+    });
+
+    it("resets on a compact_boundary Record, without the summary's flag", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.compactBoundary(),
+        Fixture.userMessage(8_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 30_000 } }),
+      ]);
+
+      const compacted = session.calls[1] as ContextSnapshot;
+      expect(compacted.reset).toBe(true);
+      expect(compacted.compaction).toBe(true);
+      expect(compacted.byCategory.skills).toBe(0);
+      expect(categoryTotal(compacted)).toBe(compacted.measuredTotal);
+      // The boundary is a `system` Record, and every other `system` subtype is
+      // still bookkeeping — decoding this one must not start counting the rest.
+      expect(session.unknownRecordTypes).toEqual({});
+    });
+
+    it("drops what was queued before the compaction, which it discarded", () => {
+      const records = [
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 }, textCharacters: 400 }),
+        // The turn the compaction threw away: a tool call, its 400k result, and
+        // a reminder alongside it. None of it is in the new window.
+        Fixture.toolResult(400_000),
+        Fixture.otherAttachment("task_reminder", 2_000),
+      ] as const;
+
+      // Both markers must clear the queue: the boundary Record, and — for the
+      // transcripts that carry only it — the summary's own flag.
+      const markers = [
+        () => [Fixture.compactBoundary(), Fixture.userMessage(4_000)],
+        () => [Fixture.compactSummary(4_000)],
+      ];
+
+      for (const marker of markers) {
+        Fixture.resetFixtureSequence();
+        const session = parseSession([
+          ...records,
+          ...marker(),
+          Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 30_000 } }),
+        ]);
+
+        const compacted = session.calls[1] as ContextSnapshot;
+        expect(compacted.reset).toBe(true);
+        // System, then the summary and nothing else: the whole post-compaction
+        // budget belongs to what actually survived.
+        expect(labels(compacted)).toEqual([
+          "System prompt, built-in tools, root CLAUDE.md",
+          "User message",
+        ]);
+        expect(categoryTotal(compacted)).toBe(compacted.measuredTotal);
+      }
+    });
+
+    it("lets System climb back after a reset too small to hold it", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.compactSummary(400),
+        // Smaller than the 49k System derived on the first call, so the reset
+        // can only draw part of it.
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 20_000 } }),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 70_000 } }),
+      ]);
+
+      const derived = session.calls[0]?.byCategory.system as number;
+      expect(session.calls[1]?.byCategory.system).toBe(20_000);
+      // The window at call 3 holds all of System again, so the grid must say so
+      // rather than leaving the difference sitting in Messages.
+      expect(session.calls[2]?.byCategory.system).toBe(derived);
+      for (const call of session.calls) {
+        expect.soft(categoryTotal(call), `call ${call.index}`).toBe(call.measuredTotal);
+      }
+    });
+
+    it("rewrites the grid on a shrinking total but does not call it a compaction", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 120_000 } }),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m2", usage: { cacheRead: 60_000 } }),
+      ]);
+
+      const shrunk = session.calls[1] as ContextSnapshot;
+      expect(shrunk.reset).toBe(true);
+      expect(shrunk.compaction).toBe(false);
+      expect(categoryTotal(shrunk)).toBe(shrunk.measuredTotal);
     });
 
     it("holds the per-call invariants across a compaction and the calls after it", () => {
@@ -589,8 +731,59 @@ describe("parseTranscript", () => {
 
       const compacted = session.calls[1] as ContextSnapshot;
       expect(compacted.reset).toBe(true);
+      expect(compacted.compaction).toBe(true);
       expect(compacted.byCategory.skills).toBe(0);
       expect(categoryTotal(compacted)).toBe(compacted.measuredTotal);
+    });
+  });
+
+  describe("Records that are not API Calls", () => {
+    it("ignores an assistant Record whose measured total is zero", () => {
+      const session = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.syntheticAssistantMessage("m2"),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 60_000 } }),
+      ]);
+
+      expect(session.calls).toHaveLength(2);
+      expect(session.calls.map((call) => call.measuredTotal)).toEqual([50_000, 60_000]);
+      expect(session.calls.map((call) => call.reset)).toEqual([false, false]);
+    });
+
+    it("keeps System intact across an API error, rather than clamping it to zero", () => {
+      const withError = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.syntheticAssistantMessage("m2"),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 60_000 } }),
+      ]);
+      const withoutError = parseSession([
+        Fixture.skillListing(4_000),
+        Fixture.assistantMessage({ id: "m1", usage: { cacheRead: 50_000 } }),
+        Fixture.userMessage(2_000),
+        Fixture.assistantMessage({ id: "m3", usage: { cacheRead: 60_000 } }),
+      ]);
+
+      expect(withError.calls.map((call) => call.byCategory)).toEqual(
+        withoutError.calls.map((call) => call.byCategory),
+      );
+      expect(withError.calls[1]?.byCategory.system).toBe(withError.calls[0]?.byCategory.system);
+    });
+
+    it("does not take the model id from a synthetic Record", () => {
+      const session = parseSession([
+        Fixture.syntheticAssistantMessage("m1"),
+        Fixture.assistantMessage({
+          id: "m2",
+          model: "claude-opus-5",
+          usage: { cacheRead: 50_000 },
+        }),
+      ]);
+
+      expect(session.model).toBe("claude-opus-5");
     });
   });
 

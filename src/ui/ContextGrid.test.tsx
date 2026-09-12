@@ -50,6 +50,7 @@ const snapshotOf = (
   byKind: emptyMessageKindTokens(),
   added: items,
   reset: false,
+  compaction: false,
 });
 
 /**

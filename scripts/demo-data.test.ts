@@ -168,11 +168,12 @@ describe("bundled Demo Sessions", () => {
   });
 
   describe("the descriptions someone reads", () => {
-    it("small: almost two thirds of a 200k window is System", () => {
+    it("small: almost two thirds of what it reached is System", () => {
       const session = sessionFor("small");
       const call = lastCall(session);
 
-      expect(session.windowSize).toBe(200_000);
+      expect(session.windowSize).toBe(1_000_000);
+      expect(call.measuredTotal).toBeLessThan(50_000);
       expect(call.byCategory.system / call.measuredTotal).toBeGreaterThan(0.6);
       expect(call.byCategory.system / call.measuredTotal).toBeLessThan(0.7);
     });
@@ -186,25 +187,30 @@ describe("bundled Demo Sessions", () => {
       expect(withEveryCategory).toEqual(["medium"]);
     });
 
-    it("medium: sixty-odd API Calls fill about half a 200k window", () => {
+    it("medium: sixty-odd API Calls reach a tenth of a 1M window", () => {
       const session = sessionFor("medium");
 
-      expect(session.windowSize).toBe(200_000);
-      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.4);
-      expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.6);
+      expect(session.windowSize).toBe(1_000_000);
+      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.08);
+      expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.12);
     });
 
-    it("large: four compactions along the way through a 1M window", () => {
+    it("large: four drops on the way through half a 1M window", () => {
       const session = sessionFor("large");
 
       expect(session.windowSize).toBe(1_000_000);
+      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.3);
       expect(session.calls.filter((call) => call.reset)).toHaveLength(4);
     });
 
-    it("the descriptions accurately identify which sessions compact", () => {
-      for (const id of ["small", "large"]) {
-        const resets = sessionFor(id).calls.filter((call) => call.reset).length;
-        expect.soft(resets, `${id} has ${resets} compactions`).toBe(id === "large" ? 4 : 0);
+    // None of the bundled Demo Sessions carries a compaction marker, so none of
+    // them may describe itself as compacting: the four drops in `large` are
+    // Claude Code shedding older context, which the Scrubber must not mark.
+    it("the descriptions do not claim a compaction none of them records", () => {
+      for (const entry of manifest.sessions) {
+        const compactions = sessionFor(entry.id).calls.filter((call) => call.compaction).length;
+        expect.soft(compactions, `${entry.id}`).toBe(0);
+        expect.soft(entry.description, `${entry.id}`).not.toMatch(/\bcompactions\b/);
       }
     });
   });

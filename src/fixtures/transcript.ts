@@ -157,6 +157,27 @@ export const reminderMessage = (characters: number): FixtureRecord => ({
 });
 
 /**
+ * A `user` Record whose single text block holds a prompt *and* an injected
+ * reminder, the way Claude Code concatenates them.
+ */
+export const mixedReminderMessage = (
+  promptCharacters: number,
+  reminderCharacters: number,
+): FixtureRecord => ({
+  ...next(),
+  type: "user",
+  message: {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: `${filler(promptCharacters)}\n<system-reminder>${filler(reminderCharacters)}</system-reminder>`,
+      },
+    ],
+  },
+});
+
+/**
  * Measured usage numbers for one API Call.
  */
 export type FixtureUsage = {
@@ -202,7 +223,8 @@ export type AssistantOptions = {
    */
   readonly toolUse?: string | undefined;
   /**
-   * Characters of `thinking`, which is never re-sent.
+   * Characters of `thinking` text. Real transcripts almost always record this
+   * as empty, so the parser gives it no weight.
    */
   readonly thinkingCharacters?: number | undefined;
 };
@@ -246,6 +268,39 @@ export const assistantMessage = (options: AssistantOptions): FixtureRecord => {
     },
   };
 };
+
+/**
+ * An `assistant` Record of the kind Claude Code writes for an API error or an
+ * interrupt: a real `usage` object whose input fields are all zero, under the
+ * `<synthetic>` model id. It is not an API Call.
+ */
+export const syntheticAssistantMessage = (id: string, characters = 40): FixtureRecord => ({
+  ...next(),
+  type: "assistant",
+  isApiErrorMessage: true,
+  requestId: `req_${id}`,
+  message: {
+    id,
+    role: "assistant",
+    model: "<synthetic>",
+    content: [{ type: "text", text: filler(characters) }],
+    usage: { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+  },
+});
+
+/**
+ * The `compact_boundary` Record Claude Code writes when it compacts, ahead of
+ * the summary — the authoritative marker the parser resets on.
+ */
+export const compactBoundary = (trigger: "auto" | "manual" = "auto"): FixtureRecord => ({
+  ...next(),
+  type: "system",
+  subtype: "compact_boundary",
+  isMeta: true,
+  level: "info",
+  content: "",
+  compactMetadata: { trigger, preTokens: 0 },
+});
 
 /**
  * A `user` Record flagged as the summary Claude Code writes after a compaction.

@@ -85,7 +85,7 @@ export const MESSAGE_KIND_LABELS: Readonly<Record<MessageKind, string>> = {
 export const MESSAGE_KIND_DESCRIPTIONS: Readonly<Record<MessageKind, string>> = {
   user: "Prompts you typed, plus any images pasted or dropped into the conversation.",
   assistant:
-    "What the model wrote back, including its tool calls; thinking is not re-sent and never counted.",
+    "What the model wrote back, including its tool calls; thinking is logged without its text, so it cannot be counted separately.",
   toolResult: "What tools returned to the model — the file reads, searches and command output.",
   reminder: "The <system-reminder> blocks the harness injects around your turns.",
 };
@@ -198,10 +198,26 @@ export type ContextSnapshot = {
    */
   readonly added: readonly ContextItem[];
   /**
-   * True when the context shrank (compaction): every item except System was
-   * dropped and attribution restarted from this call.
+   * True when every item except System was dropped and attribution restarted
+   * from this call.
+   *
+   * Either the transcript recorded a compaction, or the API Call simply came
+   * back carrying less context than the one before it — which also rewrites the
+   * window, but without saying what left it. {@link ContextSnapshot.compaction}
+   * is what tells the two apart.
    */
   readonly reset: boolean;
+  /**
+   * True when this reset was a compaction Claude Code recorded, rather than a
+   * request that happened to carry less context.
+   *
+   * Only a compaction is worth marking on the Scrubber, and only the transcript
+   * can say one happened: a `compact_boundary` Record, or the `isCompactSummary`
+   * flag on the summary that follows it. Inferring one from a shrinking total
+   * marks cache churn and dropped tool results as compactions, which is what
+   * this flag exists to stop.
+   */
+  readonly compaction: boolean;
 };
 
 /**

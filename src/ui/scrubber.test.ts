@@ -35,6 +35,7 @@ const snapshot = (
     byKind: emptyMessageKindTokens(),
     added: [],
     reset,
+    compaction: reset,
   };
 };
 

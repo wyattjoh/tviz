@@ -21,6 +21,7 @@ const call = (measuredTotal: number): ContextSnapshot => ({
   byKind: emptyMessageKindTokens(),
   added: [],
   reset: false,
+  compaction: false,
 });
 
 const session = (id: string, fileName: string, peak: number): Session => ({

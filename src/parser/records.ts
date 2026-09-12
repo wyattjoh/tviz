@@ -107,6 +107,27 @@ export const AttachmentRecord = Schema.Struct({
 });
 
 /**
+ * The `compact_boundary` Record Claude Code writes when it compacts a Session.
+ *
+ * This is the authoritative compaction marker: it is written before the
+ * `isCompactSummary` user Record that carries the summary, and it is the only
+ * signal that fires when a compaction *grows* the measured total rather than
+ * shrinking it. Every other `system` subtype stays bookkeeping
+ * ({@link METADATA_RECORD_TYPES}), so the `subtype` literal is what keeps this
+ * Record out of the unknown tally without admitting the rest.
+ */
+export const CompactBoundaryRecord = Schema.Struct({
+  type: Schema.Literal("system"),
+  subtype: Schema.Literal("compact_boundary"),
+  uuid: Schema.optional(Schema.String),
+  timestamp: Schema.optional(Schema.String),
+  version: Schema.optional(Schema.String),
+  sessionId: Schema.optional(Schema.String),
+  isCompactSummary: Schema.optional(Schema.Boolean),
+  isSidechain: Schema.optional(Schema.Boolean),
+});
+
+/**
  * Any Record at all, used to name the types the parser skipped.
  */
 export const AnyRecord = Schema.Struct({
@@ -160,7 +181,10 @@ export const METADATA_RECORD_TYPES: ReadonlySet<string> = new Set([
   "result",
   "started",
   // `system` carries `subtype` (`stop_hook_summary`, `turn_duration`,
-  // `local_command`, `compact_boundary`, …); none of them is sent to the API.
+  // `local_command`, `away_summary`, …); none of them is sent to the API. The
+  // one exception is `compact_boundary`, which {@link CompactBoundaryRecord}
+  // decodes before this list is consulted: it is not context either, but it is
+  // the marker that says the context was just rewritten.
   "system",
 ]);
 
@@ -170,9 +194,28 @@ export const METADATA_RECORD_TYPES: ReadonlySet<string> = new Set([
 export const isMetadataRecordType = (type: string): boolean => METADATA_RECORD_TYPES.has(type);
 
 /**
+ * The `type` values {@link KnownRecord} accounts for.
+ *
+ * Used to tell "a Record type this parser has never seen" apart from "a type it
+ * knows whose body it could not decode" — the second is the one that can lose an
+ * API Call, so the two must not share a tally.
+ */
+export const ACCOUNTED_RECORD_TYPES: ReadonlySet<string> = new Set([
+  "assistant",
+  "attachment",
+  "system",
+  "user",
+]);
+
+/**
  * The Records the parser knows how to account for.
  */
-export const KnownRecord = Schema.Union([AssistantRecord, UserRecord, AttachmentRecord]);
+export const KnownRecord = Schema.Union([
+  AssistantRecord,
+  UserRecord,
+  AttachmentRecord,
+  CompactBoundaryRecord,
+]);
 
 /**
  * A decoded Record the parser accounts for.
@@ -193,6 +236,11 @@ export type UserRecord = typeof UserRecord.Type;
  * A decoded `attachment` Record.
  */
 export type AttachmentRecord = typeof AttachmentRecord.Type;
+
+/**
+ * A decoded `compact_boundary` Record.
+ */
+export type CompactBoundaryRecord = typeof CompactBoundaryRecord.Type;
 
 /**
  * A decoded Record of a type the parser does not account for.

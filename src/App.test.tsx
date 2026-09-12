@@ -992,8 +992,7 @@ const DEMO_MANIFEST = {
 const DEMO_SHAPES: Readonly<Record<string, { readonly tokens: number; readonly model: string }>> = {
   "small.jsonl": { tokens: 20_000, model: "claude-opus-4-7" },
   "medium.jsonl": { tokens: 60_000, model: "claude-opus-4-8" },
-  // A Claude 5 model, so this Demo Session is the one on a 1M window.
-  "large.jsonl": { tokens: 90_000, model: "claude-fable-5" },
+  "large.jsonl": { tokens: 290_000, model: "claude-fable-5" },
 };
 
 const demoTranscript = (file: string): string => {
@@ -1091,7 +1090,7 @@ describe("App demo mode", () => {
     expect(selected).toHaveLength(1);
     expect(selected[0]?.textContent).toContain("Medium session");
     expect(contextGrid().getAttribute("aria-label")).toBe(
-      "Context grid: 60.0k of 200.0k tokens used",
+      "Context grid: 60.0k of 1000.0k tokens used",
     );
   });
 
@@ -1129,7 +1128,7 @@ describe("App demo mode", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Large session \(demo\)/ }));
 
     expect(contextGrid().getAttribute("aria-label")).toBe(
-      "Context grid: 90.0k of 1000.0k tokens used",
+      "Context grid: 290.0k of 1000.0k tokens used",
     );
   });
 

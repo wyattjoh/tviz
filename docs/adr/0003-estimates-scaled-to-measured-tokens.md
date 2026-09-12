@@ -9,4 +9,5 @@ No browser tokenizer exists for Claude models, and `chars / 4` undercounts code-
 ## Consequences
 
 - Items added in the same API Call share one scaling factor; a large tool result and a short user message in the same call keep their relative proportion, not their absolute accuracy.
-- Compaction shows as a negative delta; the parser must reset attribution from the compaction summary rather than scale a negative number.
+- A delta is only meaningful while the window grows. When a call comes back carrying less than the one before it, there is no negative amount to scale: attribution restarts from that call, keeping System. That restart is not the same thing as a compaction, and is not evidence of one — see ADR-0008.
+- An API Call is a call that measured something. Claude Code logs interrupts and API errors as assistant Records carrying a complete `usage` whose input fields are all zero; scaling against those produces an empty snapshot and a Measured Total that can only fall, so they are not admitted.

@@ -41,7 +41,7 @@ Token counts reported by the API for an API Call; exact.
 _Avoid_: actual tokens, real tokens
 
 **Estimated Tokens**:
-Token counts derived from text length and scaled so that estimates within an API Call sum to its Measured Tokens.
+Token counts derived from text length and scaled so that estimates within an API Call sum to its Measured Tokens. The first API Call is the exception: there they stand as derived and the leftover becomes System, which is what makes System a remainder.
 _Avoid_: approximate tokens, guessed tokens
 
 **Category**:
@@ -55,6 +55,18 @@ _Avoid_: System prompt (too narrow), overhead, remainder
 **Message Kind**:
 A sub-division of the Messages Category: User, Assistant, Tool Result, Reminder.
 _Avoid_: message type, role
+
+**Compaction**:
+The event where Claude Code replaces the conversation with a summary. The transcript
+records it; it is never inferred from the numbers, because a Compaction does not always
+shrink the Measured Tokens and a shrink is usually not a Compaction.
+_Avoid_: summarization, truncation, context reset
+
+**Reset**:
+An API Call that restarts attribution: everything but System left the Context Window and
+the grid is rewritten from here. A Compaction is one cause; a request that simply carried
+less context is the other.
+_Avoid_: compaction (only one kind of Reset is one), clear, restart
 
 ### Visualization
 

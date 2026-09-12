@@ -26,6 +26,7 @@ import {
 import {
   type AttachmentRecord,
   type ContentBlock,
+  ACCOUNTED_RECORD_TYPES,
   decodeAnyRecord,
   decodeKnownRecord,
   isMetadataRecordType,
@@ -114,6 +115,66 @@ const UNATTRIBUTED_LABEL = "Unattributed context";
 const SYSTEM_REMINDER_MARKER = "<system-reminder>";
 
 /**
+ * One `<system-reminder>` block, which Claude Code concatenates into the same
+ * text block as the prompt it wraps rather than sending separately.
+ */
+const SYSTEM_REMINDER_SPAN = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+
+/**
+ * Splits a user text block into its prompt parts and its injected reminders.
+ *
+ * They arrive in one block, so charging the whole block to whichever it
+ * *contains* is wrong in both directions — and lopsidedly so: across the corpus
+ * 96.7% of the characters in a reminder-bearing block are the person's own
+ * prompt. Reading the block as a Reminder therefore empties the User Kind into
+ * the Reminder one, which are two of the four the legend exists to compare.
+ *
+ * A marker with no closing tag falls back to the whole block as a Reminder,
+ * which is the older, safer reading of a block this cannot take apart.
+ */
+const userTextPending = (text: string): PendingItem[] => {
+  const wholeBlock = (kind: MessageKind, label: string): PendingItem[] =>
+    text.length === 0 ? [] : [{ category: "messages", kind, label, weight: estimateTokens(text) }];
+
+  if (!text.includes(SYSTEM_REMINDER_MARKER)) return wholeBlock("user", "User message");
+
+  const items: PendingItem[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(SYSTEM_REMINDER_SPAN)) {
+    const start = match.index;
+    const prompt = text.slice(cursor, start).trim();
+    if (prompt.length > 0) {
+      items.push({
+        category: "messages",
+        kind: "user",
+        label: "User message",
+        weight: estimateTokens(prompt),
+      });
+    }
+    items.push({
+      category: "messages",
+      kind: "reminder",
+      label: "System reminder",
+      weight: estimateTokens(match[0]),
+    });
+    cursor = start + match[0].length;
+  }
+
+  if (items.length === 0) return wholeBlock("reminder", "System reminder");
+
+  const trailing = text.slice(cursor).trim();
+  if (trailing.length > 0) {
+    items.push({
+      category: "messages",
+      kind: "user",
+      label: "User message",
+      weight: estimateTokens(trailing),
+    });
+  }
+  return items;
+};
+
+/**
  * Reads a string property from an unknown value without asserting its type.
  */
 const readString = (value: unknown, key: string): string | undefined => {
@@ -184,23 +245,22 @@ const attachmentPending = (record: AttachmentRecord): PendingItem => {
         category: "messages",
         kind: "reminder",
         label: attachment.type,
+        // The whole object on purpose. Unlike the named arms above, these kinds
+        // keep their payload under no shared key — `stdout` and `command` for
+        // `hook_success`, `text` for `total_tokens_reminder`, `content` for
+        // `task_reminder`, `snippet` for `edited_text_file`, `files` for
+        // `diagnostics` — so any fixed key list would silently weigh most of
+        // them at zero. The envelope keys it over-counts are a few characters
+        // against payloads in the hundreds of thousands.
         weight: estimateJsonTokens(attachment),
       };
   }
 };
 
-const userBlockPending = (block: ContentBlock): PendingItem | undefined => {
+const userBlockPending = (block: ContentBlock): PendingItem | PendingItem[] | undefined => {
   switch (block.type) {
-    case "text": {
-      const text = block.text ?? "";
-      const isReminder = text.includes(SYSTEM_REMINDER_MARKER);
-      return {
-        category: "messages",
-        kind: isReminder ? "reminder" : "user",
-        label: isReminder ? "System reminder" : "User message",
-        weight: estimateTokens(text),
-      };
-    }
+    case "text":
+      return userTextPending(block.text ?? "");
     case "tool_result":
       return {
         category: "messages",
@@ -215,7 +275,7 @@ const userBlockPending = (block: ContentBlock): PendingItem | undefined => {
         label: "Image",
         weight: IMAGE_ESTIMATED_TOKENS,
       };
-    // `thinking` is not re-sent on the next API Call, so it never enters the context.
+    // See {@link assistantBlockPending}: there is nothing to measure.
     case "thinking":
       return undefined;
     default:
@@ -244,6 +304,11 @@ const assistantBlockPending = (block: ContentBlock): PendingItem | undefined => 
         label: block.name === undefined ? "Tool use" : `Tool use: ${block.name}`,
         weight: estimateJsonTokens({ name: block.name, input: block.input }),
       };
+    // A `thinking` block is recorded without its text: 93% of them carry an
+    // empty `thinking` string against a full `signature`. There is nothing to
+    // estimate, so it takes no weight — whatever it cost is still inside the
+    // call's Measured Tokens and is shared out across the items that *can* be
+    // measured (ADR-0003).
     case "thinking":
       return undefined;
     default:
@@ -262,19 +327,18 @@ const messagePendingItems = (
 ): PendingItem[] => {
   if (content === undefined) return [];
   if (Predicate.isString(content)) {
-    const isReminder = content.includes(SYSTEM_REMINDER_MARKER);
+    if (role === "user") return userTextPending(content);
     return [
       {
         category: "messages",
-        kind: role === "user" ? (isReminder ? "reminder" : "user") : "assistant",
-        label:
-          role === "user" ? (isReminder ? "System reminder" : "User message") : "Assistant message",
+        kind: "assistant",
+        label: "Assistant message",
         weight: estimateTokens(content),
       },
     ];
   }
   const toPending = role === "user" ? userBlockPending : assistantBlockPending;
-  return content.map(toPending).filter((item) => item !== undefined);
+  return content.flatMap((block) => toPending(block) ?? []);
 };
 
 /**
@@ -322,7 +386,13 @@ const decodeTranscript = (fileName: string, text: string): DecodedTranscript => 
       recognisedRecords += 1;
       continue;
     }
-    unknownRecordTypes[type] = (unknownRecordTypes[type] ?? 0) + 1;
+    // A type the parser *does* account for that still would not decode is a
+    // different failure from an unheard-of type: the body moved, not the
+    // vocabulary, and an `assistant` that fails here takes its `usage` — a whole
+    // API Call — with it. Tallying it under its bare name would hide that inside
+    // a count that is supposed to mean "a Record type we have never seen".
+    const tally = ACCOUNTED_RECORD_TYPES.has(type) ? `${type} (undecodable)` : type;
+    unknownRecordTypes[tally] = (unknownRecordTypes[tally] ?? 0) + 1;
   }
 
   return {
@@ -356,8 +426,8 @@ const parentSessionRecords = (records: readonly KnownRecord[]): readonly KnownRe
  *
  * Items seen since the previous call are scaled so their Estimated Tokens sum to
  * the measured delta (ADR-0003); on the first call the leftover becomes System
- * (ADR-0001); a shrinking total is a compaction and resets everything but
- * System.
+ * (ADR-0001); a compaction — or, failing a marker, a total that came back
+ * smaller — resets everything but System.
  */
 const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapshot[] => {
   const calls: ContextSnapshot[] = [];
@@ -368,6 +438,24 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
   let previousTotal = 0;
   let currentCallId: string | undefined;
   let compactionAhead = false;
+
+  /**
+   * Notes that the next API Call is the first one after a compaction.
+   *
+   * Compaction throws the conversation away, so anything queued since the last
+   * API Call went with it: the final assistant turn, its tool calls, their
+   * results and any attachments alongside them were all in the pre-compaction
+   * window and are not in the new one. Leaving them queued would scale them into
+   * the post-compaction budget, where they were never sent.
+   */
+  const markCompaction = () => {
+    if (compactionAhead) return;
+    compactionAhead = true;
+    // Before the first API Call there is no turn to have lost: the queue is the
+    // Session's opening context, and a transcript that begins already compacted
+    // still has to derive System from it.
+    if (calls.length > 0) pending = [];
+  };
 
   const commit = (added: readonly ContextItem[]) => {
     for (const item of added) {
@@ -385,7 +473,18 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
     }));
 
   for (const record of records) {
-    if (record.isCompactSummary === true) compactionAhead = true;
+    // `compact_boundary` is the authoritative marker: it comes before the
+    // summary, and it fires even when the compaction left the measured total
+    // larger than it found it. Matched on the subtype rather than on
+    // `type === "system"`, so a second `system` Record added to `KnownRecord`
+    // later is not silently read as a compaction.
+    if (record.type === "system") {
+      if (record.subtype === "compact_boundary") markCompaction();
+      continue;
+    }
+
+    // The fallback, for the transcripts that carry the summary's flag alone.
+    if (record.isCompactSummary === true) markCompaction();
 
     if (record.type === "attachment") {
       pending.push(attachmentPending(record));
@@ -398,18 +497,30 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
     }
 
     const usage = record.message.usage;
+    const measuredTotal =
+      usage === undefined
+        ? 0
+        : (usage.input_tokens ?? 0) +
+          (usage.cache_read_input_tokens ?? 0) +
+          (usage.cache_creation_input_tokens ?? 0);
     const callId = record.message.id ?? record.requestId ?? record.uuid;
 
     // Consecutive assistant Records sharing one `message.id` are one API Call.
-    if (usage !== undefined && (callId === undefined || callId !== currentCallId)) {
+    //
+    // A measured total of zero is not an API Call at all: Claude Code writes
+    // assistant Records for interrupts and API errors (`model: "<synthetic>"`)
+    // carrying a complete `usage` whose input fields are all zero. Admitting
+    // them drew an empty Context Snapshot and, because the total only ever goes
+    // down from there, wiped the Session's System remainder for good.
+    if (measuredTotal > 0 && (callId === undefined || callId !== currentCallId)) {
       currentCallId = callId;
-      const measuredTotal =
-        (usage.input_tokens ?? 0) +
-        (usage.cache_read_input_tokens ?? 0) +
-        (usage.cache_creation_input_tokens ?? 0);
       const weights = pending.map((item) => item.weight);
       const isFirstCall = calls.length === 0;
-      const isReset = !isFirstCall && (compactionAhead || measuredTotal < previousTotal);
+      const isCompaction = !isFirstCall && compactionAhead;
+      // Without a marker, a smaller total is all there is to go on. It still
+      // rewrites the grid, but it is a request that carried less context rather
+      // than a compaction, and the Scrubber must not label it as one.
+      const isReset = isCompaction || (!isFirstCall && measuredTotal < previousTotal);
 
       let added: ContextItem[];
       if (isFirstCall) {
@@ -428,16 +539,21 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
           ];
         }
       } else if (isReset) {
-        systemTokens = Math.min(systemTokens, measuredTotal);
         for (const category of Object.keys(cumulativeByCategory) as Category[]) {
           cumulativeByCategory[category] = 0;
         }
         for (const kind of Object.keys(cumulativeByKind) as MessageKind[]) {
           cumulativeByKind[kind] = 0;
         }
-        const available = measuredTotal - systemTokens;
+        // System is derived once, on the first call, and a compaction does not
+        // change what it holds: the system prompt, the tool schemas and the root
+        // CLAUDE.md are re-sent unchanged. Only the *drawn* value is clamped, so
+        // a call too small to hold all of System still reconciles without
+        // ratcheting `systemTokens` itself down for every call after it.
+        const drawnSystem = Math.min(systemTokens, measuredTotal);
+        const available = measuredTotal - drawnSystem;
         added = [
-          { category: "system", kind: undefined, label: SYSTEM_LABEL, tokens: systemTokens },
+          { category: "system", kind: undefined, label: SYSTEM_LABEL, tokens: drawnSystem },
           ...(pending.length > 0
             ? toItems(scaleToTotal(weights, available))
             : available > 0
@@ -452,20 +568,40 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
               : []),
         ];
       } else {
+        // A call that could not hold all of System drew a clamped value, and
+        // System is not re-emitted on an ordinary call — so without this it
+        // would stay short for the rest of the Session and its missing tokens
+        // would read as Messages. Take the shortfall off the delta first; what
+        // is left is scaled across the items as usual, so the total still
+        // reconciles.
+        const shortfall = Math.max(0, systemTokens - cumulativeByCategory.system);
         const delta = measuredTotal - previousTotal;
-        added =
-          pending.length > 0
-            ? toItems(scaleToTotal(weights, delta))
-            : delta > 0
+        const restored = Math.min(shortfall, Math.max(0, delta));
+        const remaining = delta - restored;
+        added = [
+          ...(restored > 0
+            ? [
+                {
+                  category: "system" as const,
+                  kind: undefined,
+                  label: SYSTEM_LABEL,
+                  tokens: restored,
+                },
+              ]
+            : []),
+          ...(pending.length > 0
+            ? toItems(scaleToTotal(weights, remaining))
+            : remaining > 0
               ? [
                   {
                     category: "messages" as const,
                     kind: "assistant" as const,
                     label: UNATTRIBUTED_LABEL,
-                    tokens: delta,
+                    tokens: remaining,
                   },
                 ]
-              : [];
+              : []),
+        ];
       }
 
       commit(added);
@@ -481,6 +617,7 @@ const aggregateCalls = (records: readonly KnownRecord[]): readonly ContextSnapsh
         // the Session quadratic in size and in postMessage cost.
         added,
         reset: isReset,
+        compaction: isCompaction,
       });
 
       pending = [];

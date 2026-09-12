@@ -24,6 +24,7 @@ const call = (index: number, added: readonly ContextItem[], reset = false): Cont
   byKind: emptyMessageKindTokens(),
   added,
   reset,
+  compaction: reset,
 });
 
 const labelsOf = (calls: readonly ContextSnapshot[], index: number): readonly string[] =>

@@ -32,6 +32,7 @@ const snapshot: ContextSnapshot = {
   byKind: { user: 6_000, assistant: 4_000, toolResult: 7_000, reminder: 1_000 },
   added: [],
   reset: false,
+  compaction: false,
 };
 
 const renderLegend = (
