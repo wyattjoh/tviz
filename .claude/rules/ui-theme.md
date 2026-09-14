@@ -54,9 +54,9 @@ Scrubber's chart — never by tag.
 ## Layout
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
-`wyattjoh/ui-prototype`; see its `src/prototype/README.md`): a menu bar carrying the File
-menu, a Session strip (`SessionHeader`), and five slotted regions — grid pane, right rail,
-Inspector, and Scrubber inside the shell, with the Menu Bar above it. From `md` up the body
+`wyattjoh/ui-prototype`; see its `src/prototype/README.md`): one top bar carrying the File
+menu and active Session details, then four slotted regions — grid pane, right rail,
+Inspector, and Scrubber inside the shell. From `md` up the body
 is `minmax(0,1fr)_340px`: the grid and settings rail share the first row, then the Inspector
 and Scrubber each span both columns below them. The grid pane is the scroll container, and
 both of its dimensions drive `ContextGrid`. Fill a region; do not restructure the shell.
@@ -72,7 +72,8 @@ scrolled clear without changing the pane size used by `cell-fit.ts`.
 The two layouts reuse the *same elements* — `absolute md:static` — rather than rendering a
 second shell. The same `<aside>` is the Legend pane on a phone and the right rail on desktop;
 the same Inspector and Scrubber are overlays below `md` and full-width rows from `md` up.
-`LoadedSession` and `LandingPreview` therefore fill one geometry.
+`LoadedSession` and `LandingPreview` therefore fill one geometry. The active Session's
+API Call index is owned by `App`, because both the top bar and the Scrubber read it.
 
 Five constraints:
 
@@ -96,9 +97,10 @@ Five constraints:
   both jobs on one element clips the fades.
 
 The regions live in `src/ui/Workbench.tsx`: a slotted shell
-(`header`/`grid`/`rail`/`inspector`/`scrubber`) plus `RailPanel`. The menu bar and drop
-handling stay above it in `src/App.tsx`. Both `LoadedSession` and `LandingPreview` fill the
-same slots, so the landing state cannot drift from the interface it claims to preview.
+(`grid`/`rail`/`inspector`/`scrubber`) plus `RailPanel`. The menu bar, active Session details,
+and drop handling stay above it in `src/App.tsx`. Both `LoadedSession` and `LandingPreview`
+fill the same slots, so the landing state cannot drift from the interface it claims to
+preview.
 
 ## Touch
 
@@ -139,8 +141,9 @@ no transcript reaches the Demo Sessions.
 
 Keep the Workbench layer at exactly the size and position the real one gets — no scaling, no
 inset, nothing that would show a layout the loaded view never has. `LandingPreview` uses the
-real components with no-op handlers, including the Session strip's close button, rather than
-omitting controls.
+real Workbench components with no-op handlers. Session details stay out of the preview because
+the global top bar only describes a Session the visitor opened; the blurred preview is scenery,
+not an open Session.
 
 `src/ui/preview-scrub.ts` drives the preview's API Call index: `nextPreviewIndex` and
 `previewStepDelay` are pure so the cycle is testable without a render, and `usePreviewScrub`
@@ -152,11 +155,11 @@ transport.
 and `DropZone` only draws the `isOver` it is handed. A second drop handler anywhere inside
 would bubble to that root and import every dropped file twice.
 
-The Session strip is identity plus one action — file name, id, model, CC version, call
-index, and `close`. It carries no controls: the fill meter and the Context Window override
-are `ContextWindowPanel` in the rail, under Categories, because a strip holding both
-wrapped onto two lines on a narrow window and took the height out of the grid. New
-per-Session state belongs in a rail panel, not back in the strip.
+The top bar's Session region is identity plus one action — id, model, CC version, call
+index, `close`, and the filename as its rightmost item. Lower-priority identity fields hide
+at narrow breakpoints so the filename and call index keep their space. It carries no fill
+controls: the fill meter and Context Window override are `ContextWindowPanel` in the rail,
+under Categories. New per-Session state belongs in a rail panel, not back in the top bar.
 
 A rail panel is a reading; a setting that changes it rides in the panel's header row
 through `RailPanel`'s `action` slot, as `ContextWindowMenu`'s cog does — not as a row of

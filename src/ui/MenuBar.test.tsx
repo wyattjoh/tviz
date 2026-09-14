@@ -40,10 +40,12 @@ const session = (id: string, fileName: string, peak: number): Session => ({
 const baseProps = (overrides: Partial<MenuBarProps> = {}): MenuBarProps => ({
   sessions: [],
   selectedId: undefined,
+  selectedSnapshot: undefined,
   pending: [],
   errors: [],
   onFiles: vi.fn(),
   onSelectSession: vi.fn(),
+  onCloseSession: vi.fn(),
   onCloseAll: vi.fn(),
   onLoadDemo: vi.fn(),
   demoBusy: false,
@@ -69,6 +71,31 @@ describe("MenuBar", () => {
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("merges the selected Session into the bar with its filename at the far right", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    const onCloseSession = vi.fn();
+    render(
+      <MenuBar
+        {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
+          selectedSnapshot: selected.calls[0],
+          onCloseSession,
+        })}
+      />,
+    );
+
+    const bar = screen.getByRole("banner", { name: "tviz" });
+    const details = screen.getByRole("region", { name: "Session" });
+    const filename = screen.getByText("session-a.jsonl");
+    expect(bar.contains(details)).toBe(true);
+    expect(filename.className).toContain("ml-auto");
+    expect(details.lastElementChild).toBe(filename);
+
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+    expect(onCloseSession).toHaveBeenCalledWith(selected.id);
+  });
+
   it("closes on a click outside the menu", () => {
     render(
       <div>
@@ -91,8 +118,8 @@ describe("MenuBar", () => {
 
     openMenu();
 
-    const rowA = screen.getByText("session-a.jsonl").closest("button");
-    const rowB = screen.getByText("session-b.jsonl").closest("button");
+    const rowA = screen.getByRole("button", { name: /^session-a\.jsonl/ });
+    const rowB = screen.getByRole("button", { name: /^session-b\.jsonl/ });
     expect(rowA?.textContent).toContain("1 · 45.0k");
     expect(rowB?.getAttribute("aria-pressed")).toBe("true");
     expect(rowA?.getAttribute("aria-pressed")).toBe("false");
@@ -104,7 +131,7 @@ describe("MenuBar", () => {
     render(<MenuBar {...baseProps({ sessions, onSelectSession })} />);
 
     const button = openMenu();
-    fireEvent.click(screen.getByText("session-a.jsonl"));
+    fireEvent.click(screen.getByRole("button", { name: /^session-a\.jsonl/ }));
 
     expect(onSelectSession).toHaveBeenCalledWith("s1");
     expect(button.getAttribute("aria-expanded")).toBe("false");

@@ -37,12 +37,12 @@ const session = (): Session => {
 };
 
 /**
- * Which API Call the preview is showing, read off the Session strip.
+ * Which API Call the preview is showing, read off the Scrubber's slider.
  */
 const shownCall = (): string => {
-  const strip = screen.getByRole("region", { name: "Session" });
-  const match = /call (\d+)\/(\d+)/.exec(strip.textContent ?? "");
-  if (match === null) throw new Error("the Session strip names no API Call");
+  const slider = screen.getByRole("slider", { name: "API call" });
+  const match = /Call (\d+) of (\d+)/.exec(slider.getAttribute("aria-valuetext") ?? "");
+  if (match === null) throw new Error("the Scrubber names no API Call");
   return `${match[1]}/${match[2]}`;
 };
 
@@ -87,13 +87,10 @@ describe("LandingPreview", () => {
   // The whole claim of the landing page is that it is showing the interface,
   // so every region of the Workbench has to be in it. Its controls are real
   // components with no-op handlers rather than omitted: `App` renders the whole
-  // layer `inert`, which is what makes an unreachable control safe, and a
-  // preview missing the strip's close button would be showing a layout the
-  // loaded view never has.
+  // layer `inert`, which is what makes an unreachable control safe.
   it("fills every region of the Workbench", () => {
     render(<LandingPreview session={session()} />);
 
-    expect(screen.getByRole("region", { name: "Session" })).toBeDefined();
     expect(screen.getByRole("main", { name: "Context grid" })).toBeDefined();
     expect(screen.getByRole("complementary", { name: "Legend and Context Window" })).toBeDefined();
     expect(screen.getByRole("region", { name: "Inspector" })).toBeDefined();

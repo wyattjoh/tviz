@@ -3,7 +3,7 @@
  * full the window is at the selected API Call, and the override that decides
  * which window the whole view is measured against.
  *
- * This lived on the right of the Session strip until the strip ran out of room
+ * This lived in the Session strip until that strip ran out of room
  * — on a narrow window the Session's identity and these controls wrapped onto
  * two lines and the grid lost the height. The rail is where the same question
  * is already being answered: the legend's Free space line and this meter are

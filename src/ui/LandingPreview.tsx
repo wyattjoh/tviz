@@ -25,7 +25,6 @@ import { buildCells, type Cell } from "./grid.ts";
 import { Inspector } from "./Inspector.tsx";
 import { usePreviewScrub } from "./preview-scrub.ts";
 import { Scrubber } from "./Scrubber.tsx";
-import { SessionHeader } from "./SessionHeader.tsx";
 import { effectiveWindowSize } from "./window-choice.ts";
 import { RailPanel, Workbench } from "./Workbench.tsx";
 
@@ -69,7 +68,6 @@ export const LandingPreview = ({ session }: LandingPreviewProps) => {
 
   return (
     <Workbench
-      header={<SessionHeader session={session} snapshot={snapshot} onClose={noop} />}
       grid={
         <ContextGrid
           cells={cells}

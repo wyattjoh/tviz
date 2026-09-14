@@ -13,9 +13,10 @@
  */
 import { Check } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { peakMeasuredTotal, type Session } from "../domain/context.ts";
+import { type ContextSnapshot, peakMeasuredTotal, type Session } from "../domain/context.ts";
 import { collectFileListEntries, type PathedFile } from "./collect-files.ts";
 import { formatTokens } from "./format.ts";
+import { SessionHeader } from "./SessionHeader.tsx";
 import type { LoadErrorEntry, PendingEntry } from "./session-loader.ts";
 
 /**
@@ -116,6 +117,10 @@ export type MenuBarProps = {
    */
   readonly selectedId: string | undefined;
   /**
+   * The selected Session's Context Snapshot, when a Session is open.
+   */
+  readonly selectedSnapshot: ContextSnapshot | undefined;
+  /**
    * Transcripts still parsing.
    */
   readonly pending: readonly PendingEntry[];
@@ -131,6 +136,10 @@ export type MenuBarProps = {
    * Switches which Session the grid shows.
    */
   readonly onSelectSession: (id: string) => void;
+  /**
+   * Closes the selected Session while leaving the other Sessions open.
+   */
+  readonly onCloseSession: (id: string) => void;
   /**
    * Closes every open Session and returns to the empty state.
    */
@@ -334,14 +343,25 @@ const FileMenu = ({
 };
 
 /**
- * The menu bar across the top of the Workbench.
+ * The menu bar across the top of the Workbench, including the active Session.
  */
-export const MenuBar = (props: MenuBarProps) => (
-  <header
-    aria-label="tviz"
-    className="flex items-center gap-3 border-b border-ui-border bg-ui-shell px-3 py-1.5"
-  >
-    <span className="text-xs tracking-[0.18em] text-ui-text-faint uppercase">tviz</span>
-    <FileMenu {...props} />
-  </header>
-);
+export const MenuBar = (props: MenuBarProps) => {
+  const selectedSession = props.sessions.find((session) => session.id === props.selectedId);
+
+  return (
+    <header
+      aria-label="tviz"
+      className="flex min-w-0 items-center gap-3 border-b border-ui-border bg-ui-shell px-3 py-1.5"
+    >
+      <span className="shrink-0 text-xs tracking-[0.18em] text-ui-text-faint uppercase">tviz</span>
+      <FileMenu {...props} />
+      {selectedSession === undefined || props.selectedSnapshot === undefined ? null : (
+        <SessionHeader
+          session={selectedSession}
+          snapshot={props.selectedSnapshot}
+          onClose={() => props.onCloseSession(selectedSession.id)}
+        />
+      )}
+    </header>
+  );
+};

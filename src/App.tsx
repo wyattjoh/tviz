@@ -4,8 +4,8 @@
  *
  * The loaded view fills `Workbench`, the shell the throwaway UI prototype
  * settled on (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a
- * menu bar above it, then a Session strip, the grid pane on the flexible left,
- * a fixed 340px right rail holding the legend and settings, and separate
+ * menu bar carrying the active Session details, the grid pane on the flexible
+ * left, a fixed 340px right rail holding the legend and settings, and separate
  * Inspector and Scrubber rows below. The regions live in `src/ui/Workbench.tsx`
  * so the filter and Inspector work fills a region instead of re-laying out the
  * app — and so the landing page's preview is the same shell rather than a
@@ -35,8 +35,8 @@
  * {@link useSessionLoader} owns the Session list — which files parsed, which
  * are still parsing, which failed, and Subagent Session counts — so switching
  * Sessions from the File menu never re-parses anything. The selected API Call
- * and the Context Window override live here because the strip, the grid, the
- * legend and the Scrubber all read them.
+ * and the Context Window override live here because the menu bar, grid, legend
+ * and Scrubber all read them.
  *
  * The Demo Sessions are fetched by `loadDemoSessions` and then handed to the
  * same Session list as a dropped file, so there is no demo-only view: only
@@ -73,7 +73,6 @@ import { Inspector } from "./ui/Inspector.tsx";
 import { LandingPreview } from "./ui/LandingPreview.tsx";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { Scrubber } from "./ui/Scrubber.tsx";
-import { SessionHeader } from "./ui/SessionHeader.tsx";
 import { useSessionLoader } from "./ui/session-loader.ts";
 import { effectiveWindowSize, type WindowChoice } from "./ui/window-choice.ts";
 import { RailPanel, Workbench } from "./ui/Workbench.tsx";
@@ -119,6 +118,11 @@ const App = () => {
   // override is selected, matching the throwaway prototype this was settled
   // against.
   const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
+  // Paired with its Session so switching files can immediately fall back to
+  // that Session's last API Call without an effect or one stale render.
+  const [callSelection, setCallSelection] = useState<
+    { readonly sessionId: string; readonly index: number } | undefined
+  >(undefined);
   const [demo, setDemo] = useState<DemoState>(NO_DEMO);
   // The landing page's background. Held here rather than in `useSessionLoader`
   // on purpose: it must not be an open Session. Putting it in the loader would
@@ -200,20 +204,39 @@ const App = () => {
   );
 
   const selectedSession = loader.sessions.find((session) => session.id === loader.selectedId);
+  const callIndex =
+    selectedSession === undefined
+      ? undefined
+      : callSelection?.sessionId === selectedSession.id
+        ? callSelection.index
+        : selectedSession.calls.length - 1;
+  const selectedSnapshot =
+    selectedSession === undefined || callIndex === undefined
+      ? undefined
+      : selectedSession.calls[callIndex];
+  const onSelectCall = useCallback(
+    (index: number) => {
+      if (selectedSession === undefined) return;
+      setCallSelection({ sessionId: selectedSession.id, index });
+    },
+    [selectedSession],
+  );
+  const onCloseSession = loader.closeSession;
 
   const menuBarProps = {
     sessions: loader.sessions,
     selectedId: loader.selectedId,
+    selectedSnapshot,
     pending: loader.pending,
     errors: loader.errors,
     onFiles: loader.addEntries,
     onSelectSession: loader.selectSession,
+    onCloseSession,
     onCloseAll,
     onLoadDemo: loadDemo,
     demoBusy: demo.progress !== undefined,
     demoLabels: demo.labels,
   };
-  const onCloseSession = loader.closeSession;
 
   // One view, two states. Nothing loaded shows the Demo Session preview under
   // the drop panel; a Session loaded shows that Session and lets the panel
@@ -269,9 +292,10 @@ const App = () => {
             <LoadedSession
               key={shown.id}
               session={shown}
+              callIndex={callIndex ?? shown.calls.length - 1}
+              onSelectCall={onSelectCall}
               windowChoice={windowChoice}
               onWindowChoiceChange={setWindowChoice}
-              onCloseSession={onCloseSession}
               demoNote={demo.labels.has(shown.id) ? demo.note : undefined}
             />
           )}
@@ -306,12 +330,10 @@ const App = () => {
 
 type LoadedSessionProps = {
   readonly session: Session;
+  readonly callIndex: number;
+  readonly onSelectCall: (index: number) => void;
   readonly windowChoice: WindowChoice;
   readonly onWindowChoiceChange: (choice: WindowChoice) => void;
-  /**
-   * Closes one Session, leaving the rest of the loaded Sessions open.
-   */
-  readonly onCloseSession: (id: string) => void;
   /**
    * The demo manifest's statement about the Demo Sessions, when the Session on
    * screen is one of them. Its presence is what marks the view as synthetic.
@@ -321,14 +343,12 @@ type LoadedSessionProps = {
 
 const LoadedSession = ({
   session,
+  callIndex,
+  onSelectCall,
   windowChoice,
   onWindowChoiceChange,
-  onCloseSession,
   demoNote,
 }: LoadedSessionProps) => {
-  // The last API Call answers "where did it end up?", which is the question a
-  // finished Session is usually opened with.
-  const [callIndex, setCallIndex] = useState(session.calls.length - 1);
   const [filters, setFilters] = useState<GridFilters>(ALL_SHOWN);
   // Cells are addressed by index rather than held as objects: an index stays
   // meaningful when the Scrubber moves and the Cell at that position is rebuilt,
@@ -392,13 +412,6 @@ const LoadedSession = ({
 
   return (
     <Workbench
-      header={
-        <SessionHeader
-          session={session}
-          snapshot={snapshot}
-          onClose={() => onCloseSession(session.id)}
-        />
-      }
       grid={
         <ContextGrid
           cells={cells}
@@ -454,7 +467,7 @@ const LoadedSession = ({
 
           {/* Fill level and the window override sit under the legend: the
               legend's Free space line is the other half of the same number,
-              and the Session strip stayed one line on a narrow window once
+              and the Session details stayed compact in the top bar once
               they left it. */}
           <RailPanel
             title="Context Window"
@@ -495,7 +508,7 @@ const LoadedSession = ({
           calls={session.calls}
           windowSize={windowSize}
           callIndex={callIndex}
-          onSelectCall={setCallIndex}
+          onSelectCall={onSelectCall}
         />
       }
     />

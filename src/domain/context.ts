@@ -262,7 +262,7 @@ export const cumulativeItems = (
 
 /**
  * The highest Measured Tokens any API Call in a Session reached — what the
- * Session list and the Session strip call "peak".
+ * Session list and the Context Window panel call "peak".
  *
  * @param calls - Context Snapshots of one Session, in transcript order
  * @returns The largest `measuredTotal`, or `0` for a Session with no calls

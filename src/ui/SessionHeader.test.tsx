@@ -38,7 +38,7 @@ const session: Session = {
 
 /**
  * A Session with three API Calls and a distinct id/model/version, so the
- * strip's id, model, version, call index and timestamp can each be pinned
+ * bar's id, model, version, call index and timestamp can each be pinned
  * against a value nothing else in the fixture could produce by accident.
  */
 const identifiableSession: Session = {
@@ -68,15 +68,16 @@ describe("SessionHeader", () => {
       />,
     );
 
-    const strip = screen.getByRole("region", { name: "Session" });
-    expect(strip.textContent).toContain(identifiableSession.id);
-    expect(strip.textContent).toContain("claude-opus-4-9");
-    expect(strip.textContent).toContain("cc 2.1.140");
+    const details = screen.getByRole("region", { name: "Session" });
+    expect(details.textContent).toContain(identifiableSession.id);
+    expect(details.textContent).toContain("claude-opus-4-9");
+    expect(details.textContent).toContain("cc 2.1.140");
     // Call index is 1-based against the total ("call 3/3"), not the raw
     // zero-based `ContextSnapshot.index` a reader would have to decode.
-    expect(strip.textContent).toContain("call 3");
-    expect(strip.textContent).toContain("/3");
-    expect(strip.textContent).toContain(new Date("2026-01-15T09:30:00.000Z").toLocaleString());
+    expect(details.textContent).toContain("call 3");
+    expect(details.textContent).toContain("/3");
+    expect(details.textContent).toContain(new Date("2026-01-15T09:30:00.000Z").toLocaleString());
+    expect(details.lastElementChild?.textContent).toBe(identifiableSession.fileName);
   });
 
   it("falls back to an em dash rather than blanking the row when a Call has no timestamp", () => {
@@ -88,9 +89,9 @@ describe("SessionHeader", () => {
       />,
     );
 
-    const strip = screen.getByRole("region", { name: "Session" });
-    expect(strip.textContent).toContain("call 1");
-    expect(strip.textContent).toContain("—");
+    const details = screen.getByRole("region", { name: "Session" });
+    expect(details.textContent).toContain("call 1");
+    expect(details.textContent).toContain("—");
   });
 
   it("closes this Session, and only this one, when the close button is clicked", () => {

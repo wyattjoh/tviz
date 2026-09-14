@@ -2,8 +2,8 @@
  * The Workbench shell: the regions the throwaway UI prototype settled on
  * (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`), as slots.
  *
- * The menu bar sits above this, in `App`; what lives here is the Session strip
- * and then one positioning context holding four regions — the grid pane, the
+ * The menu bar and active Session details sit above this, in `App`; what lives
+ * here is one positioning context holding four regions — the grid pane, the
  * rail, the Inspector and the Scrubber. Both the loaded Session and the landing
  * page's blurred preview fill the same one.
  *
@@ -49,10 +49,6 @@ import { type CSSProperties, type ReactNode, useCallback, useId, useState } from
  * Props for {@link Workbench}.
  */
 export type WorkbenchProps = {
-  /**
-   * The Session strip — identity plus, on the loaded view, its close control.
-   */
-  readonly header: ReactNode;
   /**
    * The grid pane, which is also the body's scroll container.
    */
@@ -178,14 +174,12 @@ const tabClass = (raised: boolean): string =>
     : "text-ui-text-muted hover:bg-ui-panel hover:text-ui-text");
 
 /**
- * Lays the Session strip, grid pane, rail, Inspector and Scrubber into the
- * shell.
+ * Lays the grid pane, rail, Inspector and Scrubber into the shell.
  *
  * Fill a region; do not restructure the shell — see `.claude/rules/ui-theme.md`
  * and ADR-0006.
  */
 export const Workbench = ({
-  header,
   grid,
   rail,
   inspector,
@@ -249,135 +243,131 @@ export const Workbench = ({
   }
 
   return (
-    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      {header}
-
-      {/* The one positioning context. Below `md` it is a single full-height
-          region and every panel floats inside it; from `md` up it is the
-          two-column body with the Inspector and Scrubber spanning beneath.
-          `grid-cols-[minmax(0,1fr)]` rather than an implicit column: an
-          implicit track is `auto`, which floors at its items' min-content and
-          would let one unbreakable string widen the page. */}
-      <div
-        style={{ [OBSCURED_BOTTOM]: `${obscuredBottom}px` } as CSSProperties}
-        // The `md:` reset is written out rather than built from
-        // `OBSCURED_BOTTOM`: Tailwind scans source text for class names, so a
-        // template literal produces a class it never generates.
-        className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1fr)_auto_auto] md:[--tviz-obscured-bottom:0px]"
+    // The one positioning context. Below `md` it is a single full-height
+    // region and every panel floats inside it; from `md` up it is the
+    // two-column body with the Inspector and Scrubber spanning beneath.
+    // `grid-cols-[minmax(0,1fr)]` rather than an implicit column: an implicit
+    // track is `auto`, which floors at its items' min-content and would let one
+    // unbreakable string widen the page.
+    <div
+      style={{ [OBSCURED_BOTTOM]: `${obscuredBottom}px` } as CSSProperties}
+      // The `md:` reset is written out rather than built from
+      // `OBSCURED_BOTTOM`: Tailwind scans source text for class names, so a
+      // template literal produces a class it never generates.
+      className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1fr)_auto_auto] md:[--tviz-obscured-bottom:0px]"
+    >
+      <main
+        aria-label="Context grid"
+        className="relative min-h-0 min-w-0 md:border-r md:border-ui-border"
       >
-        <main
-          aria-label="Context grid"
-          className="relative min-h-0 min-w-0 md:border-r md:border-ui-border"
-        >
-          {grid}
-          {/* From `md` up nothing floats over the grid, so the fade belongs at
+        {grid}
+        {/* From `md` up nothing floats over the grid, so the fade belongs at
               the pane's own bottom edge. `top-full` on a zero-height anchor at
               the bottom is how it reaches the same place `bottom-full` does on
               the Info Panes below. */}
-          <div className="absolute inset-x-0 bottom-0 hidden md:block">
-            <ScrollFade shown={gridHasMoreBelow === true} />
-          </div>
-        </main>
+        <div className="absolute inset-x-0 bottom-0 hidden md:block">
+          <ScrollFade shown={gridHasMoreBelow === true} />
+        </div>
+      </main>
 
-        {/* The scroll lives on the inner element, not on the `<aside>`. The
+      {/* The scroll lives on the inner element, not on the `<aside>`. The
             fade sits *above* the pane's top edge, so an `overflow` on the same
             element that carries it clips it away — which is why this one pane
             went without a fade while the other two, which have no overflow, had
             theirs. */}
-        <aside
-          id={railId}
-          aria-label="Legend and Context Window"
-          ref={railRef}
-          style={{
-            display: openPane === "legend" ? "flex" : undefined,
-            flexDirection: "column",
-          }}
-          className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-9 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:col-start-2 md:row-start-1 md:flex md:max-h-none md:border-t-0`}
+      <aside
+        id={railId}
+        aria-label="Legend and Context Window"
+        ref={railRef}
+        style={{
+          display: openPane === "legend" ? "flex" : undefined,
+          flexDirection: "column",
+        }}
+        className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-9 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:col-start-2 md:row-start-1 md:flex md:max-h-none md:border-t-0`}
+      >
+        <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
+        <ScrollArea
+          className="flex min-h-0 flex-1 flex-col"
+          innerClassName="flex flex-col gap-2 p-2 md:gap-3 md:p-3"
         >
-          <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
-          <ScrollArea
-            className="flex min-h-0 flex-1 flex-col"
-            innerClassName="flex flex-col gap-2 p-2 md:gap-3 md:p-3"
-          >
-            {rail}
-          </ScrollArea>
-        </aside>
+          {rail}
+        </ScrollArea>
+      </aside>
 
-        {/* Its own region rather than a panel inside the rail: a full-width
+      {/* Its own region rather than a panel inside the rail: a full-width
             band under the grid from `md` up, an overlay on a phone. */}
-        <section
-          id={inspectorId}
-          aria-label="Inspector"
-          ref={inspectorRef}
-          className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
-        >
-          {/* The desktop header is this section's own collapse control, and it
+      <section
+        id={inspectorId}
+        aria-label="Inspector"
+        ref={inspectorRef}
+        className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
+      >
+        {/* The desktop header is this section's own collapse control, and it
               keeps a chevron: from `md` up this really is a drawer, and folding
               it does give its height back to the grid. On a phone the tab bar
               carries the state instead, so the header is `md:flex`. */}
-          <button
-            type="button"
-            onClick={() => setInspectorCollapsed((wasCollapsed) => !wasCollapsed)}
-            aria-expanded={!inspectorCollapsed}
-            aria-controls={inspectorId}
-            className="hidden w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase hover:text-ui-text md:flex"
-          >
-            <ChevronDown
-              className={`h-3 w-3 shrink-0 transition-transform ${
-                inspectorCollapsed ? "-rotate-90" : ""
-              }`}
-              aria-hidden="true"
-            />
-            Inspector
-          </button>
-          {/* Collapsed is desktop-only: on a phone the section is raised or it
-              is not, so the body always shows when the tab is active. */}
-          <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
-          <div className={`p-3 md:pt-0 ${inspectorCollapsed ? "md:hidden" : ""}`}>{inspector}</div>
-        </section>
-
-        <div
-          id={scrubberId}
-          ref={scrubberRef}
-          className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-3 md:block`}
+        <button
+          type="button"
+          onClick={() => setInspectorCollapsed((wasCollapsed) => !wasCollapsed)}
+          aria-expanded={!inspectorCollapsed}
+          aria-controls={inspectorId}
+          className="hidden w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase hover:text-ui-text md:flex"
         >
-          <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
-          {scrubber}
-        </div>
+          <ChevronDown
+            className={`h-3 w-3 shrink-0 transition-transform ${
+              inspectorCollapsed ? "-rotate-90" : ""
+            }`}
+            aria-hidden="true"
+          />
+          Inspector
+        </button>
+        {/* Collapsed is desktop-only: on a phone the section is raised or it
+              is not, so the body always shows when the tab is active. */}
+        <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
+        <div className={`p-3 md:pt-0 ${inspectorCollapsed ? "md:hidden" : ""}`}>{inspector}</div>
+      </section>
 
-        {/* Pinned over the bottom edge rather than laid out in flow: in flow it
+      <div
+        id={scrubberId}
+        ref={scrubberRef}
+        className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-3 md:block`}
+      >
+        <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
+        {scrubber}
+      </div>
+
+      {/* Pinned over the bottom edge rather than laid out in flow: in flow it
             would take permanent height out of the grid pane, and the pane's
             height is what sizes every Cell. It covers the last row or two,
             which the pane scrolls past. */}
-        <div
-          role="tablist"
-          aria-label="Info panes"
-          className="absolute inset-x-0 bottom-0 z-40 flex h-9 items-stretch border-t border-ui-border bg-ui-shell md:hidden"
-        >
-          {/* Only when nothing is raised: an open Info Pane is nearer the grid
+      <div
+        role="tablist"
+        aria-label="Info panes"
+        className="absolute inset-x-0 bottom-0 z-40 flex h-9 items-stretch border-t border-ui-border bg-ui-shell md:hidden"
+      >
+        {/* Only when nothing is raised: an open Info Pane is nearer the grid
               and carries the fade itself. */}
-          <ScrollFade shown={gridHasMoreBelow === true && openPane === undefined} />
-          {TABS.map(({ pane, label, panelId }, order) => {
-            const raised = openPane === pane;
-            return (
-              <button
-                key={pane}
-                type="button"
-                role="tab"
-                onClick={() => togglePane(pane)}
-                // `aria-selected` is the tab's state; `aria-expanded` says the
-                // selected one can also be put away, which a plain tablist
-                // cannot express on its own.
-                aria-selected={raised}
-                aria-expanded={raised}
-                aria-controls={panelId}
-                className={`${tabClass(raised)} ${order === 0 ? "" : "border-l border-ui-border"}`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <ScrollFade shown={gridHasMoreBelow === true && openPane === undefined} />
+        {TABS.map(({ pane, label, panelId }, order) => {
+          const raised = openPane === pane;
+          return (
+            <button
+              key={pane}
+              type="button"
+              role="tab"
+              onClick={() => togglePane(pane)}
+              // `aria-selected` is the tab's state; `aria-expanded` says the
+              // selected one can also be put away, which a plain tablist
+              // cannot express on its own.
+              aria-selected={raised}
+              aria-expanded={raised}
+              aria-controls={panelId}
+              className={`${tabClass(raised)} ${order === 0 ? "" : "border-l border-ui-border"}`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -67,6 +67,13 @@ with tab stops in it is a trap; and it stops animating under `prefers-reduced-mo
 cost is 110 KB on every first view and a preview thin enough — five API calls — that the
 loop reads as a slow pulse rather than a session filling up.
 
+**One compact top bar, not stacked file chrome.** The filename, model, Claude Code
+version and current API call used to occupy a Session strip below the File menu. That
+made identity clear, but it permanently took height away from the visualization. The
+same details now share the menu bar, with lower-priority metadata disappearing at narrow
+breakpoints and the active filename anchored at the right. The File menu remains a stable
+control on the left, while the grid gets the reclaimed row.
+
 **A fixed-cell grid, not a treemap.** A treemap packs more into each pixel, but the grid is
 the picture Claude Code users already have in their heads, and because every cell is the
 same number of tokens, two sessions or two points in time compare directly by eye. Cells

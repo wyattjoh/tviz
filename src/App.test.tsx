@@ -151,18 +151,16 @@ describe("App", () => {
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    // 1 — menu bar, with the File menu Sessions will be opened from.
+    // 1 — one top bar with the File menu and selected Session details.
     const menuBar = screen.getByRole("banner", { name: "tviz" });
     expect(menuBar.contains(screen.getByRole("button", { name: "File" }))).toBe(true);
+    const sessionDetails = screen.getByRole("region", { name: "Session" });
+    expect(menuBar.contains(sessionDetails)).toBe(true);
+    expect(sessionDetails.contains(screen.getByText("session-a.jsonl"))).toBe(true);
+    expect(sessionDetails.contains(screen.getByRole("button", { name: "close" }))).toBe(true);
+    expect(sessionDetails.textContent).not.toContain("tokens");
 
-    // 2 — Session strip: which Session and which API Call. How full the window
-    // is moved to the rail, so the strip stays one line on a narrow window.
-    const strip = screen.getByRole("region", { name: "Session" });
-    expect(strip.contains(screen.getByText("session-a.jsonl"))).toBe(true);
-    expect(strip.contains(screen.getByRole("button", { name: "close" }))).toBe(true);
-    expect(strip.textContent).not.toContain("tokens");
-
-    // 3 — grid pane on the flexible left, scrolling vertically under its own
+    // 2 — grid pane on the flexible left, scrolling vertically under its own
     // column count while horizontal rounding stays clipped.
     const grid = contextGrid();
     const pane = screen.getByRole("main", { name: "Context grid" });
@@ -170,7 +168,7 @@ describe("App", () => {
     expect(grid.parentElement?.className).toContain("overflow-x-hidden");
     expect(grid.parentElement?.className).toContain("overflow-y-auto");
 
-    // 4 — the fixed 340px right rail holds the legend and settings.
+    // 3 — the fixed 340px right rail holds the legend and settings.
     const rail = screen.getByRole("complementary", { name: "Legend and Context Window" });
     expect(rail.contains(screen.getByText("Free space"))).toBe(true);
     expect(rail.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
@@ -701,8 +699,8 @@ describe("App", () => {
       await findContextGrid();
 
       fireEvent.click(screen.getByRole("button", { name: "File" }));
-      // The selected Session's file name is also in the Session strip behind
-      // the menu, so the Session-list row is found by its button role.
+      // The selected Session's file name is also in the top bar behind the
+      // menu, so the Session-list row is found by its button role.
       expect(screen.getByRole("button", { name: /session-a\.jsonl/ })).toBeDefined();
       expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
       expect(screen.queryByText("README.md")).toBeNull();
@@ -752,7 +750,7 @@ describe("App", () => {
       expect(strip.textContent).toContain("session-a.jsonl");
 
       fireEvent.click(screen.getByRole("button", { name: "File" }));
-      fireEvent.click(screen.getByText("session-b.jsonl"));
+      fireEvent.click(screen.getByRole("button", { name: /^session-b\.jsonl/ }));
 
       expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
         "session-b.jsonl",

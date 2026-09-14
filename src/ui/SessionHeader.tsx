@@ -1,10 +1,10 @@
 /**
- * The Session strip under the menu bar: which Session is loaded and which API
- * Call the grid is showing.
+ * The active Session details inside the menu bar: which Session is loaded and
+ * which API Call the grid is showing.
  *
- * How full the Context Window is, and the override that sets the window, are in
- * the rail's Context Window panel rather than here — the strip is identity plus
- * one action, so a narrow window wraps it less.
+ * How full the Context Window is, and the override that sets the window, remain
+ * in the rail's Context Window panel. The filename is the rightmost item so the
+ * current file stays easy to scan without spending a second row on chrome.
  */
 import type { ContextSnapshot, Session } from "../domain/context.ts";
 import { formatTimestamp } from "./format.ts";
@@ -31,44 +31,44 @@ export type SessionHeaderProps = {
 };
 
 /**
- * Session identity on the left, closing the Session on the right, in one strip.
+ * Session identity, its close action, and the right-aligned filename for the menu bar.
  */
 export const SessionHeader = ({ session, snapshot, onClose }: SessionHeaderProps) => (
-  <section
-    aria-label="Session"
-    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ui-border bg-ui-sunken px-4 py-2"
-  >
-    {/* Both of these shrink rather than widen the strip: a flex item floors
-        at min-content unless told otherwise, which on a phone is the
-        difference between a wrapped strip and a horizontally scrolling page. */}
-    <span className="min-w-0 truncate text-ui-focus underline underline-offset-4">
-      {session.fileName}
+  <section aria-label="Session" className="flex min-w-0 flex-1 items-center gap-3">
+    <span className="hidden max-w-56 min-w-0 truncate text-xs text-ui-text-faint xl:inline">
+      {session.id}
     </span>
-    <span className="min-w-0 truncate text-xs text-ui-text-faint">{session.id}</span>
-    <span className="rounded bg-ui-panel px-2 py-0.5 text-xs text-ui-text-secondary">
+    <span className="hidden max-w-40 truncate rounded bg-ui-panel px-2 py-0.5 text-xs text-ui-text-secondary sm:inline">
       {session.model ?? "unknown model"}
     </span>
-    <span className="text-xs text-ui-text-muted">cc {session.claudeCodeVersion ?? "unknown"}</span>
-    <span className="text-xs text-ui-text-muted">
-      call <span className="text-ui-text">{snapshot.index + 1}</span>/{session.calls.length} ·{" "}
-      {formatTimestamp(snapshot.timestamp)}
+    <span className="hidden shrink-0 text-xs text-ui-text-muted md:inline">
+      cc {session.claudeCodeVersion ?? "unknown"}
+    </span>
+    <span className="shrink-0 text-xs text-ui-text-muted">
+      call <span className="text-ui-text">{snapshot.index + 1}</span>/{session.calls.length}
+      <span className="hidden lg:inline"> · {formatTimestamp(snapshot.timestamp)}</span>
     </span>
     {/* A Subagent Session owns a separate Context Window; only the folder
         loader can count them, so a single dropped file says nothing. */}
     {session.subagentCount === undefined ? null : (
-      <span className="text-xs text-ui-text-faint">{session.subagentCount} subagent sessions</span>
+      <span className="hidden shrink-0 text-xs text-ui-text-faint lg:inline">
+        {session.subagentCount} subagent sessions
+      </span>
     )}
     {/* A compaction is the one API Call that rewrites the grid instead of
         extending it, so it is named rather than left to the Scrubber's mark. */}
-    {snapshot.reset ? <span className="text-xs text-ui-warning"> · compaction</span> : null}
+    {snapshot.reset ? <span className="shrink-0 text-xs text-ui-warning">· compaction</span> : null}
 
     <button
       type="button"
       onClick={onClose}
       title="Close this Session"
-      className="ml-auto rounded px-2 py-0.5 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+      className="shrink-0 rounded px-2 py-0.5 text-xs text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
     >
       close
     </button>
+    <span title={session.fileName} className="ml-auto min-w-0 truncate text-right text-ui-focus">
+      {session.fileName}
+    </span>
   </section>
 );

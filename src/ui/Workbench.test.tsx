@@ -7,7 +7,6 @@ afterEach(cleanup);
 
 const view = (revealInspector: boolean | undefined) => (
   <Workbench
-    header={<div>session strip</div>}
     grid={<div>grid pane</div>}
     rail={<RailPanel title="Categories">legend</RailPanel>}
     inspector={<div>inspector</div>}
@@ -51,7 +50,6 @@ describe("the Workbench shell", () => {
   it("fills every region", () => {
     shell();
 
-    expect(screen.getByText("session strip")).toBeDefined();
     expect(screen.getByText("grid pane")).toBeDefined();
     expect(screen.getByText("legend")).toBeDefined();
     expect(screen.getByText("inspector")).toBeDefined();
