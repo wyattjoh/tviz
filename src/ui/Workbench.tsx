@@ -22,10 +22,10 @@
  * apart. Those two booleans are the only state the shell holds, and they
  * describe the shell rather than a Session.
  *
- * Both disclosures answer to their content rather than only to a click:
- * `revealRail` opens the rail when a caller puts something in it worth reading,
- * and `scrubberAlwaysVisible` drops the Scrubber's disclosure entirely for the
- * landing preview, whose pitch is the chart tracking the grid.
+ * The rail's disclosure also answers to its content, not only to a click:
+ * `revealRail` opens it when a caller has put something in it worth reading.
+ * Both callers get the same disclosures otherwise — the landing preview
+ * included, so a phone visitor sees the grid rather than a chart.
  *
  * That shared geometry is the point. The landing page claims to show the
  * interface, and a preview that re-declared these grid classes would stop being
@@ -65,15 +65,6 @@ export type WorkbenchProps = {
    * would be the shell arguing back.
    */
   readonly revealRail?: boolean;
-  /**
-   * Renders the Scrubber plainly, with no disclosure around it at any width.
-   *
-   * For the landing page's preview, whose whole pitch is the chart tracking
-   * the grid as the window fills — a visitor arriving on a phone should see
-   * that, even though a loaded Session there starts with the Scrubber folded
-   * away to give the grid the screen.
-   */
-  readonly scrubberAlwaysVisible?: boolean;
 };
 
 /**
@@ -82,14 +73,7 @@ export type WorkbenchProps = {
  * Fill a region; do not restructure the shell — see `.claude/rules/ui-theme.md`
  * and ADR-0006.
  */
-export const Workbench = ({
-  header,
-  grid,
-  rail,
-  scrubber,
-  revealRail,
-  scrubberAlwaysVisible,
-}: WorkbenchProps) => {
+export const Workbench = ({ header, grid, rail, scrubber, revealRail }: WorkbenchProps) => {
   // The only state the shell owns, and it is about the shell rather than about
   // a Session: below `md` the rail is behind a disclosure, so that a phone
   // spends its height on the grid instead of on a legend nobody asked for. It
@@ -175,34 +159,26 @@ export const Workbench = ({
           toggle is `display: none`, which also takes it out of the grid, and
           the Scrubber is simply docked as before. */}
       <div>
-        {scrubberAlwaysVisible === true ? (
-          scrubber
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setScrubberOpen((wasOpen) => !wasOpen)}
-              aria-expanded={scrubberOpen}
-              aria-controls={scrubberId}
-              className="flex w-full items-center gap-1.5 border-t border-ui-border bg-ui-sunken px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase md:hidden"
-            >
-              <ChevronDown
-                className={`h-3 w-3 shrink-0 transition-transform ${
-                  scrubberOpen ? "" : "-rotate-90"
-                }`}
-                aria-hidden="true"
-              />
-              Scrubber
-            </button>
+        <button
+          type="button"
+          onClick={() => setScrubberOpen((wasOpen) => !wasOpen)}
+          aria-expanded={scrubberOpen}
+          aria-controls={scrubberId}
+          className="flex w-full items-center gap-1.5 border-t border-ui-border bg-ui-sunken px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase md:hidden"
+        >
+          <ChevronDown
+            className={`h-3 w-3 shrink-0 transition-transform ${scrubberOpen ? "" : "-rotate-90"}`}
+            aria-hidden="true"
+          />
+          Scrubber
+        </button>
 
-            {/* `display: none` when closed, for the same reason the rail is:
-                the transport's buttons and the range input leave the tab order
-                without an `inert` to undo at `md`. */}
-            <div id={scrubberId} className={`md:block ${scrubberOpen ? "" : "hidden"}`}>
-              {scrubber}
-            </div>
-          </>
-        )}
+        {/* `display: none` when closed, for the same reason the rail is: the
+            transport's buttons and the range input leave the tab order without
+            an `inert` to undo at `md`. */}
+        <div id={scrubberId} className={`md:block ${scrubberOpen ? "" : "hidden"}`}>
+          {scrubber}
+        </div>
       </div>
     </div>
   );

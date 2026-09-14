@@ -69,10 +69,6 @@ export const LandingPreview = ({ session }: LandingPreviewProps) => {
 
   return (
     <Workbench
-      // The preview's whole pitch is the chart tracking the grid as the window
-      // fills, so it keeps the Scrubber at every width — a loaded Session on a
-      // phone starts with it folded away instead.
-      scrubberAlwaysVisible
       header={<SessionHeader session={session} snapshot={snapshot} onClose={noop} />}
       grid={
         <ContextGrid

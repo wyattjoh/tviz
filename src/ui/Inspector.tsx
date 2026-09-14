@@ -9,6 +9,12 @@
  * step aside so the pinned Cell is the only thing beside the grid, and the
  * heading's close control — or Escape, or clicking the Cell again — unpins it
  * and hands the rail back.
+ *
+ * The panel is a fixed height at every width and scrolls within it, so the one
+ * thing in the rail whose content varies cannot change the rail's size. Below
+ * `md` that matters twice over: the rail is a grid row there, so its height
+ * comes out of the grid pane's, and the pane's height is what sizes every
+ * Cell.
  */
 import { CATEGORY_LABELS, MESSAGE_KIND_LABELS } from "../domain/context.ts";
 import type { GridFilters } from "./filters.ts";
@@ -21,10 +27,10 @@ import { cellFillClass } from "./theme.ts";
  * How many items to list before summarising the rest, while the Inspector
  * shares the rail.
  *
- * A Cell of 1,000 tokens can overlap dozens of small items; past a dozen the
- * hover preview stops being readable and pushes the panels under it off the
- * rail. A pinned Cell has the rail to itself, so its list runs in full and the
- * rail scrolls.
+ * A Cell of 1,000 tokens can overlap dozens of small items, and past a dozen
+ * the hover preview stops being readable. A pinned Cell has the rail to
+ * itself, so its list runs in full and scrolls inside the panel's fixed
+ * height — the panel never grows, whichever Cell is being read.
  */
 const ITEM_LIMIT = 12;
 
@@ -80,9 +86,29 @@ const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
 );
 
 /**
- * Describes the Cell under the pointer, or the pinned one.
+ * The Inspector's fixed height.
+ *
+ * Fixed, not `auto`: below `md` the rail is a grid row, so its height is taken
+ * out of the grid pane's — and `cell-fit.ts` sizes every Cell from that pane's
+ * height. A panel that grew with the item count therefore re-sized the whole
+ * grid each time a different Cell was tapped, which is the one thing the
+ * append-only layout exists to avoid (ADR-0006). Roughly eight rows at this
+ * type size; anything longer scrolls inside the panel rather than moving
+ * anything outside it.
  */
-export const Inspector = ({ cell, filters, pinned }: InspectorProps) => {
+const INSPECTOR_HEIGHT = "h-48 overflow-y-auto";
+
+/**
+ * Describes the Cell under the pointer, or the pinned one, at a height that
+ * never depends on which Cell that is.
+ */
+export const Inspector = (props: InspectorProps) => (
+  <div className={INSPECTOR_HEIGHT}>
+    <InspectorBody {...props} />
+  </div>
+);
+
+const InspectorBody = ({ cell, filters, pinned }: InspectorProps) => {
   if (cell === undefined) {
     return <p className="text-[11px] leading-snug text-ui-text-faint">Hover a Cell.</p>;
   }

@@ -160,3 +160,46 @@ describe("Inspector", () => {
     expect(swatch()).toContain("bg-cat-messages");
   });
 });
+
+describe("the Inspector's height", () => {
+  // Below `md` the rail is a grid row, so its height comes out of the grid
+  // pane's — and `cell-fit.ts` sizes every Cell from that pane's height. A
+  // panel that grew with the item count re-sized the whole grid each time a
+  // different Cell was tapped.
+  const boxOf = (cell: Cell | undefined): string => {
+    const { container } = render(<Inspector cell={cell} filters={ALL_SHOWN} pinned={false} />);
+    const box = container.firstElementChild;
+    if (box === null) throw new Error("the Inspector rendered nothing");
+    return box.className;
+  };
+
+  const manyItems = (count: number) =>
+    cellOf(
+      "messages",
+      Array.from({ length: count }, (_, index) =>
+        share({
+          category: "messages",
+          kind: "toolResult",
+          label: `Tool result ${index}`,
+          tokens: 40,
+        }),
+      ),
+      "toolResult",
+    );
+
+  it("is the same box empty, on a free Cell, and on a crowded one", () => {
+    const empty = boxOf(undefined);
+    cleanup();
+    const free = boxOf(cellOf("free", []));
+    cleanup();
+    const crowded = boxOf(manyItems(20));
+
+    expect(empty).toContain("h-48");
+    expect(free).toBe(empty);
+    expect(crowded).toBe(empty);
+  });
+
+  it("scrolls inside itself rather than growing", () => {
+    expect(boxOf(manyItems(40))).toContain("overflow-y-auto");
+  });
+});

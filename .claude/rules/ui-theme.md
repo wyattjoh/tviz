@@ -92,10 +92,22 @@ Four constraints:
   when a caller has just put something in it worth reading — pinning a Cell hands the rail
   to the Inspector, and a phone has no hover, so pin is the *only* gesture that fills it;
   landing that in a closed disclosure makes the tap look like it did nothing. It only ever
-  opens: the reader may close it again while the Cell is still pinned, and the effect keys
-  on the prop's transition so nothing re-opens under them. `scrubberAlwaysVisible` is the
-  mirror image — `LandingPreview` drops the Scrubber's disclosure at every width, because
-  the chart tracking the grid as the window fills is the preview's whole pitch.
+  opens: the reader may close it again while the Cell is still pinned, and the adjustment
+  keys on the prop's transition so nothing re-opens under them. Both callers otherwise get
+  the same disclosures, `LandingPreview` included — on a phone its preview shows the grid
+  rather than a chart.
+- **The Inspector is a fixed height** (`h-48`, scrolling inside) at every width. It is the
+  one thing in the rail whose content varies, and below `md` the rail is a grid *row*, so
+  its height comes out of the grid pane's — which is what `cell-fit.ts` sizes every Cell
+  from. A panel that grew with the item count re-sized the whole grid each time a different
+  Cell was tapped, which is the re-flow ADR-0006 exists to prevent.
+
+The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
+`scrubber`) plus `RailPanel`. Its only state is the two disclosure flags above, and its only
+handlers are their toggles — everything else about a Session stays outside. The menu bar
+sits above it, in `src/App.tsx`, and so does the drop handling; neither belongs to a
+Session. Two callers fill the same shell, `LoadedSession` and `LandingPreview`, so the
+geometry cannot drift between the interface and the landing state that claims to show it.
 
 ## Touch
 
@@ -106,12 +118,6 @@ Pinch-zoom and panning are untouched: do **not** reach for `user-scalable=no` on
 viewport meta, which buys the same thing by taking zoom away from people who need it. The
 Scrubber's chart opts further out with `touch-none`, because dragging it must not scroll
 the page.
-
-The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
-`scrubber`) plus `RailPanel`, with no state and no handlers. The menu bar sits above it, in
-`src/App.tsx`, and so does the drop handling — neither belongs to a Session. Two callers fill
-the same shell, `LoadedSession` and `LandingPreview`, so the geometry cannot drift between
-the interface and the landing state that claims to show it.
 
 ## The landing page
 
@@ -226,8 +232,10 @@ The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell 
 the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
 never the item's own size: a 40k tool result crosses 40 Cells, and reporting its size in
 each would have a 1,000-token Cell list 40,000 tokens of items. A hovered Cell's list is
-capped at `ITEM_LIMIT` because the panels under it share the rail; a pinned Cell has the
-rail to itself and lists every item, so `pinned` is what lifts the cap. Cells are addressed
+capped at `ITEM_LIMIT` because past a dozen rows the hover preview stops being readable; a
+pinned Cell has the rail to itself and lists every item, so `pinned` is what lifts the cap.
+Either way the panel is a fixed `h-48` and the list scrolls inside it, so which Cell is
+being read never changes the rail's size. Cells are addressed
 upwards by **index**, not as objects, so a pinned Cell keeps meaning something when the
 Scrubber rebuilds the layout. Grid Cells are buttons on a roving tabindex under a
 `role="group"` block — a 1M window is 1,000 Cells and must not be 1,000 tab stops.

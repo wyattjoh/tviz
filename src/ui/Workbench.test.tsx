@@ -214,21 +214,4 @@ describe("the Scrubber disclosure", () => {
     fireEvent.click(scrubberToggle());
     expect(scrubberPanel().className).toContain("hidden");
   });
-
-  // The landing preview sells the tool by letting a visitor watch the chart
-  // track the grid, so it opts out of the disclosure at every width.
-  it("has no disclosure at all when the caller asks for it always visible", () => {
-    render(
-      <Workbench
-        header={<div>session strip</div>}
-        grid={<div>grid pane</div>}
-        rail={<RailPanel title="Categories">legend</RailPanel>}
-        scrubber={<div>scrubber</div>}
-        scrubberAlwaysVisible
-      />,
-    );
-
-    expect(screen.getByText("scrubber")).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Scrubber" })).toBeNull();
-  });
 });
