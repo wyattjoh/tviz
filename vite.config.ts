@@ -13,7 +13,15 @@ const worktrees = fileURLToPath(new URL("./.claude/worktrees/**", import.meta.ur
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Vite consumes `server` only for `vite` development servers. Production
+  // builds ignore it, and `vite preview` has a separate `preview` namespace.
   server: {
+    // On macOS, Vite's `localhost` default can bind IPv6 only. Tailscale Serve
+    // proxies a port through IPv4 loopback, so that otherwise ends in a 502.
+    host: "127.0.0.1",
+    // Serve forwards the tailnet hostname. Allow MagicDNS names without baking
+    // one person's hostname into the public repo or disabling Vite's host check.
+    allowedHosts: [".ts.net"],
     watch: { ignored: [worktrees] },
   },
   test: {
