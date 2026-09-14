@@ -1,3 +1,19 @@
+# Every response carries the policy the README's central claim rests on: a
+# transcript is parsed in the tab and goes nowhere. `connect-src 'self'` is the
+# line that makes that enforceable rather than a promise — no fetch, no
+# WebSocket, no beacon to any other origin — and `script-src 'self'` is what
+# stops an injected script from rewriting the rule. The app makes exactly one
+# request of its own, for the bundled Demo Sessions under /demo/.
+#
+# `style-src` keeps 'unsafe-inline' because ContextGrid and ContextWindowPanel
+# size Cells and the fill meter through `style={{}}`, which CSP counts as an
+# inline style. That costs nothing here: inline styles cannot exfiltrate, and
+# the guarantee above is carried by connect-src and script-src.
+/*
+  Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+
 # Vite fingerprints everything under /assets/, so those URLs can never change
 # content. Cloudflare's default for static assets is
 # `public, max-age=0, must-revalidate`, which costs a conditional round-trip per
