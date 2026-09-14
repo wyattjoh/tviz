@@ -9,9 +9,10 @@
  * and how full the window is stays the thing the grid answers.
  *
  * The clamp is what keeps both ends honest. Below {@link MIN_CELL_PX} the Cells
- * stop shrinking and the pane scrolls instead, which is the reading the grid
- * had before this was responsive at all; above {@link MAX_CELL_PX} a small
- * window stops growing rather than becoming a wall of tiles.
+ * stop shrinking and the pane scrolls instead — a Cell is a button, and one
+ * sized only to make the whole window fit on a phone is too small to tap;
+ * above {@link MAX_CELL_PX} a small window stops growing rather than becoming a
+ * wall of tiles.
  *
  * The geometry lives here rather than in the component so the shape of the
  * block is testable without a DOM, the way the Scrubber's chart is.
@@ -19,9 +20,20 @@
 
 /**
  * Smallest Cell drawn. Past this the pane scrolls rather than shrinking Cells
- * into something too small to hover or tell apart.
+ * further.
+ *
+ * This is a **tap target** before it is a visual floor. A Cell is a button, and
+ * the size that fits a whole Context Window into a phone-sized pane is far
+ * below the 24px WCAG 2.5.8 asks of one — a 1M window in a 350x560 pane solved
+ * to 12px. Sized from the pane alone the grid always fits on screen and is
+ * always untappable; the honest trade is a comfortable Cell and a pane that
+ * scrolls, which is what this floor now buys.
+ *
+ * At 32 it binds on a phone at both window sizes (roughly 1.6x scroll at 200k)
+ * and on desktop only for a 1M Session, which since ADR-0009 means one that
+ * actually exceeded 200k.
  */
-export const MIN_CELL_PX = 8;
+export const MIN_CELL_PX = 32;
 
 /**
  * Largest Cell drawn, so a small Context Window in a big pane stops growing
@@ -39,8 +51,12 @@ export const CELL_GAP_RATIO = 3 / 16;
 /**
  * Cell size used before the pane has been measured — the first paint, and any
  * environment without `ResizeObserver` (jsdom).
+ *
+ * Kept at {@link MIN_CELL_PX} so the first paint is never smaller than any
+ * measured one: the grid settles by growing, never by jumping up from a size
+ * the clamp would not allow.
  */
-export const FALLBACK_CELL_PX = 16;
+export const FALLBACK_CELL_PX = MIN_CELL_PX;
 
 /**
  * Columns drawn before the pane has been measured.

@@ -34,8 +34,8 @@ A Cell under the pointer or keyboard focus **lifts** — a small translate up an
 `scale-125`, a `shadow-md` in `cell-lift` (the deepest neutral, so the shadow reads as
 depth on the canvas rather than as a colour), and a raised `z-index` so it paints over its
 neighbours. The pinned Cell holds the lift beside its outline. It is pure CSS in
-`ContextGrid`'s `CELL_CLASS`, not a pointer-tracking tilt: Cells go down to 8px, where a
-tilt is invisible and per-Cell pointer maths over 1,000 Cells buys nothing.
+`ContextGrid`'s `CELL_CLASS`, not a pointer-tracking tilt: per-Cell pointer maths over
+1,000 Cells buys nothing that CSS does not already give.
 `motion-reduce` drops the transition, never the lift — the state still has to be seen.
 
 ## Icons
@@ -196,8 +196,13 @@ sidebar — a new way into the app is a File-menu entry.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a
-fixed number of pixels: it grows to fill the pane, clamped to 8–48px, and bottoms out into
-the scrolling grid the fixed Cell always drew. That geometry is a pure function in
+fixed number of pixels: it grows to fill the pane, clamped to 32–48px, and bottoms out into
+the scrolling grid the fixed Cell always drew. **The floor is a tap target, not a visual
+minimum.** A Cell is a button, and sizing purely to make the whole window fit a phone-sized
+pane always succeeds and always lands under WCAG 2.5.8's 24px — a 1M window in a 350×560
+pane solved to 12px. Past the floor the pane scrolls instead, which is what `MIN_CELL_PX`
+was always documented to do and never reached at 8px. `FALLBACK_CELL_PX` tracks the floor,
+so the first paint is never smaller than a measured one. That geometry is a pure function in
 `src/ui/cell-fit.ts` so the shape of the block is testable without a DOM, the way
 `scrubber.ts` holds the chart's. Filtering blanks Cells in place; it
 never removes them, so legend totals never change when a Category or Message Kind is

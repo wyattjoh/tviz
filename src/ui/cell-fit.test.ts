@@ -42,15 +42,27 @@ const fitsAt = (count: number, size: number, width: number, height: number): boo
 
 describe("fitCells", () => {
   it("grows Cells until the whole Context Window fills the pane", () => {
-    const fit = fitCells(1_000, 1_360, 660);
+    const fit = fitCells(500, 1_360, 660);
 
     expect(blockWidth(fit)).toBeLessThanOrEqual(1_360);
-    expect(blockHeight(1_000, fit)).toBeLessThanOrEqual(660);
+    expect(blockHeight(500, fit)).toBeLessThanOrEqual(660);
     // The size is the largest that fits, not merely one that does: a Cell a
     // pixel bigger overflows the pane at every column count.
-    expect(fitsAt(1_000, fit.size + 1, 1_360, 660)).toBe(false);
-    // ...and it beats the 16px the grid drew before it was responsive.
-    expect(fit.size).toBeGreaterThan(FALLBACK_CELL_PX);
+    expect(fitsAt(500, fit.size + 1, 1_360, 660)).toBe(false);
+    // Solved rather than clamped at either end.
+    expect(fit.size).toBeGreaterThan(MIN_CELL_PX);
+    expect(fit.size).toBeLessThan(MAX_CELL_PX);
+  });
+
+  // A Cell is a button. Sizing purely to fit the pane always succeeds and
+  // always produces something untappable — a 1M window in a phone-sized pane
+  // solved to 12px — so past the floor the pane scrolls instead.
+  it("keeps Cells tappable rather than fitting a big window into a small pane", () => {
+    const phone = fitCells(1_000, 350, 560);
+
+    expect(phone.size).toBe(MIN_CELL_PX);
+    expect(phone.size).toBeGreaterThanOrEqual(24);
+    expect(blockHeight(1_000, phone)).toBeGreaterThan(560);
   });
 
   it("draws a bigger Context Window with smaller Cells in the same pane", () => {
@@ -90,7 +102,11 @@ describe("fitCells", () => {
   });
 
   it("falls back to the fixed Cell before the pane has been measured", () => {
-    const fallback = { size: FALLBACK_CELL_PX, gap: 3, columns: FALLBACK_COLUMNS };
+    const fallback = {
+      size: FALLBACK_CELL_PX,
+      gap: gapFor(FALLBACK_CELL_PX),
+      columns: FALLBACK_COLUMNS,
+    };
 
     expect(fitCells(1_000, 0, 0)).toEqual(fallback);
     expect(fitCells(1_000, Number.NaN, 660)).toEqual(fallback);
@@ -110,4 +126,10 @@ describe("gapFor", () => {
     expect(gapFor(MIN_CELL_PX)).toBeGreaterThanOrEqual(1);
     expect(gapFor(1)).toBeGreaterThanOrEqual(1);
   });
+});
+
+it("never paints smaller before measuring than after", () => {
+  // The grid settles by growing into the pane, never by jumping up from a size
+  // the clamp would not have allowed.
+  expect(FALLBACK_CELL_PX).toBeGreaterThanOrEqual(MIN_CELL_PX);
 });

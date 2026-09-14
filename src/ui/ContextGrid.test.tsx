@@ -8,6 +8,7 @@ import {
   emptyCategoryTokens,
   emptyMessageKindTokens,
 } from "../domain/context.ts";
+import { FALLBACK_CELL_PX, FALLBACK_COLUMNS, MIN_CELL_PX } from "./cell-fit.ts";
 import { ContextGrid } from "./ContextGrid.tsx";
 import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./filters.ts";
 import { buildCells } from "./grid.ts";
@@ -126,14 +127,14 @@ describe("ContextGrid", () => {
   it("sizes the Cells to fill the grid pane, in both directions", () => {
     render(renderGrid([], 200_000));
 
-    // Before the pane is measured the grid falls back to the fixed Cell it was
-    // drawn at when Cell size was a constant.
-    expect(gridColumns()).toBe("repeat(20, 16px)");
-    expect(cellSize()).toBe("16px\u00d716px");
+    // Before the pane is measured the grid falls back to a fixed Cell — at the
+    // floor, so the first paint is never smaller than a measured one.
+    expect(gridColumns()).toBe(`repeat(${FALLBACK_COLUMNS}, ${FALLBACK_CELL_PX}px)`);
+    expect(cellSize()).toBe(`${FALLBACK_CELL_PX}px\u00d7${FALLBACK_CELL_PX}px`);
 
     resizePaneTo(1_360, 660);
     const wide = cellSize();
-    expect(wide).not.toBe("16px\u00d716px");
+    expect(Number.parseInt(wide, 10)).toBeGreaterThan(FALLBACK_CELL_PX);
 
     // A taller pane is more room for the same 200 Cells, so the Cell grows
     // until it hits the clamp rather than leaving the space empty.
@@ -170,10 +171,11 @@ describe("ContextGrid", () => {
 
     render(renderGrid(items, 1_000_000));
 
-    // 1,000 Cells cannot fit a pane this short even at the smallest Cell, so
-    // the Cell bottoms out and the pane — not the Cell — absorbs the rest.
+    // 1,000 Cells cannot fit a pane this short at a Cell big enough to tap, so
+    // the Cell bottoms out at the floor and the pane — not the Cell — absorbs
+    // the rest.
     resizePaneTo(600, 120);
-    expect(cellSize()).toBe("8px\u00d78px");
+    expect(cellSize()).toBe(`${MIN_CELL_PX}px\u00d7${MIN_CELL_PX}px`);
 
     const pane = grid().parentElement;
     expect(pane?.className).toContain("overflow-auto");
