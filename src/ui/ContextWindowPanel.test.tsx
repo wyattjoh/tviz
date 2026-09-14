@@ -93,7 +93,7 @@ describe("ContextWindowMenu", () => {
     expect(choices()).toBeNull();
   });
 
-  it("closes on Escape and on a click outside, the way the File menu does", () => {
+  it("closes on Escape and on a click outside, the way the file dropdown does", () => {
     render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={vi.fn()} />);
 
     openMenu();

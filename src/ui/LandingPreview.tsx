@@ -46,7 +46,7 @@ const midUsedCell = (cells: readonly Cell[]): Cell | undefined => {
 export type LandingPreviewProps = {
   /**
    * The Demo Session to show. Not an open Session: it is never in the loader's
-   * list, never in the File menu, and a dropped transcript replaces it.
+   * list, never in the file dropdown, and a dropped transcript replaces it.
    */
   readonly session: Session;
 };

@@ -34,7 +34,7 @@
  *
  * {@link useSessionLoader} owns the Session list — which files parsed, which
  * are still parsing, which failed, and Subagent Session counts — so switching
- * Sessions from the filename menu never re-parses anything. `LoadedSession` owns
+ * Sessions from the file dropdown never re-parses anything. `LoadedSession` owns
  * the selected API Call because the grid, legend and Scrubber all read it; the
  * Context Window override stays above that Session state so it survives a switch.
  *
@@ -114,14 +114,14 @@ const NO_DEMO: DemoState = {
 
 const App = () => {
   const loader = useSessionLoader();
-  // Not per-Session: switching Sessions from the filename menu keeps whatever
+  // Not per-Session: switching Sessions from the file dropdown keeps whatever
   // override is selected, matching the throwaway prototype this was settled
   // against.
   const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
   const [demo, setDemo] = useState<DemoState>(NO_DEMO);
   // The landing page's background. Held here rather than in `useSessionLoader`
   // on purpose: it must not be an open Session. Putting it in the loader would
-  // put it in the File menu, and — because `addEntries` only selects a parsed
+  // put it in the file dropdown, and — because `addEntries` only selects a parsed
   // Session when nothing is selected yet — would leave a dropped transcript
   // sitting behind a demo the visitor never asked to open.
   const [preview, setPreview] = useState<Session | undefined>(undefined);
@@ -233,7 +233,7 @@ const App = () => {
         isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
       }`}
     >
-      {/* Outside the blur: the File menu is how someone with no transcript
+      {/* Outside the blur: the file dropdown is how someone with no transcript
           reaches the Demo Sessions, so it stays sharp and reachable on the
           landing page. */}
       <MenuBar {...menuBarProps} />

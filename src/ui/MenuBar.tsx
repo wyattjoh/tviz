@@ -1,11 +1,10 @@
 /**
- * The Workbench's top region: the wordmark, the File menu, static Session
- * identity, and the active filename's Session menu.
+ * The Workbench's top region: the wordmark, static Session identity, and one
+ * right-aligned file dropdown.
  *
- * The filename menu opens individual transcripts and switches among loaded
- * Sessions. The File menu keeps project-folder import, Demo Sessions, and close
- * actions. Both pickers feed the same `collectFileListEntries` path as the drop
- * zone.
+ * The dropdown opens individual transcripts or folders, loads Demo Sessions,
+ * switches among loaded Sessions, and closes Sessions. Both pickers feed the
+ * same `collectFileListEntries` path as the drop zone.
  */
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -16,7 +15,7 @@ import { SessionHeader } from "./SessionHeader.tsx";
 import type { LoadErrorEntry, PendingEntry } from "./session-loader.ts";
 
 /**
- * One line of the File menu.
+ * One button row in the file dropdown.
  */
 type MenuItemProps = {
   /**
@@ -44,7 +43,7 @@ const MenuItem = ({ label, hint, onClick, checked, disabled }: MenuItemProps) =>
     disabled={disabled === true || onClick === undefined}
     onClick={onClick}
     aria-pressed={checked}
-    className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left text-xs text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text disabled:opacity-40 disabled:hover:bg-transparent"
+    className="flex min-h-11 w-full touch-manipulation items-center gap-3 px-3 py-2.5 text-left text-sm text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text disabled:opacity-40 disabled:hover:bg-transparent md:min-h-0 md:items-baseline md:py-1.5 md:text-xs"
   >
     <span className="w-3 shrink-0 self-center text-ui-focus" aria-hidden="true">
       {checked === true ? <Check className="h-3 w-3" /> : null}
@@ -71,16 +70,19 @@ type PickerMenuItemProps = {
 const PickerMenuItem = ({ label, hint, directory, onFiles, onPicked }: PickerMenuItemProps) => {
   const inputId = useId();
   return (
-    <div className="flex items-baseline gap-3 px-3 py-1.5 text-xs text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text">
-      {/* The empty check gutter `MenuItem` reserves, so every row's label
-          starts on the same column whether or not it can be checked. */}
-      <span className="w-3 shrink-0" aria-hidden="true" />
-      <label htmlFor={inputId} className="flex-1 cursor-pointer truncate">
-        {label}
+    <>
+      <label
+        htmlFor={inputId}
+        className="flex min-h-11 w-full cursor-pointer touch-manipulation items-center gap-3 px-3 py-2.5 text-sm text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text md:min-h-0 md:items-baseline md:py-1.5 md:text-xs"
+      >
+        {/* The empty check gutter `MenuItem` reserves, so every row's label
+            starts on the same column whether or not it can be checked. */}
+        <span className="w-3 shrink-0" aria-hidden="true" />
+        <span className="flex-1 truncate">{label}</span>
+        {hint === undefined ? null : (
+          <span className="shrink-0 text-[10px] text-ui-text-faint">{hint}</span>
+        )}
       </label>
-      {hint === undefined ? null : (
-        <span className="shrink-0 text-[10px] text-ui-text-faint">{hint}</span>
-      )}
       <input
         id={inputId}
         type="file"
@@ -96,7 +98,7 @@ const PickerMenuItem = ({ label, hint, directory, onFiles, onPicked }: PickerMen
           onPicked();
         }}
       />
-    </div>
+    </>
   );
 };
 
@@ -178,9 +180,9 @@ export type MenuBarProps = {
 };
 
 /**
- * The filename button and menu for opening or switching Sessions.
+ * The single file dropdown, labeled by the selected Session when one is open.
  */
-const SessionMenu = ({
+const FileDropdown = ({
   selectedSession,
   sessions,
   selectedId,
@@ -188,8 +190,12 @@ const SessionMenu = ({
   errors,
   onFiles,
   onSelectSession,
+  onCloseSession,
+  onCloseAll,
+  onLoadDemo,
+  demoBusy,
   demoLabels,
-}: MenuBarProps & { readonly selectedSession: Session }) => {
+}: MenuBarProps & { readonly selectedSession: Session | undefined }) => {
   const { container, open, setOpen } = useDismissibleMenu();
   const close = () => setOpen(false);
 
@@ -197,15 +203,19 @@ const SessionMenu = ({
     <div ref={container} className="relative ml-auto min-w-0">
       <button
         type="button"
-        title={selectedSession.fileName}
+        title={selectedSession?.fileName}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`flex max-w-full min-w-0 items-center gap-1.5 rounded px-2 py-0.5 text-right text-ui-focus ${
-          open ? "bg-ui-panel-active" : "hover:bg-ui-panel"
+        className={`flex min-h-11 max-w-full min-w-0 touch-manipulation items-center gap-1.5 rounded px-3 text-right text-sm md:min-h-0 md:px-2 md:py-0.5 md:text-xs ${
+          open
+            ? "bg-ui-panel-active text-ui-text"
+            : selectedSession === undefined
+              ? "text-ui-text-secondary hover:bg-ui-panel"
+              : "text-ui-focus hover:bg-ui-panel"
         }`}
       >
-        <span className="truncate">{selectedSession.fileName}</span>
+        <span className="truncate">{selectedSession?.fileName ?? "File"}</span>
         <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
         {pending.length === 0 ? null : (
           <span
@@ -233,7 +243,7 @@ const SessionMenu = ({
           : ` ${errors.length} file${errors.length === 1 ? "" : "s"} failed to parse.`}
       </span>
       {!open ? null : (
-        <div className="absolute top-full right-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
+        <div className="absolute top-full right-0 z-40 mt-1 max-h-[calc(100dvh-4rem)] w-[calc(100vw-1.5rem)] max-w-[340px] overflow-y-auto rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg md:w-[290px]">
           <PickerMenuItem
             label="Open session…"
             hint={undefined}
@@ -241,85 +251,6 @@ const SessionMenu = ({
             onFiles={onFiles}
             onPicked={close}
           />
-          <div className="my-1 border-t border-ui-border" />
-          <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
-            Open sessions
-          </div>
-          {sessions.map((session) => (
-            <MenuItem
-              key={session.id}
-              label={
-                demoLabels.has(session.id)
-                  ? `${demoLabels.get(session.id)} (demo)`
-                  : session.fileName
-              }
-              hint={`${session.calls.length} · ${formatTokens(peakMeasuredTotal(session.calls))}`}
-              checked={session.id === selectedId}
-              disabled={false}
-              onClick={() => {
-                onSelectSession(session.id);
-                close();
-              }}
-            />
-          ))}
-          {pending.length === 0 ? null : (
-            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
-              parsing {pending.length} file{pending.length === 1 ? "" : "s"}…
-            </div>
-          )}
-          {errors.length === 0 ? null : (
-            <>
-              <div className="my-1 border-t border-ui-border" />
-              <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
-                Failed
-              </div>
-              {errors.map((entry) => (
-                <div
-                  key={entry.id}
-                  role="alert"
-                  className="py-1.5 pr-3 pl-9 text-xs text-ui-danger"
-                >
-                  {entry.fileName}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
- * The File menu: open on click, closed by Escape or a click outside it.
- */
-const FileMenu = ({
-  sessions,
-  selectedId,
-  onFiles,
-  onCloseSession,
-  onCloseAll,
-  onLoadDemo,
-  demoBusy,
-}: MenuBarProps) => {
-  const { container, open, setOpen } = useDismissibleMenu();
-  const close = () => setOpen(false);
-
-  return (
-    <div ref={container} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${
-          open ? "bg-ui-panel-active text-ui-text" : "text-ui-text-secondary hover:bg-ui-panel"
-        }`}
-      >
-        File
-      </button>
-      {!open ? null : (
-        <div className="absolute top-full left-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
           <PickerMenuItem
             label="Open folder…"
             hint={undefined}
@@ -338,9 +269,56 @@ const FileMenu = ({
             }}
           />
           {!demoBusy ? null : (
-            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
+            <div className="min-h-11 py-2.5 pr-3 pl-9 text-sm text-ui-text-faint md:min-h-0 md:py-1.5 md:text-xs">
               loading demo sessions…
             </div>
+          )}
+          {sessions.length === 0 ? null : (
+            <>
+              <div className="my-1 border-t border-ui-border" />
+              <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
+                Open sessions
+              </div>
+            </>
+          )}
+          {sessions.map((session) => (
+            <MenuItem
+              key={session.id}
+              label={
+                demoLabels.has(session.id)
+                  ? `${demoLabels.get(session.id)} (demo)`
+                  : session.fileName
+              }
+              hint={`${session.calls.length} · ${formatTokens(peakMeasuredTotal(session.calls))}`}
+              checked={session.id === selectedId}
+              disabled={false}
+              onClick={() => {
+                onSelectSession(session.id);
+                close();
+              }}
+            />
+          ))}
+          {pending.length === 0 ? null : (
+            <div className="min-h-11 py-2.5 pr-3 pl-9 text-sm text-ui-text-faint md:min-h-0 md:py-1.5 md:text-xs">
+              parsing {pending.length} file{pending.length === 1 ? "" : "s"}…
+            </div>
+          )}
+          {errors.length === 0 ? null : (
+            <>
+              <div className="my-1 border-t border-ui-border" />
+              <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
+                Failed
+              </div>
+              {errors.map((entry) => (
+                <div
+                  key={entry.id}
+                  role="alert"
+                  className="min-h-11 py-2.5 pr-3 pl-9 text-sm text-ui-danger md:min-h-0 md:py-1.5 md:text-xs"
+                >
+                  {entry.fileName}
+                </div>
+              ))}
+            </>
           )}
           <div className="my-1 border-t border-ui-border" />
           <MenuItem
@@ -389,11 +367,12 @@ export const MenuBar = (props: MenuBarProps) => {
       className="flex min-w-0 items-center gap-3 border-b border-ui-border bg-ui-shell px-3 py-1.5"
     >
       <span className="shrink-0 text-xs tracking-[0.18em] text-ui-text-faint uppercase">tviz</span>
-      <FileMenu {...props} />
-      {selectedSession === undefined ? null : (
+      {selectedSession === undefined ? (
+        <FileDropdown {...props} selectedSession={undefined} />
+      ) : (
         <SessionHeader
           session={selectedSession}
-          sessionMenu={<SessionMenu {...props} selectedSession={selectedSession} />}
+          sessionMenu={<FileDropdown {...props} selectedSession={selectedSession} />}
         />
       )}
     </header>

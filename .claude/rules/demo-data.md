@@ -34,8 +34,8 @@ unconditionally, so keep `PREVIEW_SESSION_ID` pointed at the smallest file; swit
 It goes through the same `fetchManifest`/`loadOne` and so the same Worker client. It reports
 nothing: a missing manifest, an unknown id or a parse failure all return `undefined` and the
 landing page falls back to a plain drop panel. Only a demo load someone clicked for earns an
-alert. The preview is never an open Session — it is not in the loader, not in the File menu,
-and a dropped transcript replaces it.
+alert. The preview is never an open Session — it is not in the loader, not in the file
+dropdown, and a dropped transcript replaces it.
 
 ## Regenerating a Demo Session
 

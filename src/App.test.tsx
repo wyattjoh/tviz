@@ -151,9 +151,9 @@ describe("App", () => {
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    // 1 — one top bar with the File menu and selected Session details.
+    // 1 — one top bar with the unified file dropdown and selected Session details.
     const menuBar = screen.getByRole("banner", { name: "tviz" });
-    expect(menuBar.contains(screen.getByRole("button", { name: "File" }))).toBe(true);
+    expect(menuBar.contains(screen.getByRole("button", { name: "session-a.jsonl" }))).toBe(true);
     const sessionDetails = screen.getByRole("region", { name: "Session" });
     expect(menuBar.contains(sessionDetails)).toBe(true);
     expect(sessionDetails.contains(screen.getByText("session-a.jsonl"))).toBe(true);
@@ -303,7 +303,7 @@ describe("App", () => {
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    closeSessionFromFileMenu();
+    closeSessionFromDropdown();
 
     expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
     expect(queryContextGrid()).toBeNull();
@@ -620,10 +620,10 @@ describe("App", () => {
       expect(rail().textContent).toContain("Free space");
 
       // One keypress closes one thing: the open menu, not the pin under it.
-      const file = screen.getByRole("button", { name: "File" });
-      fireEvent.click(file);
+      const fileDropdown = screen.getByRole("button", { name: "session-a.jsonl" });
+      fireEvent.click(fileDropdown);
       fireEvent.keyDown(document, { key: "Escape" });
-      expect(file.getAttribute("aria-expanded")).toBe("false");
+      expect(fileDropdown.getAttribute("aria-expanded")).toBe("false");
       expect(panel.textContent).toContain("pinned");
 
       fireEvent.keyDown(document, { key: "Escape" });
@@ -766,7 +766,7 @@ describe("App", () => {
         "session-a.jsonl",
       );
 
-      closeSessionFromFileMenu();
+      closeSessionFromDropdown();
 
       // Still on the Workbench — session-b.jsonl took the vacated slot —
       // rather than dropped back to the empty state with an open Session
@@ -809,7 +809,7 @@ describe("App", () => {
       drop(transcriptFile("session-a.jsonl", transcript()));
       await findContextGrid();
 
-      closeSessionFromFileMenu();
+      closeSessionFromDropdown();
 
       await waitFor(() => expect(dropPanelLayer().hasAttribute("inert")).toBe(false));
       expect(layer("workbench").hasAttribute("inert")).toBe(true);
@@ -1024,15 +1024,11 @@ const stubDemoFetch = (manifestBody: unknown = DEMO_MANIFEST): void => {
 };
 
 /**
- * The empty state's own button. The File menu is the other entry point, and
- * the only one once a Session is open.
+ * The empty state's own button. The right file dropdown is the other entry
+ * point, and the only one once a Session is open.
  */
 const loadDemo = (): void => {
   fireEvent.click(screen.getByRole("button", { name: "load demo sessions" }));
-};
-
-const openFileMenu = (): void => {
-  fireEvent.click(screen.getByRole("button", { name: "File" }));
 };
 
 const openSessionMenu = (): HTMLElement => {
@@ -1041,8 +1037,8 @@ const openSessionMenu = (): HTMLElement => {
   return button;
 };
 
-const closeSessionFromFileMenu = (): void => {
-  openFileMenu();
+const closeSessionFromDropdown = (): void => {
+  openSessionMenu();
   fireEvent.click(screen.getByRole("button", { name: "Close session" }));
 };
 
@@ -1054,8 +1050,8 @@ const openWindowMenu = (): void => {
   fireEvent.click(screen.getByRole("button", { name: "Context Window override" }));
 };
 
-const loadDemoFromFileMenu = (): void => {
-  openFileMenu();
+const loadDemoFromDropdown = (): void => {
+  openSessionMenu();
   fireEvent.click(screen.getByRole("button", { name: "Load demo sessions" }));
 };
 
@@ -1141,13 +1137,13 @@ describe("App demo mode", () => {
     );
   });
 
-  it("reaches the demo from the File menu of a loaded Session", async () => {
+  it("reaches the demo from the filename dropdown of a loaded Session", async () => {
     stubDemoFetch();
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    loadDemoFromFileMenu();
+    loadDemoFromDropdown();
     await screen.findByText(DEMO_MANIFEST.note);
 
     // The dropped Session stays open beside the Demo Sessions; the demo does
@@ -1174,7 +1170,7 @@ describe("App demo mode", () => {
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    loadDemoFromFileMenu();
+    loadDemoFromDropdown();
     await waitFor(() => {
       expect(screen.queryByText(DEMO_MANIFEST.note)).toBeNull();
     });

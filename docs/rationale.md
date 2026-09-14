@@ -71,10 +71,12 @@ loop reads as a slow pulse rather than a session filling up.
 strip below the File menu. That made identity clear, but it permanently took height away
 from the visualization. The static details now share the menu bar, with lower-priority
 metadata disappearing at narrow breakpoints and the active filename anchored at the right.
-That filename is the Session switcher: its menu opens another transcript or selects one
-already loaded, while the File menu keeps folder import, demos, and close actions. API-call
-position stays in the Scrubber. The grid gets the reclaimed row without turning the header
-into a second transport.
+That filename opens the only file dropdown: it imports transcripts or folders, loads demos,
+switches among open Sessions, and closes them. With no Session selected, the same right-side
+control says “File” so demo mode and file import remain reachable. Its trigger and rows grow
+to 44px touch targets on phones while desktop keeps the compact treatment. API-call position
+stays in the Scrubber. The grid gets the reclaimed row without turning the header into a
+second transport.
 
 **A fixed-cell grid, not a treemap.** A treemap packs more into each pixel, but the grid is
 the picture Claude Code users already have in their heads, and because every cell is the

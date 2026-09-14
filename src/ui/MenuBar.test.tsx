@@ -73,16 +73,33 @@ const sessionRow = (fileName: RegExp): HTMLElement => {
 };
 
 describe("MenuBar", () => {
-  it("opens the File menu and closes it on Escape", () => {
+  it("opens the unified file dropdown and closes it on Escape", () => {
     render(<MenuBar {...baseProps()} />);
 
     const button = openFileMenu();
     expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Open session…")).toBeDefined();
     expect(screen.getByText("Open folder…")).toBeDefined();
-    expect(screen.queryByText("Open session…")).toBeNull();
+    expect(screen.getByText("Load demo sessions")).toBeDefined();
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("gives the file trigger and dropdown choices mobile-sized targets", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id })} />);
+
+    const trigger = openSessionMenu(selected.fileName);
+    const pickerRow = screen.getByText("Open session…").closest("label");
+    const actionRow = screen.getByRole("button", { name: "Close all sessions" });
+
+    expect(trigger.className).toContain("min-h-11");
+    expect(trigger.className).toContain("md:min-h-0");
+    expect(pickerRow?.className).toContain("min-h-11");
+    expect(pickerRow?.className).toContain("md:min-h-0");
+    expect(actionRow.className).toContain("min-h-11");
+    expect(actionRow.className).toContain("md:min-h-0");
   });
 
   it("merges the selected Session into the bar with its filename at the far right", () => {
@@ -195,7 +212,7 @@ describe("MenuBar", () => {
     expect(screen.getByRole("alert").textContent).toBe("bad.jsonl");
   });
 
-  it("closes only the selected Session from the File menu", () => {
+  it("closes only the selected Session from the filename dropdown", () => {
     const selected = session("s1", "session-a.jsonl", 1_000);
     const onCloseSession = vi.fn();
     render(
@@ -208,7 +225,8 @@ describe("MenuBar", () => {
       />,
     );
 
-    openFileMenu();
+    openSessionMenu(selected.fileName);
+    expect(screen.queryByRole("button", { name: "File" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Close session" }));
     expect(onCloseSession).toHaveBeenCalledWith(selected.id);
   });
@@ -344,7 +362,7 @@ describe("MenuBar", () => {
     expect(sessionRow(/^Medium session \(demo\)/)).toBeDefined();
     fireEvent.keyDown(document, { key: "Escape" });
 
-    openFileMenu();
+    openSessionMenu("medium.jsonl");
     fireEvent.click(screen.getByRole("button", { name: "Load demo sessions" }));
     expect(onLoadDemo).toHaveBeenCalledTimes(1);
   });

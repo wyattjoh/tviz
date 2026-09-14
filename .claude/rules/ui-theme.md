@@ -54,8 +54,8 @@ Scrubber's chart — never by tag.
 ## Layout
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
-`wyattjoh/ui-prototype`; see its `src/prototype/README.md`): one top bar carrying the File
-menu and active Session details, then four slotted regions — grid pane, right rail,
+`wyattjoh/ui-prototype`; see its `src/prototype/README.md`): one top bar carrying the file
+dropdown and active Session details, then four slotted regions — grid pane, right rail,
 Inspector, and Scrubber inside the shell. From `md` up the body
 is `minmax(0,1fr)_340px`: the grid and settings rail share the first row, then the Inspector
 and Scrubber each span both columns below them. The grid pane is the scroll container, and
@@ -137,8 +137,8 @@ control nobody can see; without it on the faded panel, an invisible layer coveri
 Workbench keeps its tab stops. Tests read which state the app is in off those attributes
 rather than off what is mounted.
 
-The menu bar sits *outside* the stack and stays sharp: the File menu is how a visitor with
-no transcript reaches the Demo Sessions.
+The menu bar sits *outside* the stack and stays sharp: the right-aligned file dropdown says
+“File” when no Session is selected, which is how a visitor reaches the Demo Sessions.
 
 Keep the Workbench layer at exactly the size and position the real one gets — no scaling, no
 inset, nothing that would show a layout the loaded view never has. `LandingPreview` uses the
@@ -157,13 +157,13 @@ and `DropZone` only draws the `isOver` it is handed. A second drop handler anywh
 would bubble to that root and import every dropped file twice.
 
 The top bar's Session region is static file identity only — id, model, CC version, Subagent
-Session count, and the filename menu as its rightmost item. Lower-priority identity fields
-hide at narrow breakpoints so the filename keeps its space. The filename is a button that
-opens individual transcripts, reports pending or failed loads, and switches among open
-Sessions. API Call state stays in the Scrubber; "Close session" stays in the File menu beside
-"Close all sessions"; and the fill meter and Context Window override stay in
-`ContextWindowPanel` under Categories. New per-Session state belongs in a rail panel, not
-back in the top bar.
+Session count, and the file dropdown as its rightmost item. Lower-priority identity fields
+hide at narrow breakpoints so the filename keeps its space. The filename button opens the
+single dropdown for transcript and folder import, Demo Sessions, pending or failed load
+status, switching among open Sessions, and both close actions. When no Session is selected,
+the same right-aligned dropdown says “File.” API Call state stays in the Scrubber; the fill
+meter and Context Window override stay in `ContextWindowPanel` under Categories. New
+per-Session state belongs in a rail panel, not back in the top bar.
 
 A rail panel is a reading; a setting that changes it rides in the panel's header row
 through `RailPanel`'s `action` slot, as `ContextWindowMenu`'s cog does — not as a row of
@@ -186,11 +186,12 @@ Cell in the Inspector while the pinned Cell remains raised, and leaving the grid
 the pinned reading. Escape leaves the pin alone while a menu is open, so one keypress closes
 one thing.
 
-The menu bar (`src/ui/MenuBar.tsx`) splits navigation by intent. The filename menu carries
-Open session…, pending and failed file status, and the list of open Sessions (a Demo Session
-shows its manifest name and "(demo)" rather than the file it is served as). The File menu
-keeps Open folder…, Load demo sessions, Close session, and Close all sessions. There is no
-session sidebar.
+The menu bar (`src/ui/MenuBar.tsx`) uses one right-aligned file dropdown rather than splitting
+navigation across two menus. It carries Open session…, Open folder…, Load demo sessions,
+pending and failed file status, the list of open Sessions, Close session, and Close all
+sessions. A Demo Session shows its manifest name and "(demo)" rather than the file it is
+served as. The trigger and every actionable row use a 44px minimum height and larger text
+below `md`, with compact sizing restored from `md` up. There is no session sidebar.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a
