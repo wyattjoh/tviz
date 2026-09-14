@@ -11,7 +11,7 @@
  * the transport buttons, or step the range input with the arrow keys. Playback
  * lives here too; any manual scrub pauses it.
  */
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Check, ChevronDown, Gauge, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -22,7 +22,6 @@ import {
   useState,
 } from "react";
 import type { ContextSnapshot } from "../domain/context.ts";
-import { formatTokens } from "./format.ts";
 import {
   bandsFor,
   callIndexAtRatio,
@@ -42,6 +41,87 @@ const BASE_INTERVAL_MS = 260;
  * Playback speeds offered, as multiples of {@link BASE_INTERVAL_MS}.
  */
 const SPEEDS = [0.5, 1, 2, 4] as const;
+
+type PlaybackSpeed = (typeof SPEEDS)[number];
+
+type PlaybackSpeedMenuProps = {
+  readonly speed: PlaybackSpeed;
+  readonly onSpeedChange: (speed: PlaybackSpeed) => void;
+};
+
+/**
+ * Selects playback speed without spending a standing row on four choices.
+ */
+const PlaybackSpeedMenu = ({ speed, onSpeedChange }: PlaybackSpeedMenuProps) => {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={container} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`Playback speed: ${speed}×`}
+        className={`flex min-h-11 w-24 min-w-11 touch-manipulation items-center gap-2 rounded border border-ui-border px-3 py-2 text-left text-sm md:min-h-0 md:w-20 md:min-w-0 md:px-2 md:py-1 md:text-[11px] ${
+          open
+            ? "bg-ui-panel-active text-ui-text"
+            : "text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+        }`}
+      >
+        <Gauge
+          aria-hidden="true"
+          data-icon="playback-speed"
+          className="h-4 w-4 shrink-0 md:h-3.5 md:w-3.5"
+        />
+        <span className="flex-1">{speed}×</span>
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 md:h-3 md:w-3" />
+      </button>
+      {!open ? null : (
+        <div
+          role="group"
+          aria-label="Playback speed"
+          className="absolute top-full right-0 z-40 mt-1 w-full min-w-24 overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg"
+        >
+          {SPEEDS.map((choice) => (
+            <button
+              type="button"
+              key={choice}
+              aria-pressed={choice === speed}
+              onClick={() => {
+                onSpeedChange(choice);
+                setOpen(false);
+              }}
+              className="flex min-h-11 w-full touch-manipulation items-center gap-2 px-3 py-2 text-left text-sm text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text md:min-h-0 md:px-2 md:py-1 md:text-[11px]"
+            >
+              <span className="w-3 shrink-0 text-ui-focus" aria-hidden="true">
+                {choice === speed ? <Check aria-hidden="true" className="h-3 w-3" /> : null}
+              </span>
+              {choice}×
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 /**
  * Steps the selected API Call forward while playing.
@@ -63,7 +143,7 @@ const usePlayback = (
   onSelectCall: (index: number) => void,
 ) => {
   const [requested, setRequested] = useState(false);
-  const [speed, setSpeed] = useState<number>(1);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1);
 
   // Reaching the last API Call ends playback by derivation rather than by
   // clearing the flag from inside the effect: the end of a Session is a fact
@@ -217,74 +297,53 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
       // than each bringing its own.
       className="bg-ui-sunken px-4 py-2.5"
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => scrubTo(0)}
             aria-label="First call"
-            className="rounded px-2 py-1.5 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+            className="flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded p-0 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text md:min-h-0 md:min-w-0 md:px-2 md:py-1.5"
           >
             {/* The icons are `aria-hidden`: every transport button already
                 carries its own label, and "Play" flipping to "Pause" is what a
                 screen reader follows rather than the glyph. */}
-            <SkipBack aria-hidden="true" className="h-3.5 w-3.5" />
+            <SkipBack aria-hidden="true" className="h-5 w-5 md:h-3.5 md:w-3.5" />
           </button>
           <button
             type="button"
             onClick={play.toggle}
             aria-label={play.playing ? "Pause" : "Play"}
-            className="rounded bg-ui-action px-3 py-1.5 text-ui-shell hover:opacity-90"
+            className="flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded bg-ui-action p-0 text-ui-shell hover:opacity-90 md:min-h-0 md:min-w-0 md:px-3 md:py-1.5"
           >
             {play.playing ? (
-              <Pause aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+              <Pause aria-hidden="true" className="h-5 w-5 fill-current md:h-3.5 md:w-3.5" />
             ) : (
-              <Play aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+              <Play aria-hidden="true" className="h-5 w-5 fill-current md:h-3.5 md:w-3.5" />
             )}
           </button>
           <button
             type="button"
             onClick={() => scrubTo(lastIndex)}
             aria-label="Last call"
-            className="rounded px-2 py-1.5 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text"
+            className="flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded p-0 text-ui-text-muted hover:bg-ui-panel hover:text-ui-text md:min-h-0 md:min-w-0 md:px-2 md:py-1.5"
           >
-            <SkipForward aria-hidden="true" className="h-3.5 w-3.5" />
+            <SkipForward aria-hidden="true" className="h-5 w-5 md:h-3.5 md:w-3.5" />
           </button>
         </div>
 
-        <div
-          role="group"
-          aria-label="Playback speed"
-          className="flex overflow-hidden rounded border border-ui-border text-[11px]"
-        >
-          {SPEEDS.map((speed) => (
-            <button
-              type="button"
-              key={speed}
-              onClick={() => play.setSpeed(speed)}
-              aria-pressed={play.speed === speed}
-              className={`px-2 py-1 font-mono ${
-                play.speed === speed
-                  ? "bg-ui-panel-active text-ui-text"
-                  : "text-ui-text-muted hover:bg-ui-panel"
-              }`}
-            >
-              {speed}×
-            </button>
-          ))}
-        </div>
-
-        <span className="font-mono text-xs text-ui-text-secondary">
+        <span className="min-w-0 flex-1 truncate text-center font-mono text-xs text-ui-text-secondary">
           call {callIndex + 1}/{calls.length}
-          {selected === undefined ? null : ` · ${formatTokens(selected.measuredTotal)}`}
         </span>
 
-        {compactions.length === 0 ? null : (
-          <span className="ml-auto text-[11px] text-ui-text-faint">
-            dashed rule = compaction ({compactions.length})
-          </span>
-        )}
+        <PlaybackSpeedMenu speed={play.speed} onSpeedChange={play.setSpeed} />
       </div>
+
+      {compactions.length === 0 ? null : (
+        <p className="mt-1.5 text-right text-[11px] text-ui-text-faint">
+          dashed rule = compaction ({compactions.length})
+        </p>
+      )}
 
       <div className="mt-2 rounded border border-ui-border bg-ui-canvas">
         {/* The chart is a drag surface and a picture; the range input below

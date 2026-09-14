@@ -89,9 +89,13 @@ load a grouped layout hides.
 there", and the answer is a list with a token count per item. A tooltip that vanishes when
 the pointer moves can't be read down, compared with the next cell, or kept while you
 scrub. So the inspector is its own region below the desktop grid and one of three floating
-Info Panes on a phone. Clicking a cell pins it and raises that pane without taking the
-legend or Context Window controls away; hovering another cell previews it, then returns to
-the pinned reading. Message kinds get the same treatment as categories — they hide in
+Info Panes on a phone. Every Legend-pane control, each Info Pane tab, and the Scrubber's
+controls use 44px mobile tap targets while the desktop chrome stays compact. The Scrubber
+keeps transport on the left, the concise `call x/y` position between the controls, and its
+speed choices behind an icon-labelled dropdown on the right. This reduces clutter without
+hiding the current position or selected speed. Clicking a cell pins the
+Inspector and raises that pane without taking the legend or Context Window controls away;
+hovering another cell previews it, then returns to the pinned reading. Message kinds get the same treatment as categories — they hide in
 place and always keep their own colours — because "how much of this session is tool output"
 is the question people actually arrive with. The Messages row gathers the enabled kinds
 into one radial, multicolour swatch and remains the all/none control, so the overview and

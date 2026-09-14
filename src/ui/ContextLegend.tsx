@@ -79,12 +79,12 @@ export const FilterAllButton = ({ filters, onToggle }: FilterAllButtonProps) => 
       onClick={onToggle}
       aria-label={label}
       title={label}
-      className="-my-1 touch-manipulation rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
+      className="flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded p-0 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text md:-my-1 md:min-h-0 md:min-w-0 md:p-1"
     >
       <Icon
         aria-hidden="true"
         data-icon={selecting ? "select-all" : "deselect-all"}
-        className="h-3.5 w-3.5"
+        className="h-5 w-5 md:h-3.5 md:w-3.5"
       />
     </button>
   );

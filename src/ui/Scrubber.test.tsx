@@ -116,7 +116,66 @@ describe("Scrubber", () => {
     const { calls } = renderScrubber();
 
     expect(range().value).toBe(String(calls.length - 1));
-    expect(position()).toContain(`call ${calls.length}/${calls.length}`);
+    expect(position()).toBe(`call ${calls.length}/${calls.length}`);
+  });
+
+  it("puts the call position between transport and speed", () => {
+    renderScrubber();
+
+    const call = screen.getByText(/^call \d+\/\d+$/);
+    expect(call.className).toContain("text-center");
+    expect(call.previousElementSibling?.contains(screen.getByLabelText("Play"))).toBe(true);
+    expect(
+      call.nextElementSibling?.contains(screen.getByRole("button", { name: "Playback speed: 1×" })),
+    ).toBe(true);
+  });
+
+  it("gives transport and speed controls 44px mobile targets with compact desktop sizing", () => {
+    renderScrubber();
+
+    const controls = ["First call", "Play", "Last call", "Playback speed: 1×"].map((name) =>
+      screen.getByRole("button", { name }),
+    );
+
+    for (const control of controls) {
+      expect(control.className).toContain("min-h-11");
+      expect(control.className).toContain("min-w-11");
+      expect(control.className).toContain("touch-manipulation");
+      expect(control.className).toContain("md:min-h-0");
+      expect(control.className).toContain("md:min-w-0");
+    }
+  });
+
+  it("selects playback speed from an icon-labelled dropdown", () => {
+    renderScrubber();
+
+    const trigger = screen.getByRole("button", { name: "Playback speed: 1×" });
+    expect(trigger.querySelector('[data-icon="playback-speed"]')).not.toBeNull();
+    expect(screen.queryByRole("group", { name: "Playback speed" })).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const selectedChoice = screen.getByRole("button", { name: "1×" });
+    expect(selectedChoice.getAttribute("aria-pressed")).toBe("true");
+    expect(selectedChoice.className).toContain("min-h-11");
+    expect(selectedChoice.className).toContain("touch-manipulation");
+    expect(selectedChoice.className).toContain("md:min-h-0");
+
+    fireEvent.click(screen.getByRole("button", { name: "2×" }));
+    expect(screen.getByRole("button", { name: "Playback speed: 2×" })).toBeDefined();
+    expect(screen.queryByRole("group", { name: "Playback speed" })).toBeNull();
+  });
+
+  it("closes the playback speed dropdown on Escape or an outside press", () => {
+    renderScrubber();
+
+    fireEvent.click(screen.getByRole("button", { name: "Playback speed: 1×" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Playback speed" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Playback speed: 1×" }));
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("group", { name: "Playback speed" })).toBeNull();
   });
 
   it("scrubs to the API Call under the pointer when the chart is dragged", () => {
@@ -239,7 +298,8 @@ describe("Scrubber", () => {
     expect(range().value).toBe("0");
 
     // At 4x it is exactly one, and the change takes effect on the next step.
-    fireEvent.click(screen.getByText("4×"));
+    fireEvent.click(screen.getByRole("button", { name: "Playback speed: 1×" }));
+    fireEvent.click(screen.getByRole("button", { name: "4×" }));
     act(() => {
       vi.advanceTimersByTime(BASE_INTERVAL_MS / 4);
     });

@@ -106,7 +106,11 @@ describe("FilterAllButton", () => {
 
     const deselect = screen.getByRole("button", { name: "Deselect all filters" });
     expect(deselect.querySelector('[data-icon="deselect-all"]')).not.toBeNull();
+    expect(deselect.className).toContain("min-h-11");
+    expect(deselect.className).toContain("min-w-11");
     expect(deselect.className).toContain("touch-manipulation");
+    expect(deselect.className).toContain("md:min-h-0");
+    expect(deselect.className).toContain("md:min-w-0");
     fireEvent.click(deselect);
     expect(onToggle).toHaveBeenCalledOnce();
 

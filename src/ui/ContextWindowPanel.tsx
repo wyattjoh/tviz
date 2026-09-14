@@ -135,13 +135,13 @@ export const ContextWindowMenu = ({
         aria-haspopup="menu"
         aria-label="Context Window override"
         title="Context Window override"
-        className={`-my-1 rounded p-1 ${
+        className={`flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded p-0 md:-my-1 md:min-h-0 md:min-w-0 md:p-1 ${
           open
             ? "bg-ui-panel-active text-ui-text"
             : "text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
         }`}
       >
-        <Settings aria-hidden="true" className="h-3.5 w-3.5" />
+        <Settings aria-hidden="true" className="h-5 w-5 md:h-3.5 md:w-3.5" />
       </button>
       {!open ? null : (
         <div
@@ -158,7 +158,7 @@ export const ContextWindowMenu = ({
                 onWindowChoiceChange(choice);
                 setOpen(false);
               }}
-              className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left text-xs text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text"
+              className="flex min-h-11 w-full touch-manipulation items-center gap-3 px-3 py-1.5 text-left text-sm text-ui-text-secondary hover:bg-ui-panel-hover hover:text-ui-text md:min-h-0 md:items-baseline md:text-xs"
             >
               <span className="w-3 shrink-0 self-center text-ui-focus" aria-hidden="true">
                 {choice === windowChoice ? <Check className="h-3 w-3" /> : null}

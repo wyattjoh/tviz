@@ -61,9 +61,16 @@ describe("ContextWindowMenu", () => {
     expect(choices()).toBeNull();
     const cog = screen.getByRole("button", { name: "Context Window override" });
     expect(cog.getAttribute("aria-expanded")).toBe("false");
+    expect(cog.className).toContain("min-h-11");
+    expect(cog.className).toContain("min-w-11");
+    expect(cog.className).toContain("touch-manipulation");
+    expect(cog.className).toContain("md:min-h-0");
+    expect(cog.className).toContain("md:min-w-0");
 
     openMenu();
     expect(choices()).not.toBeNull();
+    expect(screen.getByRole("button", { name: "auto" }).className).toContain("min-h-11");
+    expect(screen.getByRole("button", { name: "auto" }).className).toContain("md:min-h-0");
     expect(cog.getAttribute("aria-expanded")).toBe("true");
   });
 

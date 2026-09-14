@@ -89,7 +89,7 @@ describe("the Workbench shell", () => {
   it("reserves the tab bar's height in the grid's scroll clearance", () => {
     shell();
 
-    expect(body().style.getPropertyValue("--tviz-obscured-bottom")).toBe("36px");
+    expect(body().style.getPropertyValue("--tviz-obscured-bottom")).toBe("44px");
     expect(body().className).toContain("md:[--tviz-obscured-bottom:0px]");
   });
 
@@ -113,13 +113,16 @@ describe("the Workbench shell", () => {
 });
 
 describe("the phone Info Pane tabs", () => {
-  it("starts with every pane lowered", () => {
+  it("starts with every pane lowered and gives each tab a 44px touch target", () => {
     shell();
 
     for (const name of ["Legend", "Inspector", "Scrubber"] as const) {
       expect(tab(name).getAttribute("aria-selected")).toBe("false");
       expect(tab(name).getAttribute("aria-expanded")).toBe("false");
+      expect(tab(name).className).toContain("min-h-11");
+      expect(tab(name).className).toContain("touch-manipulation");
       expect(controlledPanel(name).className).toContain("hidden");
+      expect(controlledPanel(name).className).toContain("bottom-11");
     }
   });
 
@@ -186,6 +189,17 @@ describe("the phone Info Pane tabs", () => {
     for (const name of ["Legend", "Inspector", "Scrubber"] as const) {
       expect(tab(name).getAttribute("aria-controls")).toBe(controlledPanel(name).id);
     }
+  });
+});
+
+describe("RailPanel", () => {
+  it("gives its heading a 44px mobile target and restores compact desktop sizing", () => {
+    shell();
+
+    const toggle = screen.getByRole("button", { name: "Categories" });
+    expect(toggle.className).toContain("min-h-11");
+    expect(toggle.className).toContain("touch-manipulation");
+    expect(toggle.className).toContain("md:min-h-0");
   });
 });
 

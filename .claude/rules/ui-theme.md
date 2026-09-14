@@ -63,7 +63,8 @@ both of its dimensions drive `ContextGrid`. Fill a region; do not restructure th
 
 **Below `md` the grid pane keeps the whole body and the rail, Inspector, and Scrubber become
 three mutually exclusive Info Panes floating over its bottom edge.** A phone-only tab bar
-raises one pane at a time; tapping the raised tab lowers it, and all three start lowered.
+with 44px targets raises one pane at a time; tapping the raised tab lowers it, and all three
+start lowered.
 They are tabs, not disclosures: a chevron would promise a drawer that pushes the grid down,
 which is precisely what the overlays avoid. The grid pads its scroll content by the tab bar
 plus the measured open-pane height through `--tviz-obscured-bottom`, so the last Cell can be
@@ -229,9 +230,10 @@ The copy lives in `src/domain/context.ts` (`CATEGORY_DESCRIPTIONS`,
 Category are the words `CONTEXT.md` defines it with. The card's pointer handlers hang off
 the row, not its button — a disabled Message Kind row fires no pointer events of its own and
 still has something to say — and it is `pointer-events-none` so it never swallows the hover
-of the row it covers. Filter controls are at least 44px tall below `md`, with a 16px swatch
-and labels that take the available width and wrap rather than truncate; from `md` up they
-return to the compact desktop rail spacing.
+of the row it covers. Every control in the phone Legend pane is at least 44px tall and uses
+`touch-manipulation`: filter rows, panel headings, bulk actions, override triggers, and menu
+choices. Filter rows use a 16px swatch and labels that take the available width and wrap
+rather than truncate; from `md` up the controls return to the compact desktop rail spacing.
 
 The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell Share** —
 the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
@@ -265,8 +267,13 @@ hide all, while none enabled means show all and clear every individual exclusion
 no alternate Category-colour mode or setting; `GridFilters` only tracks what is hidden.
 
 The Scrubber is a stacked-area chart of Category totals over every API Call, dragged to
-scrub, with transport controls, a 0.5x-4x speed control and a range input for keyboard
-stepping; compactions are dashed rules on the chart. Its geometry lives in
+scrub, with transport controls, a 0.5x-4x speed dropdown and a range input for keyboard
+stepping; compactions are dashed rules on the chart. Transport stays on the left, the
+`call x/y` position sits between the controls without a token reading, and the speed trigger
+stays on the right. Below `md`, every transport button, the speed trigger, and its
+menu choices have a 44px minimum tap target and `touch-manipulation`; desktop restores
+compact sizing. Its
+geometry lives in
 `src/ui/scrubber.ts` so the shape of the chart is testable without a DOM. The chart is a
 drag surface rather than a control: it hands focus to the range input so the arrow keys
 keep stepping after a drag.

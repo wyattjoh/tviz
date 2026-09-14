@@ -124,7 +124,7 @@ const OBSCURED_BOTTOM = "--tviz-obscured-bottom";
  * Info Pane is raised off this, and the grid has to be able to scroll clear of
  * the whole stack.
  */
-const TOOLBAR_HEIGHT_PX = 36;
+const TOOLBAR_HEIGHT_PX = 44;
 
 /**
  * Measures an element's border-box height.
@@ -168,7 +168,7 @@ const useMeasuredHeight = (): readonly [(node: HTMLElement | null) => void, numb
  * reads as continuous with the pane above it; the others stay on the shell.
  */
 const tabClass = (raised: boolean): string =>
-  "flex flex-1 items-center justify-center text-[11px] font-semibold tracking-wide uppercase " +
+  "flex min-h-11 flex-1 touch-manipulation items-center justify-center text-[11px] font-semibold tracking-wide uppercase " +
   (raised
     ? "bg-ui-sunken text-ui-text"
     : "text-ui-text-muted hover:bg-ui-panel hover:text-ui-text");
@@ -283,7 +283,7 @@ export const Workbench = ({
           display: openPane === "legend" ? "flex" : undefined,
           flexDirection: "column",
         }}
-        className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-9 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:col-start-2 md:row-start-1 md:flex md:max-h-none md:border-t-0`}
+        className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-11 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:col-start-2 md:row-start-1 md:flex md:max-h-none md:border-t-0`}
       >
         <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
         <ScrollArea
@@ -300,7 +300,7 @@ export const Workbench = ({
         id={inspectorId}
         aria-label="Inspector"
         ref={inspectorRef}
-        className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
+        className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
       >
         {/* The desktop header is this section's own collapse control, and it
               keeps a chevron: from `md` up this really is a drawer, and folding
@@ -330,7 +330,7 @@ export const Workbench = ({
       <div
         id={scrubberId}
         ref={scrubberRef}
-        className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-9 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-3 md:block`}
+        className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-3 md:block`}
       >
         <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
         {scrubber}
@@ -343,7 +343,7 @@ export const Workbench = ({
       <div
         role="tablist"
         aria-label="Info panes"
-        className="absolute inset-x-0 bottom-0 z-40 flex h-9 items-stretch border-t border-ui-border bg-ui-shell md:hidden"
+        className="absolute inset-x-0 bottom-0 z-40 flex h-11 items-stretch border-t border-ui-border bg-ui-shell md:hidden"
       >
         {/* Only when nothing is raised: an open Info Pane is nearer the grid
               and carries the fade itself. */}
@@ -426,10 +426,10 @@ export const RailPanel = ({ title, action, collapsible = true, children }: RailP
               onClick={() => setFolded((wasFolded) => !wasFolded)}
               aria-expanded={open}
               aria-controls={bodyId}
-              className="-m-1 flex cursor-pointer items-center gap-1.5 p-1 hover:text-ui-text"
+              className="flex min-h-11 touch-manipulation cursor-pointer items-center gap-1.5 p-0 hover:text-ui-text md:-m-1 md:min-h-0 md:p-1"
             >
               <ChevronDown
-                className={`h-3 w-3 shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
+                className={`h-4 w-4 shrink-0 transition-transform md:h-3 md:w-3 ${open ? "" : "-rotate-90"}`}
                 aria-hidden="true"
               />
               {title}
