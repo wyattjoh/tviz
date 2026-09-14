@@ -16,6 +16,7 @@
  * `src/domain/context.ts`, not here, so the words the legend uses for a
  * Category are the words the domain uses for it.
  */
+import { ListChecks, ListX } from "lucide-react";
 import { Fragment, useId, useState } from "react";
 import {
   type Category,
@@ -29,7 +30,12 @@ import {
   MESSAGE_KIND_ORDER,
   type MessageKind,
 } from "../domain/context.ts";
-import { type GridFilters, isCategoryHidden, isMessageKindHidden } from "./filters.ts";
+import {
+  areAllFiltersHidden,
+  type GridFilters,
+  isCategoryHidden,
+  isMessageKindHidden,
+} from "./filters.ts";
 import { formatPercent, formatTokens } from "./format.ts";
 import {
   CATEGORY_FILL_CLASS,
@@ -44,6 +50,45 @@ import {
  * Why the Message Kind rows stop taking clicks: their Category decides for them.
  */
 const MESSAGES_HIDDEN_HINT = "Messages is hidden, which blanks every Kind; show Messages to filter";
+
+/**
+ * Props for {@link FilterAllButton}.
+ */
+type FilterAllButtonProps = {
+  /**
+   * The current filter state, which determines the button's next action.
+   */
+  readonly filters: GridFilters;
+  /**
+   * Selects or deselects every Category and Message Kind.
+   */
+  readonly onToggle: () => void;
+};
+
+/**
+ * The Categories panel's bulk visibility control.
+ */
+export const FilterAllButton = ({ filters, onToggle }: FilterAllButtonProps) => {
+  const selecting = areAllFiltersHidden(filters);
+  const label = selecting ? "Select all filters" : "Deselect all filters";
+  const Icon = selecting ? ListChecks : ListX;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      title={label}
+      className="-my-1 touch-manipulation rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
+    >
+      <Icon
+        aria-hidden="true"
+        data-icon={selecting ? "select-all" : "deselect-all"}
+        className="h-3.5 w-3.5"
+      />
+    </button>
+  );
+};
 
 /**
  * Props for {@link ContextLegend}.

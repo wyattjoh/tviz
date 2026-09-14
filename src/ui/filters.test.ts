@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { MESSAGE_KIND_ORDER } from "../domain/context.ts";
+import { CATEGORY_ORDER, MESSAGE_KIND_ORDER } from "../domain/context.ts";
 import type { Cell } from "./grid.ts";
 import {
   ALL_SHOWN,
+  areAllFiltersHidden,
   isCategoryHidden,
   isCellHidden,
   isMessageKindHidden,
+  toggleAllFilters,
   toggleCategory,
   toggleMessageKind,
 } from "./filters.ts";
@@ -59,6 +61,18 @@ describe("GridFilters", () => {
 
     expect(isCategoryHidden(allKindsHidden, "messages")).toBe(true);
     expect(toggleCategory(allKindsHidden, "messages")).toEqual(ALL_SHOWN);
+  });
+
+  it("deselects every filter while anything is shown, then selects all", () => {
+    const partiallyHidden = toggleMessageKind(toggleCategory(ALL_SHOWN, "skills"), "user");
+    expect(areAllFiltersHidden(partiallyHidden)).toBe(false);
+
+    const allHidden = toggleAllFilters(partiallyHidden);
+    expect(areAllFiltersHidden(allHidden)).toBe(true);
+    for (const category of CATEGORY_ORDER) expect(isCategoryHidden(allHidden, category)).toBe(true);
+    for (const kind of MESSAGE_KIND_ORDER) expect(isMessageKindHidden(allHidden, kind)).toBe(true);
+
+    expect(toggleAllFilters(allHidden)).toEqual(ALL_SHOWN);
   });
 
   it("leaves the filters it was given untouched, so a re-render sees a new value", () => {

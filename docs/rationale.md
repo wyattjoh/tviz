@@ -85,6 +85,8 @@ only thing beside the grid until you close it. Message kinds get the same treatm
 categories — they hide in place and always keep their own colours — because "how much of
 this session is tool output" is the question people actually arrive with. The Messages
 row gathers the enabled kinds into one radial, multicolour swatch and remains the all/none
-control, so the overview and the individual filters tell the same story.
+control, so the overview and the individual filters tell the same story. A second all/none
+control in the Categories heading covers every category and kind at once; its icon names
+the next action rather than the current state, so one click always has a predictable result.
 
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).

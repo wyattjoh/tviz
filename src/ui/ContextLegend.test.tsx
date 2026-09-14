@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type Category,
@@ -13,8 +14,14 @@ import {
   MESSAGE_KIND_ORDER,
   type MessageKind,
 } from "../domain/context.ts";
-import { ContextLegend } from "./ContextLegend.tsx";
-import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./filters.ts";
+import { ContextLegend, FilterAllButton } from "./ContextLegend.tsx";
+import {
+  ALL_SHOWN,
+  type GridFilters,
+  toggleAllFilters,
+  toggleCategory,
+  toggleMessageKind,
+} from "./filters.ts";
 import { CATEGORY_FILL_CLASS, CATEGORY_RING_CLASS, MESSAGE_KIND_FILL_CLASS } from "./theme.ts";
 
 const snapshot: ContextSnapshot = {
@@ -52,6 +59,26 @@ const renderLegend = (
   />
 );
 
+const FilterHarness = () => {
+  const [filters, setFilters] = useState<GridFilters>(ALL_SHOWN);
+
+  return (
+    <>
+      <FilterAllButton
+        filters={filters}
+        onToggle={() => setFilters((current) => toggleAllFilters(current))}
+      />
+      <ContextLegend
+        snapshot={snapshot}
+        windowSize={200_000}
+        filters={filters}
+        onToggleCategory={(category) => setFilters((current) => toggleCategory(current, category))}
+        onToggleMessageKind={(kind) => setFilters((current) => toggleMessageKind(current, kind))}
+      />
+    </>
+  );
+};
+
 const row = (name: RegExp): HTMLElement => screen.getByRole("button", { name });
 
 const swatch = (name: RegExp): HTMLElement =>
@@ -71,6 +98,51 @@ const labelClass = (name: RegExp): string =>
 const rowItem = (name: RegExp): HTMLElement => row(name).closest("li") as HTMLElement;
 
 afterEach(cleanup);
+
+describe("FilterAllButton", () => {
+  it("changes its action and icon when every filter is hidden", () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(<FilterAllButton filters={ALL_SHOWN} onToggle={onToggle} />);
+
+    const deselect = screen.getByRole("button", { name: "Deselect all filters" });
+    expect(deselect.querySelector('[data-icon="deselect-all"]')).not.toBeNull();
+    expect(deselect.className).toContain("touch-manipulation");
+    fireEvent.click(deselect);
+    expect(onToggle).toHaveBeenCalledOnce();
+
+    rerender(<FilterAllButton filters={toggleAllFilters(ALL_SHOWN)} onToggle={onToggle} />);
+    const select = screen.getByRole("button", { name: "Select all filters" });
+    expect(select.querySelector('[data-icon="select-all"]')).not.toBeNull();
+  });
+
+  it("deselects and selects every legend row", () => {
+    render(<FilterHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Deselect all filters" }));
+    for (const category of CATEGORY_ORDER) {
+      expect(row(new RegExp(`^${CATEGORY_LABELS[category]}`)).getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+    }
+    for (const kind of MESSAGE_KIND_ORDER) {
+      expect(row(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)).getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Select all filters" }));
+    for (const category of CATEGORY_ORDER) {
+      expect(row(new RegExp(`^${CATEGORY_LABELS[category]}`)).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+    }
+    for (const kind of MESSAGE_KIND_ORDER) {
+      expect(row(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+    }
+  });
+});
 
 describe("ContextLegend", () => {
   it("lists every Category with its exact tokens and share of the window", () => {

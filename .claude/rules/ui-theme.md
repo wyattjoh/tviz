@@ -251,6 +251,14 @@ upwards by **index**, not as objects, so a pinned Cell keeps meaning something w
 Scrubber rebuilds the layout. Grid Cells are buttons on a roving tabindex under a
 `role="group"` block — a 1M window is 1,000 Cells and must not be 1,000 tab stops.
 
+The Categories panel's `action` slot holds `FilterAllButton`, which controls every Category
+and Message Kind filter. If anything is shown, its `ListX` icon and "Deselect all filters"
+accessible name describe the next click; only when nothing is shown does it switch to
+`ListChecks` and "Select all filters". Keep the action derived from `areAllFiltersHidden`
+and the state transition in `toggleAllFilters`, rather than duplicating set logic in the
+component. The action stays present while the panel is collapsed, matching `RailPanel`'s
+setting-in-force rule.
+
 Messages Cells always use their Message Kind accents: "how much of this is tool output" is
 the question a Session is usually opened with, and it cannot be read off a grid where every
 Messages Cell is one blue. The Message Kind rows are always present and own their individual

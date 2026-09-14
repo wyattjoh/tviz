@@ -18,7 +18,7 @@
 import { useMemo } from "react";
 import { cumulativeItems, peakMeasuredTotal, type Session } from "../domain/context.ts";
 import { ContextGrid } from "./ContextGrid.tsx";
-import { ContextLegend } from "./ContextLegend.tsx";
+import { ContextLegend, FilterAllButton } from "./ContextLegend.tsx";
 import { ContextWindowMenu, ContextWindowPanel } from "./ContextWindowPanel.tsx";
 import { ALL_SHOWN } from "./filters.ts";
 import { buildCells, type Cell } from "./grid.ts";
@@ -83,7 +83,10 @@ export const LandingPreview = ({ session }: LandingPreviewProps) => {
       }
       rail={
         <>
-          <RailPanel title="Categories">
+          <RailPanel
+            title="Categories"
+            action={<FilterAllButton filters={ALL_SHOWN} onToggle={noop} />}
+          >
             <ContextLegend
               snapshot={snapshot}
               windowSize={windowSize}

@@ -60,9 +60,15 @@ import {
 import { collectDataTransferEntries } from "./ui/collect-files.ts";
 import { ContextGrid } from "./ui/ContextGrid.tsx";
 import { ContextWindowMenu, ContextWindowPanel } from "./ui/ContextWindowPanel.tsx";
-import { ContextLegend } from "./ui/ContextLegend.tsx";
+import { ContextLegend, FilterAllButton } from "./ui/ContextLegend.tsx";
 import { DropZone } from "./ui/DropZone.tsx";
-import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./ui/filters.ts";
+import {
+  ALL_SHOWN,
+  type GridFilters,
+  toggleAllFilters,
+  toggleCategory,
+  toggleMessageKind,
+} from "./ui/filters.ts";
 import { buildCells } from "./ui/grid.ts";
 import { Inspector } from "./ui/Inspector.tsx";
 import { LandingPreview } from "./ui/LandingPreview.tsx";
@@ -353,6 +359,10 @@ const LoadedSession = ({
     (kind: MessageKind) => setFilters((current) => toggleMessageKind(current, kind)),
     [],
   );
+  const onToggleAllFilters = useCallback(
+    () => setFilters((current) => toggleAllFilters(current)),
+    [],
+  );
   // Clicking the pinned Cell again releases it, so the rail can be handed back
   // to whatever the pointer is over.
   const onPin = useCallback(
@@ -430,7 +440,10 @@ const LoadedSession = ({
       }
       rail={
         <>
-          <RailPanel title="Categories">
+          <RailPanel
+            title="Categories"
+            action={<FilterAllButton filters={filters} onToggle={onToggleAllFilters} />}
+          >
             <ContextLegend
               snapshot={snapshot}
               windowSize={windowSize}

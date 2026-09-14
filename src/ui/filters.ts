@@ -9,7 +9,12 @@
  * avoid. Legend totals come from the Context Snapshot, so they are unaffected
  * too, and the proportions two Sessions are compared on stay stable.
  */
-import { MESSAGE_KIND_ORDER, type Category, type MessageKind } from "../domain/context.ts";
+import {
+  CATEGORY_ORDER,
+  MESSAGE_KIND_ORDER,
+  type Category,
+  type MessageKind,
+} from "../domain/context.ts";
 import type { Cell } from "./grid.ts";
 
 /**
@@ -107,6 +112,23 @@ export const isCategoryHidden = (filters: GridFilters, category: Category): bool
  */
 export const isMessageKindHidden = (filters: GridFilters, kind: MessageKind): boolean =>
   filters.hiddenCategories.has("messages") || filters.hiddenKinds.has(kind);
+
+/**
+ * Whether every Category and Message Kind filter is currently off.
+ */
+export const areAllFiltersHidden = (filters: GridFilters): boolean =>
+  CATEGORY_ORDER.every((category) => isCategoryHidden(filters, category));
+
+/**
+ * Selects every filter when none are selected; otherwise deselects all of them.
+ */
+export const toggleAllFilters = (filters: GridFilters): GridFilters =>
+  areAllFiltersHidden(filters)
+    ? ALL_SHOWN
+    : {
+        hiddenCategories: new Set<Category>(CATEGORY_ORDER),
+        hiddenKinds: new Set<MessageKind>(MESSAGE_KIND_ORDER),
+      };
 
 /**
  * Whether a Cell is blanked in place.
