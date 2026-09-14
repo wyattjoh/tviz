@@ -1,11 +1,26 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NARROW_VIEWPORT_QUERY } from "./viewport.ts";
 import { RailPanel, Workbench } from "./Workbench.tsx";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
+
+/**
+ * Puts the viewport on one side of the `md` breakpoint.
+ *
+ * Stubs `matchMedia` rather than the `isNarrowViewport` module export, so the
+ * real query string and the real guard are both on the path under test.
+ */
+const viewportIsNarrow = (narrow: boolean): void => {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: narrow && query === NARROW_VIEWPORT_QUERY,
+    media: query,
+  }));
+};
 
 const shell = () =>
   render(
@@ -58,23 +73,67 @@ describe("the Workbench shell", () => {
     expect(rail.className).toContain("md:max-h-none");
   });
 
-  // The narrow layout is CSS alone (ui-theme.md). A shell that had started
-  // reading the viewport would need a `matchMedia` stand-in to render here,
-  // and every component test that mounts it would need one too.
-  it("renders without reading the viewport", () => {
+  // The shell's geometry is CSS alone; the one viewport read is a panel's
+  // *initial* fold, which CSS cannot express because folding unmounts the body.
+  it("reads the viewport only to seed a panel's initial fold", () => {
     const seen: string[] = [];
-    const realMatchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) => {
+    vi.stubGlobal("matchMedia", (query: string) => {
       seen.push(query);
-      return realMatchMedia.call(window, query);
-    }) as typeof window.matchMedia;
+      return { matches: false, media: query };
+    });
 
-    try {
-      shell();
-    } finally {
-      window.matchMedia = realMatchMedia;
-    }
+    shell();
 
-    expect(seen).toEqual([]);
+    // One read, for the one collapsible panel the shell was given — and no
+    // listener, which is what keeps a rotation from re-folding an open panel.
+    expect(seen).toEqual([NARROW_VIEWPORT_QUERY]);
+  });
+});
+
+describe("a rail panel's initial fold", () => {
+  const renderPanelAt = (narrow: boolean, collapsible = true) => {
+    viewportIsNarrow(narrow);
+    return render(
+      <RailPanel title="Categories" collapsible={collapsible}>
+        legend
+      </RailPanel>,
+    );
+  };
+
+  it("mounts open on a wide window", () => {
+    renderPanelAt(false);
+
+    expect(screen.getByText("legend")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Categories/ }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+
+  // Four open panels in a rail stacked under the grid push the Scrubber off a
+  // phone screen, which is the height cap's whole job.
+  it("mounts folded on a narrow one, body unmounted rather than hidden", () => {
+    renderPanelAt(true);
+
+    expect(screen.queryByText("legend")).toBeNull();
+    expect(screen.getByRole("button", { name: /Categories/ }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+  });
+
+  it("stays open once the reader opens it", () => {
+    renderPanelAt(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Categories/ }));
+
+    expect(screen.getByText("legend")).toBeDefined();
+  });
+
+  // The pinned Inspector. Folding the only panel in the rail would leave an
+  // empty rail under a lone heading row.
+  it("ignores the viewport when the panel cannot be collapsed", () => {
+    renderPanelAt(true, false);
+
+    expect(screen.getByText("legend")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Categories/ })).toBeNull();
   });
 });

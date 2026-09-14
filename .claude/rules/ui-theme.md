@@ -69,10 +69,28 @@ flow* — not a second shell, and not a mobile view: `LoadedSession` and `Landin
 fill one geometry, and `cell-fit.ts` needs no breakpoint of its own because it measures the
 pane it is given.
 
-The narrow layout is **CSS alone**, and must stay that way. Nothing reads the viewport in
-JS: no `matchMedia`, no resize hook deciding a panel's state, no prop seeding a `RailPanel`
-folded. Capping the rail's height gets what auto-collapsing would have got, and a jsdom
-component test needs no `matchMedia` stand-in to render the shell.
+The narrow **geometry** is CSS alone, and must stay that way — every rule above is a `md:`
+class, and no component measures the viewport to lay itself out.
+
+There is exactly **one** viewport read in the UI, and it is not geometry: `RailPanel` seeds
+its initial folded state from `isNarrowViewport()` (`src/ui/viewport.ts`). Collapsing a
+panel *unmounts* its body, which is React state, so "starts folded on a phone" is the one
+thing a class cannot express — and four open panels in a stacked rail push the Scrubber off
+a phone screen, which is what the height cap exists to prevent.
+
+That read is deliberately minimal and should stay so:
+
+- It is a plain function, not a hook, and owns **no listener**. Width decides where a
+  panel's state *starts*, never where it goes: a panel the reader has opened must not
+  re-fold itself when the device is rotated.
+- It is read in a lazy `useState` initialiser, so it runs once per panel at mount.
+- It guards on `matchMedia` being absent and answers `false`, so a test environment without
+  it renders the wide-window behaviour instead of throwing.
+- The open state still lives inside `RailPanel`. Nothing was lifted out, and no prop was
+  added to thread it down.
+
+Do not grow this into a general responsive hook. A second thing wanting the viewport is a
+sign the layout belongs in CSS.
 
 The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
 `scrubber`) plus `RailPanel`, with no state and no handlers. The menu bar sits above it, in

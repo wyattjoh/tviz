@@ -10,12 +10,13 @@
  * state and no handlers: the regions are a geometry, and both the loaded
  * Session and the landing page's blurred preview fill the same one.
  *
- * The narrow layout is CSS alone. Panels behave exactly as they do on a wide
- * window — `RailPanel` keeps owning its own open state and nothing here reads
- * the viewport — because capping the rail and letting it scroll keeps the
- * Scrubber reachable without a `matchMedia` hook or a prop to seed a panel
- * folded. A 340px rail beside a phone's 390px viewport leaves the grid 50px,
- * which is the layout this breakpoint exists to prevent.
+ * The *geometry* is CSS alone — every rule above is a `md:` class, and a 340px
+ * rail beside a phone's 390px viewport leaving the grid 50px is the layout this
+ * breakpoint exists to prevent. The one thing CSS cannot express is a panel
+ * that starts folded, because folding unmounts the body: `RailPanel` seeds that
+ * from `isNarrowViewport()` once at mount. That is the only viewport read in
+ * the UI, it owns no listener, and it still leaves the open state inside
+ * `RailPanel` where nothing else can reach it.
  *
  * That shared geometry is the point. The landing page claims to show the
  * interface, and a preview that re-declared these grid classes would stop being
@@ -23,6 +24,7 @@
  */
 import { ChevronDown } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
+import { isNarrowViewport } from "./viewport.ts";
 
 /**
  * Props for {@link Workbench}.
@@ -113,8 +115,12 @@ export type RailPanelProps = {
  * scrolling strip under the grid below it — and on a short window the ones a
  * reader is not using push the ones they are below the fold. Each panel keeps
  * its own open state rather than lifting it out: nothing else reads it, and a
- * collapsed panel is a view preference, not Session state. That holds at every
- * width; the narrow layout changes where the rail sits, never how it behaves.
+ * collapsed panel is a view preference, not Session state.
+ *
+ * Width changes only where that state *starts*. Below `md` a panel mounts
+ * folded, because a stacked rail of four open panels pushes the Scrubber off a
+ * phone screen; from `md` up it mounts open. After mount the width is never
+ * consulted again, so rotating a device leaves the reader's own folds alone.
  *
  * Collapsing unmounts the body rather than hiding it, so a collapsed panel
  * costs no layout — and the `action` control stays in the heading row either
@@ -122,7 +128,14 @@ export type RailPanelProps = {
  */
 export const RailPanel = ({ title, action, collapsible = true, children }: RailPanelProps) => {
   const bodyId = useId();
-  const [folded, setFolded] = useState(false);
+  // Seeded once, at mount, from the viewport: on a phone the rail is stacked
+  // under the grid, and four open panels push the Scrubber off the screen the
+  // height cap was meant to keep it on. Read lazily and never again — no
+  // listener, no resize effect — so a panel the reader has opened stays open
+  // when the device is rotated. `collapsible={false}` ignores it entirely,
+  // which is what keeps the pinned Inspector from mounting folded into an
+  // empty rail.
+  const [folded, setFolded] = useState(() => collapsible && isNarrowViewport());
   const open = !collapsible || !folded;
 
   return (
