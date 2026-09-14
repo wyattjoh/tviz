@@ -61,36 +61,39 @@ docked Inspector — and the Scrubber across the bottom. The grid pane is the sc
 and both of its dimensions drive `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill
 it and hands back the column count. Fill a region; do not restructure the shell.
 
-**That body is the layout from `md` up. Below `md` it is one column**: the grid pane takes
-the full width and the rail stacks under it at `max-h-[45vh]` with its own scroll, so the
-Scrubber stays on screen. A 340px rail beside a 390px phone viewport leaves the grid 50px,
-which is what the breakpoint exists to prevent. The two are the *same regions in a different
-flow* — not a second shell, and not a mobile view: `LoadedSession` and `LandingPreview` still
-fill one geometry, and `cell-fit.ts` needs no breakpoint of its own because it measures the
-pane it is given.
+**That body is the layout from `md` up. Below `md` the rail is behind a disclosure**: the
+grid pane takes the full width, a `md:hidden` toggle row sits under it, and the rail follows
+as a third row that is `hidden` until the toggle is pressed (`md:block` brings it back as
+the column). A 340px rail beside a 390px phone viewport leaves the grid 50px — but merely
+stacking the rail underneath still spent most of the screen on a legend nobody had asked
+for, which is why it is closed by default rather than just moved.
 
-The narrow **geometry** is CSS alone, and must stay that way — every rule above is a `md:`
-class, and no component measures the viewport to lay itself out.
+The two layouts are the *same regions in a different flow* — not a second shell, and not a
+mobile view. **The same `<aside>` is the disclosure's panel and the rail column**, so they
+cannot drift apart; `LoadedSession` and `LandingPreview` still fill one geometry, and
+`cell-fit.ts` needs no breakpoint of its own because it measures the pane it is given.
 
-There is exactly **one** viewport read in the UI, and it is not geometry: `RailPanel` seeds
-its initial folded state from `isNarrowViewport()` (`src/ui/viewport.ts`). Collapsing a
-panel *unmounts* its body, which is React state, so "starts folded on a phone" is the one
-thing a class cannot express — and four open panels in a stacked rail push the Scrubber off
-a phone screen, which is what the height cap exists to prevent.
+Three constraints on it:
 
-That read is deliberately minimal and should stay so:
+- **Nothing measures the viewport.** Which layout is on screen is media queries plus one
+  boolean; there is no `matchMedia`, no resize listener, no measured breakpoint. A jsdom
+  component test needs no stand-in to mount the shell, and `Workbench.test.tsx` pins that.
+- **Closed means `display: none`**, not a translate or a zero height, so the rail's controls
+  leave the tab order on their own — no `inert` to apply below `md` and undo above it.
+- **The open flag is the only state the shell holds**, and it describes the shell rather
+  than a Session. It stays in `Workbench` for the same reason a `RailPanel`'s fold stays in
+  `RailPanel`: nothing outside reads it, and lifting it to `App` would make both callers
+  thread a boolean and a setter to say the same thing.
 
-- It is a plain function, not a hook, and owns **no listener**. Width decides where a
-  panel's state *starts*, never where it goes: a panel the reader has opened must not
-  re-fold itself when the device is rotated.
-- It is read in a lazy `useState` initialiser, so it runs once per panel at mount.
-- It guards on `matchMedia` being absent and answers `false`, so a test environment without
-  it renders the wide-window behaviour instead of throwing.
-- The open state still lives inside `RailPanel`. Nothing was lifted out, and no prop was
-  added to thread it down.
+## Touch
 
-Do not grow this into a general responsive hook. A second thing wanting the viewport is a
-sign the layout belongs in CSS.
+`html` carries `touch-action: manipulation` (`src/index.css`). That drops the
+double-tap-to-zoom gesture and with it the ~300ms delay a browser holds every tap for while
+it waits for a second one — felt on every Cell, since the grid is a field of small targets.
+Pinch-zoom and panning are untouched: do **not** reach for `user-scalable=no` on the
+viewport meta, which buys the same thing by taking zoom away from people who need it. The
+Scrubber's chart opts further out with `touch-none`, because dragging it must not scroll
+the page.
 
 The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
 `scrubber`) plus `RailPanel`, with no state and no handlers. The menu bar sits above it, in

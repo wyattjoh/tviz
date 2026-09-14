@@ -1,26 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { NARROW_VIEWPORT_QUERY } from "./viewport.ts";
+import { afterEach, describe, expect, it } from "vitest";
 import { RailPanel, Workbench } from "./Workbench.tsx";
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
 });
 
-/**
- * Puts the viewport on one side of the `md` breakpoint.
- *
- * Stubs `matchMedia` rather than the `isNarrowViewport` module export, so the
- * real query string and the real guard are both on the path under test.
- */
-const viewportIsNarrow = (narrow: boolean): void => {
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: narrow && query === NARROW_VIEWPORT_QUERY,
-    media: query,
-  }));
-};
+const railToggle = (): HTMLElement => screen.getByRole("button", { name: "Legend and inspector" });
+
+const rail = (): HTMLElement => screen.getByRole("complementary", { name: "Legend and Inspector" });
 
 const shell = () =>
   render(
@@ -58,9 +47,25 @@ describe("the Workbench shell", () => {
     shell();
 
     const className = body().className;
-    expect(className).toContain("grid-rows-[minmax(0,1fr)_auto]");
+    // Three rows below md — grid, the disclosure toggle, the rail — collapsing
+    // to a single row at md, where the rail is a column instead.
+    expect(className).toContain("grid-rows-[minmax(0,1fr)_auto_auto]");
     expect(className).toContain("md:grid-cols-[minmax(0,1fr)_340px]");
     expect(className).toContain("md:grid-rows-1");
+  });
+
+  // A grid's implicit column is `auto`, which floors at its items' min-content
+  // — one unbreakable string then widens the track past the viewport and
+  // scrolls the page sideways. The `md:` track list always carried the
+  // `minmax(0,1fr)` floor; the narrow layout has to carry it too.
+  it("floors both regions at zero width so nothing inside can widen the page", () => {
+    shell();
+
+    expect(body().className).toContain("grid-cols-[minmax(0,1fr)]");
+    expect(screen.getByRole("main").className).toContain("min-w-0");
+    expect(screen.getByRole("complementary", { name: "Legend and Inspector" }).className).toContain(
+      "min-w-0",
+    );
   });
 
   it("caps the rail's height below md so the Scrubber stays on screen", () => {
@@ -73,67 +78,66 @@ describe("the Workbench shell", () => {
     expect(rail.className).toContain("md:max-h-none");
   });
 
-  // The shell's geometry is CSS alone; the one viewport read is a panel's
-  // *initial* fold, which CSS cannot express because folding unmounts the body.
-  it("reads the viewport only to seed a panel's initial fold", () => {
+  // Which layout is on screen is decided by media queries, never measured. A
+  // shell that started reading the viewport would need a `matchMedia`
+  // stand-in here, and so would every component test that mounts it.
+  it("never measures the viewport", () => {
     const seen: string[] = [];
-    vi.stubGlobal("matchMedia", (query: string) => {
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => {
       seen.push(query);
-      return { matches: false, media: query };
-    });
+      return realMatchMedia.call(window, query);
+    }) as typeof window.matchMedia;
 
-    shell();
+    try {
+      shell();
+      fireEvent.click(railToggle());
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
 
-    // One read, for the one collapsible panel the shell was given — and no
-    // listener, which is what keeps a rotation from re-folding an open panel.
-    expect(seen).toEqual([NARROW_VIEWPORT_QUERY]);
+    expect(seen).toEqual([]);
   });
 });
 
-describe("a rail panel's initial fold", () => {
-  const renderPanelAt = (narrow: boolean, collapsible = true) => {
-    viewportIsNarrow(narrow);
-    return render(
-      <RailPanel title="Categories" collapsible={collapsible}>
-        legend
-      </RailPanel>,
-    );
-  };
+describe("the rail disclosure", () => {
+  // jsdom applies no CSS, so `hidden` and `md:block` are class names here
+  // rather than a computed layout — the same reading `theme.test.ts` takes.
+  // What the test can check for real is the toggle's state and its wiring.
+  it("starts closed and says so", () => {
+    shell();
 
-  it("mounts open on a wide window", () => {
-    renderPanelAt(false);
-
-    expect(screen.getByText("legend")).toBeDefined();
-    expect(screen.getByRole("button", { name: /Categories/ }).getAttribute("aria-expanded")).toBe(
-      "true",
-    );
+    expect(railToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(rail().className).toContain("hidden");
   });
 
-  // Four open panels in a rail stacked under the grid push the Scrubber off a
-  // phone screen, which is the height cap's whole job.
-  it("mounts folded on a narrow one, body unmounted rather than hidden", () => {
-    renderPanelAt(true);
+  it("opens on click and closes again", () => {
+    shell();
 
-    expect(screen.queryByText("legend")).toBeNull();
-    expect(screen.getByRole("button", { name: /Categories/ }).getAttribute("aria-expanded")).toBe(
-      "false",
-    );
+    fireEvent.click(railToggle());
+    expect(railToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(rail().className).not.toContain("hidden");
+
+    fireEvent.click(railToggle());
+    expect(railToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(rail().className).toContain("hidden");
   });
 
-  it("stays open once the reader opens it", () => {
-    renderPanelAt(true);
+  // `md:block` is what keeps the disclosure phone-only: the same element is
+  // the rail column on a wide window, so a closed toggle cannot hide it there.
+  it("is a phone-only affordance", () => {
+    shell();
 
-    fireEvent.click(screen.getByRole("button", { name: /Categories/ }));
-
-    expect(screen.getByText("legend")).toBeDefined();
+    expect(rail().className).toContain("md:block");
+    expect(railToggle().className).toContain("md:hidden");
   });
 
-  // The pinned Inspector. Folding the only panel in the rail would leave an
-  // empty rail under a lone heading row.
-  it("ignores the viewport when the panel cannot be collapsed", () => {
-    renderPanelAt(true, false);
+  // `display: none` rather than a translate or a zero height, so the rail's
+  // controls leave the tab order without an `inert` to undo at `md`.
+  it("points the toggle at the rail it controls", () => {
+    shell();
 
-    expect(screen.getByText("legend")).toBeDefined();
-    expect(screen.queryByRole("button", { name: /Categories/ })).toBeNull();
+    expect(railToggle().getAttribute("aria-controls")).toBe(rail().getAttribute("id"));
+    expect(rail().getAttribute("id")).toBeTruthy();
   });
 });
