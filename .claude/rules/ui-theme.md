@@ -61,6 +61,19 @@ docked Inspector — and the Scrubber across the bottom. The grid pane is the sc
 and both of its dimensions drive `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill
 it and hands back the column count. Fill a region; do not restructure the shell.
 
+**That body is the layout from `md` up. Below `md` it is one column**: the grid pane takes
+the full width and the rail stacks under it at `max-h-[45vh]` with its own scroll, so the
+Scrubber stays on screen. A 340px rail beside a 390px phone viewport leaves the grid 50px,
+which is what the breakpoint exists to prevent. The two are the *same regions in a different
+flow* — not a second shell, and not a mobile view: `LoadedSession` and `LandingPreview` still
+fill one geometry, and `cell-fit.ts` needs no breakpoint of its own because it measures the
+pane it is given.
+
+The narrow layout is **CSS alone**, and must stay that way. Nothing reads the viewport in
+JS: no `matchMedia`, no resize hook deciding a panel's state, no prop seeding a `RailPanel`
+folded. Capping the rail's height gets what auto-collapsing would have got, and a jsdom
+component test needs no `matchMedia` stand-in to render the shell.
+
 The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
 `scrubber`) plus `RailPanel`, with no state and no handlers. The menu bar sits above it, in
 `src/App.tsx`, and so does the drop handling — neither belongs to a Session. Two callers fill

@@ -3,11 +3,19 @@
  * (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`), as slots.
  *
  * The menu bar sits above this, in `App`; what lives here is everything under
- * it — the Session strip, a body of `minmax(0,1fr)_340px` with the grid pane on
- * the flexible left and the fixed 340px right rail, and the Scrubber docked
- * across the bottom. It holds no state and no handlers: the regions are a
- * geometry, and both the loaded Session and the landing page's blurred preview
- * fill the same one.
+ * it — the Session strip, a body that is `minmax(0,1fr)_340px` from `md` up
+ * (grid pane on the flexible left, fixed 340px right rail) and a single column
+ * below it (grid pane full width, rail stacked beneath at a capped height with
+ * its own scroll), and the Scrubber docked across the bottom. It holds no
+ * state and no handlers: the regions are a geometry, and both the loaded
+ * Session and the landing page's blurred preview fill the same one.
+ *
+ * The narrow layout is CSS alone. Panels behave exactly as they do on a wide
+ * window — `RailPanel` keeps owning its own open state and nothing here reads
+ * the viewport — because capping the rail and letting it scroll keeps the
+ * Scrubber reachable without a `matchMedia` hook or a prop to seed a panel
+ * folded. A 340px rail beside a phone's 390px viewport leaves the grid 50px,
+ * which is the layout this breakpoint exists to prevent.
  *
  * That shared geometry is the point. The landing page claims to show the
  * interface, and a preview that re-declared these grid classes would stop being
@@ -48,14 +56,21 @@ export const Workbench = ({ header, grid, rail, scrubber }: WorkbenchProps) => (
   <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
     {header}
 
-    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px]">
-      <main aria-label="Context grid" className="min-h-0 border-r border-ui-border">
+    <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1">
+      <main
+        aria-label="Context grid"
+        className="min-h-0 border-b border-ui-border md:border-r md:border-b-0"
+      >
         {grid}
       </main>
 
+      {/* `max-h-[45vh]` is the whole narrow layout: the rail keeps its own
+          scroll and the Scrubber stays on screen, so nothing above has to know
+          how tall the panels happen to be. Lifted at `md`, where the rail is a
+          full-height column again. */}
       <aside
         aria-label="Legend and Inspector"
-        className="min-h-0 space-y-3 overflow-y-auto bg-ui-sunken p-3"
+        className="max-h-[45vh] min-h-0 space-y-3 overflow-y-auto bg-ui-sunken p-3 md:max-h-none"
       >
         {rail}
       </aside>
@@ -94,10 +109,12 @@ export type RailPanelProps = {
 /**
  * A panel in the rail, collapsed to its heading row by clicking that heading.
  *
- * The rail stacks four panels in a fixed 340px column, and on a short window
- * the ones a reader is not using push the ones they are below the fold. Each
- * panel keeps its own open state rather than lifting it out: nothing else
- * reads it, and a collapsed panel is a view preference, not Session state.
+ * The rail stacks four panels — a 340px column from `md` up, a capped
+ * scrolling strip under the grid below it — and on a short window the ones a
+ * reader is not using push the ones they are below the fold. Each panel keeps
+ * its own open state rather than lifting it out: nothing else reads it, and a
+ * collapsed panel is a view preference, not Session state. That holds at every
+ * width; the narrow layout changes where the rail sits, never how it behaves.
  *
  * Collapsing unmounts the body rather than hiding it, so a collapsed panel
  * costs no layout — and the `action` control stays in the heading row either
