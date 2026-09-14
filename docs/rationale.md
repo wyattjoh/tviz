@@ -85,37 +85,4 @@ only thing beside the grid until you close it. Message kinds get the same treatm
 categories — hide in place, recolour (on by default) — because "how much of this session
 is tool output" is the question people actually arrive with.
 
-## How I used Claude Code
-
-Almost every line of code was written by Claude Code. My time went on the judgment calls,
-and this project's transcripts show them in order.
-
-**Surveying, not reading.** No agent ever opened a real transcript; the first hour was
-throwaway scripts that print record types and counts and nothing else. That rule, with
-"nothing leaves the browser" and "no real content in the repo", sits in the project
-instructions every agent reads first. It is also why the finding above exists: you only
-learn what a format doesn't contain by counting everything it does.
-
-**Grilling before building.** Before any code, I had Claude interrogate the idea: what
-`/context` actually shows, what a transcript can and can't support, what someone with
-no data would see. The one-bucket System decision and the scale-to-measured rule both came
-out of that conversation, not out of implementation.
-
-**A throwaway prototype that overturned the design.** Once the parser existed, I had three
-UI shapes built side by side on fake data. Stepping through the prototype's scrubber
-showed the category-grouped grid re-flowing on every call. That killed the layout the
-first implementation had already shipped and replaced it with the append-only grid above.
-The prototype code was never promoted.
-
-## With more time
-
-- **Subagent context windows.** Subagent transcripts are separate windows. tviz counts
-  them today; nesting them under the parent session is the most obviously missing thing.
-- **Provenance.** Link an item in the inspector back to the API call that added it — the
-  next question after "which tool result ate the window".
-- **Small multiples.** A folder of sessions as a wall of grids, to compare how differently
-  structured sessions fill up.
-- **Calibration.** Paste a real `/context` output and solve for the split of the System
-  bucket, turning the honest one-bucket answer into an exact three-part one.
-
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).
