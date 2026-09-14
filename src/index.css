@@ -103,6 +103,18 @@
 
   html {
     color-scheme: dark;
+
+    /* Kills the double-tap-to-zoom gesture, and with it the ~300ms delay a
+       browser holds every tap for while it waits to find out whether a second
+       one is coming. The grid is a field of small tap targets, so that delay
+       is felt on every Cell.
+
+       Deliberately not `user-scalable=no` on the viewport meta, which would
+       get the same result by taking pinch-zoom away from everyone who needs
+       it. `manipulation` keeps panning and pinch-zoom and drops only the
+       double tap. The Scrubber's chart opts further out with `touch-none`,
+       because dragging it must not scroll the page. */
+    touch-action: manipulation;
   }
 
   body {
