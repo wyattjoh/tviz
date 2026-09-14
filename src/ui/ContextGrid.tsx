@@ -33,7 +33,7 @@ import { fitCells } from "./cell-fit.ts";
 import type { GridFilters } from "./filters.ts";
 import { isCellHidden } from "./filters.ts";
 import { formatTokens } from "./format.ts";
-import { type Cell, CELL_TOKENS } from "./grid.ts";
+import type { Cell } from "./grid.ts";
 import { cellFillClass } from "./theme.ts";
 
 /**
@@ -297,10 +297,6 @@ export const ContextGrid = ({
           })}
         </div>
       </div>
-
-      <p className="border-t border-ui-border px-5 py-2 text-[11px] text-ui-text-faint">
-        {cells.length} cells × {formatTokens(CELL_TOKENS)} tokens
-      </p>
     </div>
   );
 };
