@@ -11,15 +11,38 @@ const railToggle = (): HTMLElement => screen.getByRole("button", { name: "Legend
 
 const rail = (): HTMLElement => screen.getByRole("complementary", { name: "Legend and Inspector" });
 
-const shell = () =>
+const scrubberToggle = (): HTMLElement => screen.getByRole("button", { name: "Scrubber" });
+
+/** The wrapper the Scrubber's disclosure hides, found via the toggle. */
+const scrubberPanel = (): HTMLElement => {
+  const id = scrubberToggle().getAttribute("aria-controls");
+  const panel = id === null ? null : document.getElementById(id);
+  if (panel === null) throw new Error("the Scrubber toggle controls nothing");
+  return panel;
+};
+
+const shell = (revealRail?: boolean) =>
   render(
     <Workbench
       header={<div>session strip</div>}
       grid={<div>grid pane</div>}
       rail={<RailPanel title="Categories">legend</RailPanel>}
       scrubber={<div>scrubber</div>}
+      revealRail={revealRail}
     />,
   );
+
+const rerenderShell = (rerender: (ui: React.ReactElement) => void, revealRail: boolean): void => {
+  rerender(
+    <Workbench
+      header={<div>session strip</div>}
+      grid={<div>grid pane</div>}
+      rail={<RailPanel title="Categories">legend</RailPanel>}
+      scrubber={<div>scrubber</div>}
+      revealRail={revealRail}
+    />,
+  );
+};
 
 /** The body is the element holding both the grid pane and the rail. */
 const body = (): HTMLElement => {
@@ -123,6 +146,33 @@ describe("the rail disclosure", () => {
     expect(rail().className).toContain("hidden");
   });
 
+  // Pinning a Cell hands the rail to the Inspector, and a phone has no hover,
+  // so pin is the only gesture that fills it. Landing that in a closed
+  // disclosure makes the tap look like it did nothing.
+  it("opens when the caller reveals it", () => {
+    const { rerender } = shell(false);
+    expect(rail().className).toContain("hidden");
+
+    rerenderShell(rerender, true);
+
+    expect(rail().className).not.toContain("hidden");
+    expect(railToggle().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  // The reader is allowed to close it again; re-opening under them would be
+  // the shell arguing back.
+  it("stays closed if the reader closes it while the reason still holds", () => {
+    const { rerender } = shell(false);
+    rerenderShell(rerender, true);
+
+    fireEvent.click(railToggle());
+    expect(rail().className).toContain("hidden");
+
+    // Still revealed, still closed: the effect keys on the transition.
+    rerenderShell(rerender, true);
+    expect(rail().className).toContain("hidden");
+  });
+
   // `md:block` is what keeps the disclosure phone-only: the same element is
   // the rail column on a wide window, so a closed toggle cannot hide it there.
   it("is a phone-only affordance", () => {
@@ -139,5 +189,46 @@ describe("the rail disclosure", () => {
 
     expect(railToggle().getAttribute("aria-controls")).toBe(rail().getAttribute("id"));
     expect(rail().getAttribute("id")).toBeTruthy();
+  });
+});
+
+describe("the Scrubber disclosure", () => {
+  // ~180px of chart and transport, the largest single thing competing with the
+  // grid for a phone's height.
+  it("starts closed below md and is a phone-only affordance", () => {
+    shell();
+
+    expect(scrubberToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(scrubberPanel().className).toContain("hidden");
+    expect(scrubberPanel().className).toContain("md:block");
+    expect(scrubberToggle().className).toContain("md:hidden");
+  });
+
+  it("opens on click and closes again", () => {
+    shell();
+
+    fireEvent.click(scrubberToggle());
+    expect(scrubberToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(scrubberPanel().className).not.toContain("hidden");
+
+    fireEvent.click(scrubberToggle());
+    expect(scrubberPanel().className).toContain("hidden");
+  });
+
+  // The landing preview sells the tool by letting a visitor watch the chart
+  // track the grid, so it opts out of the disclosure at every width.
+  it("has no disclosure at all when the caller asks for it always visible", () => {
+    render(
+      <Workbench
+        header={<div>session strip</div>}
+        grid={<div>grid pane</div>}
+        rail={<RailPanel title="Categories">legend</RailPanel>}
+        scrubber={<div>scrubber</div>}
+        scrubberAlwaysVisible
+      />,
+    );
+
+    expect(screen.getByText("scrubber")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Scrubber" })).toBeNull();
   });
 });

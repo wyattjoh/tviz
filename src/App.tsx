@@ -390,6 +390,10 @@ const LoadedSession = ({
 
   return (
     <Workbench
+      // Pinning hands the rail to the Inspector. Below `md` the rail is behind
+      // a disclosure, and a phone has no hover — so without this, the one
+      // gesture that fills the Inspector would appear to do nothing.
+      revealRail={pinned}
       header={
         <SessionHeader
           session={session}

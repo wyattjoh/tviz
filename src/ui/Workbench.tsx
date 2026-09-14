@@ -11,14 +11,21 @@
  *
  * A 340px rail beside a phone's 390px viewport leaves the grid 50px, which is
  * what the breakpoint exists to prevent — but stacking the rail underneath
- * still spent most of the screen on it, so below `md` it is closed by default
- * and opened by a toggle row. The whole thing is media queries plus one
- * boolean: no viewport is measured in JS, and the *same* `<aside>` is the
- * disclosure's panel on a phone and the rail column on a wide window, so the
- * two layouts cannot drift apart.
+ * still spent most of the screen on it. So below `md` the two regions that
+ * compete with the grid for height, the rail and the Scrubber, are each closed
+ * behind a `md:hidden` toggle row; from `md` up both toggles are
+ * `display: none` and the layout is what it has always been.
  *
- * That one boolean is the only state the shell holds, and it describes the
- * shell rather than a Session.
+ * The whole thing is media queries plus two booleans. No viewport is measured
+ * in JS, and each region is the *same element* at both widths — the disclosure
+ * wraps it rather than substituting for it — so the two layouts cannot drift
+ * apart. Those two booleans are the only state the shell holds, and they
+ * describe the shell rather than a Session.
+ *
+ * Both disclosures answer to their content rather than only to a click:
+ * `revealRail` opens the rail when a caller puts something in it worth reading,
+ * and `scrubberAlwaysVisible` drops the Scrubber's disclosure entirely for the
+ * landing preview, whose pitch is the chart tracking the grid.
  *
  * That shared geometry is the point. The landing page claims to show the
  * interface, and a preview that re-declared these grid classes would stop being
@@ -47,6 +54,26 @@ export type WorkbenchProps = {
    * The Scrubber, docked across the bottom.
    */
   readonly scrubber: ReactNode;
+  /**
+   * Reveals the rail when it turns true, for a caller that has just put
+   * something in it worth reading — pinning a Cell hands the rail to the
+   * Inspector, and below `md` that would otherwise land in a closed
+   * disclosure, making the tap look like it did nothing.
+   *
+   * Only ever opens. Closing the rail while the reason it opened is still true
+   * is a decision the reader is allowed to make, and re-opening it under them
+   * would be the shell arguing back.
+   */
+  readonly revealRail?: boolean;
+  /**
+   * Renders the Scrubber plainly, with no disclosure around it at any width.
+   *
+   * For the landing page's preview, whose whole pitch is the chart tracking
+   * the grid as the window fills — a visitor arriving on a phone should see
+   * that, even though a loaded Session there starts with the Scrubber folded
+   * away to give the grid the screen.
+   */
+  readonly scrubberAlwaysVisible?: boolean;
 };
 
 /**
@@ -55,7 +82,14 @@ export type WorkbenchProps = {
  * Fill a region; do not restructure the shell — see `.claude/rules/ui-theme.md`
  * and ADR-0006.
  */
-export const Workbench = ({ header, grid, rail, scrubber }: WorkbenchProps) => {
+export const Workbench = ({
+  header,
+  grid,
+  rail,
+  scrubber,
+  revealRail,
+  scrubberAlwaysVisible,
+}: WorkbenchProps) => {
   // The only state the shell owns, and it is about the shell rather than about
   // a Session: below `md` the rail is behind a disclosure, so that a phone
   // spends its height on the grid instead of on a legend nobody asked for. It
@@ -63,7 +97,24 @@ export const Workbench = ({ header, grid, rail, scrubber }: WorkbenchProps) => {
   // to thread a boolean and a setter through to say the same thing, and
   // because — like a `RailPanel`'s fold — nothing outside reads it.
   const [railOpen, setRailOpen] = useState(false);
+  const [scrubberOpen, setScrubberOpen] = useState(false);
   const railId = useId();
+  const scrubberId = useId();
+
+  // Adjusted during render against the previous prop, rather than in an effect:
+  // React re-runs this component before committing, so the rail is already open
+  // on the first paint that shows the pinned Cell — no flash of a closed
+  // disclosure, and no cascading render.
+  //
+  // Keyed on the *transition*, which is what lets the reader close the rail
+  // again while the Cell is still pinned: `revealRail` has not changed, so
+  // nothing re-opens it under them. `undefined` as the seed means a shell that
+  // mounts already revealed opens too.
+  const [lastReveal, setLastReveal] = useState<boolean | undefined>(undefined);
+  if (revealRail !== lastReveal) {
+    setLastReveal(revealRail);
+    if (revealRail === true) setRailOpen(true);
+  }
 
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -117,7 +168,42 @@ export const Workbench = ({ header, grid, rail, scrubber }: WorkbenchProps) => {
         </aside>
       </div>
 
-      {scrubber}
+      {/* One grid row either way, so the root keeps its three tracks. The
+          Scrubber is ~180px of chart and transport — the largest single thing
+          competing with the grid for a phone's height — so below `md` it folds
+          away behind its own row, the way the rail does. From `md` up the
+          toggle is `display: none`, which also takes it out of the grid, and
+          the Scrubber is simply docked as before. */}
+      <div>
+        {scrubberAlwaysVisible === true ? (
+          scrubber
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setScrubberOpen((wasOpen) => !wasOpen)}
+              aria-expanded={scrubberOpen}
+              aria-controls={scrubberId}
+              className="flex w-full items-center gap-1.5 border-t border-ui-border bg-ui-sunken px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase md:hidden"
+            >
+              <ChevronDown
+                className={`h-3 w-3 shrink-0 transition-transform ${
+                  scrubberOpen ? "" : "-rotate-90"
+                }`}
+                aria-hidden="true"
+              />
+              Scrubber
+            </button>
+
+            {/* `display: none` when closed, for the same reason the rail is:
+                the transport's buttons and the range input leave the tab order
+                without an `inert` to undo at `md`. */}
+            <div id={scrubberId} className={`md:block ${scrubberOpen ? "" : "hidden"}`}>
+              {scrubber}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

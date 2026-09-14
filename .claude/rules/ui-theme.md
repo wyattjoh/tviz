@@ -61,29 +61,41 @@ docked Inspector — and the Scrubber across the bottom. The grid pane is the sc
 and both of its dimensions drive `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill
 it and hands back the column count. Fill a region; do not restructure the shell.
 
-**That body is the layout from `md` up. Below `md` the rail is behind a disclosure**: the
-grid pane takes the full width, a `md:hidden` toggle row sits under it, and the rail follows
-as a third row that is `hidden` until the toggle is pressed (`md:block` brings it back as
-the column). A 340px rail beside a 390px phone viewport leaves the grid 50px — but merely
-stacking the rail underneath still spent most of the screen on a legend nobody had asked
-for, which is why it is closed by default rather than just moved.
+**That body is the layout from `md` up. Below `md` the two regions that compete with the
+grid for height — the rail and the Scrubber — are each behind a disclosure**: the grid pane
+takes the full width, and each region gets a `md:hidden` toggle row above content that is
+`hidden` until pressed (`md:block` brings it back). A 340px rail beside a 390px phone
+viewport leaves the grid 50px — but merely stacking things underneath still spent most of
+the screen on a legend and a chart nobody had asked for, which is why they are closed by
+default rather than just moved.
 
 The two layouts are the *same regions in a different flow* — not a second shell, and not a
-mobile view. **The same `<aside>` is the disclosure's panel and the rail column**, so they
-cannot drift apart; `LoadedSession` and `LandingPreview` still fill one geometry, and
-`cell-fit.ts` needs no breakpoint of its own because it measures the pane it is given.
+mobile view. **The disclosure wraps each region rather than substituting for it**, so the
+same `<aside>` is the panel and the rail column; `LoadedSession` and `LandingPreview` still
+fill one geometry, and `cell-fit.ts` needs no breakpoint of its own because it measures the
+pane it is given.
 
-Three constraints on it:
+Four constraints:
 
-- **Nothing measures the viewport.** Which layout is on screen is media queries plus one
-  boolean; there is no `matchMedia`, no resize listener, no measured breakpoint. A jsdom
+- **Nothing measures the viewport.** Which layout is on screen is media queries plus two
+  booleans; there is no `matchMedia`, no resize listener, no measured breakpoint. A jsdom
   component test needs no stand-in to mount the shell, and `Workbench.test.tsx` pins that.
-- **Closed means `display: none`**, not a translate or a zero height, so the rail's controls
-  leave the tab order on their own — no `inert` to apply below `md` and undo above it.
-- **The open flag is the only state the shell holds**, and it describes the shell rather
-  than a Session. It stays in `Workbench` for the same reason a `RailPanel`'s fold stays in
-  `RailPanel`: nothing outside reads it, and lifting it to `App` would make both callers
+- **Closed means `display: none`**, not a translate or a zero height, so a hidden region's
+  controls leave the tab order on their own — no `inert` to apply below `md` and undo above
+  it. (It also means jsdom still *finds* those controls, since no CSS is applied there; a
+  test asserting a region is hidden reads the class, not the layout.)
+- **The open flags are the only state the shell holds**, and they describe the shell rather
+  than a Session. They stay in `Workbench` for the same reason a `RailPanel`'s fold stays in
+  `RailPanel`: nothing outside reads them, and lifting them to `App` would make both callers
   thread a boolean and a setter to say the same thing.
+- **A disclosure answers to its content, not only to a click.** `revealRail` opens the rail
+  when a caller has just put something in it worth reading — pinning a Cell hands the rail
+  to the Inspector, and a phone has no hover, so pin is the *only* gesture that fills it;
+  landing that in a closed disclosure makes the tap look like it did nothing. It only ever
+  opens: the reader may close it again while the Cell is still pinned, and the effect keys
+  on the prop's transition so nothing re-opens under them. `scrubberAlwaysVisible` is the
+  mirror image — `LandingPreview` drops the Scrubber's disclosure at every width, because
+  the chart tracking the grid as the window fills is the preview's whole pitch.
 
 ## Touch
 
