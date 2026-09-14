@@ -51,7 +51,8 @@ every string in a real transcript — keys and ids included — while keeping th
 and the real token counts, so the demo sessions have real growth curves and zero private
 content. The hard part was deciding what to keep verbatim: only values identical for every
 user. The first cut allow-listed by shape instead and leaked real names; review caught it
-before it shipped.
+before it shipped. The large demo deliberately spends 5.4 MB on the complete arc: growth to
+471k, a recorded Compaction, and 102 more API Calls that show the window filling again.
 
 **The landing page is the tool, not a description of it.** A first-time visitor used to get
 a dashed box on an empty canvas and had to decide whether the thing was worth a click

@@ -26,11 +26,11 @@
       "id": "large",
       "file": "large.jsonl",
       "name": "Large session",
-      "description": "Two hundred sixty-one API Calls filling half a 1M window \u2014 the one Demo Session that proves its own window, by passing 200k. The context drops back four times without a compaction \u2014 Claude Code shedding older context \u2014 and attribution restarts at each drop.",
-      "bytes": 3413365,
-      "calls": 261,
-      "model": "claude-opus-5",
-      "claudeCodeVersion": "2.1.257"
+      "description": "Two hundred seventy-three API Calls climbing to 471k in a 1M window, then one Compaction drops the context to 60k before it regrows to 212k over 102 more calls.",
+      "bytes": 5400944,
+      "calls": 273,
+      "model": "claude-sonnet-5",
+      "claudeCodeVersion": "2.1.270"
     }
   ]
 }

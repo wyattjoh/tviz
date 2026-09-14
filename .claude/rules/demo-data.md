@@ -47,8 +47,9 @@ The seed is `tviz-demo-<size>`, not the default. Then update the manifest number
 `scripts/demo-data.test.ts` passes.
 
 A source Session is recoverable from the Demo Session itself: the Anonymizer keeps
-`sessionId`, so line 1's `sessionId` is the source's file name in the corpus. Regenerating
-never changes `bytes`, because every replacement preserves string length exactly.
+`sessionId`, so line 1's `sessionId` is the source's file name in the corpus. Every
+replacement preserves JavaScript string length, but UTF-8 byte size can change when source
+text contains non-ASCII characters; update the manifest's `bytes` from the generated file.
 
 ## The gate
 

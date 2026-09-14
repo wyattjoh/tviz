@@ -197,34 +197,44 @@ describe("bundled Demo Sessions", () => {
       expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.55);
     });
 
-    it("large: four drops on the way through half a 1M window it proves for itself", () => {
+    it("large: climbs to 471k, Compacts once, then regrows for 102 API Calls", () => {
       const session = sessionFor("large");
+      const compactionIndex = session.calls.findIndex((call) => call.compaction);
+      const compaction = session.calls[compactionIndex];
 
       // The only Demo Session whose window is evidence rather than a default:
       // it passes 200k, which no Session can do inside a 200k window.
       expect(session.windowSize).toBe(1_000_000);
-      expect(peakMeasuredTotal(session.calls)).toBeGreaterThan(200_000);
-      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.3);
-      expect(session.calls.filter((call) => call.reset)).toHaveLength(4);
+      expect(peakMeasuredTotal(session.calls)).toBeGreaterThan(471_000);
+      expect(peakMeasuredTotal(session.calls)).toBeLessThan(472_000);
+      expect(compactionIndex).toBe(170);
+      expect(compaction?.reset).toBe(true);
+      expect(compaction?.measuredTotal).toBeGreaterThan(60_000);
+      expect(compaction?.measuredTotal).toBeLessThan(61_000);
+      expect(session.calls.length - compactionIndex - 1).toBe(102);
+      expect(lastCall(session).measuredTotal).toBeGreaterThan(212_000);
+      expect(lastCall(session).measuredTotal).toBeLessThan(213_000);
+      expect(session.calls.filter((call) => call.compaction)).toHaveLength(1);
+      expect(session.calls.filter((call) => call.reset)).toHaveLength(1);
     });
 
-    // None of the bundled Demo Sessions carries a compaction marker, so none of
-    // them may describe itself as compacting: the four drops in `large` are
-    // Claude Code shedding older context, which the Scrubber must not mark.
-    it("the descriptions do not claim a compaction none of them records", () => {
+    it("describes Compaction exactly when the Session records it", () => {
       for (const entry of manifest.sessions) {
         const compactions = sessionFor(entry.id).calls.filter((call) => call.compaction).length;
-        expect.soft(compactions, `${entry.id}`).toBe(0);
-        expect.soft(entry.description, `${entry.id}`).not.toMatch(/\bcompactions\b/);
+        if (compactions > 0) {
+          expect.soft(entry.description, `${entry.id}`).toMatch(/\bcompaction\b/i);
+        } else {
+          expect.soft(entry.description, `${entry.id}`).not.toMatch(/\bcompaction\b/i);
+        }
       }
     });
   });
 
   // "Loads within a few seconds" is a size question first: the whole demo has
   // to cross the network before the Worker sees it. Large is explicitly
-  // authorized to use a 4 MB transfer budget for this source session.
+  // authorized to use a 6 MB transfer budget for its full Compaction arc.
   it.each(manifest.sessions)("$name stays within its approved transfer budget", (entry) => {
-    const transferBudget = entry.id === "large" ? 4_000_000 : 2_000_000;
+    const transferBudget = entry.id === "large" ? 6_000_000 : 2_000_000;
     expect(entry.bytes).toBeLessThanOrEqual(transferBudget);
   });
 
