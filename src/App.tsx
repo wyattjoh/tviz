@@ -74,11 +74,9 @@ import { LandingPreview } from "./ui/LandingPreview.tsx";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { Scrubber } from "./ui/Scrubber.tsx";
 import { useSessionLoader } from "./ui/session-loader.ts";
+import { TranscriptPanel } from "./ui/TranscriptPanel.tsx";
 import { effectiveWindowSize, type WindowChoice } from "./ui/window-choice.ts";
 import { RailPanel, Workbench } from "./ui/Workbench.tsx";
-
-const unknownRecordCount = (session: Session): number =>
-  Object.values(session.unknownRecordTypes).reduce((sum, count) => sum + count, 0);
 
 /**
  * What the app knows about the Demo Sessions: which open Sessions came from
@@ -462,18 +460,7 @@ const LoadedSession = ({
           </RailPanel>
 
           <RailPanel title="Transcript">
-            {/* The window and its peak moved up to the Context Window panel,
-                beside the control that sets them; what is left here is what the
-                parse itself found. */}
-            <p className="text-[11px] leading-snug text-ui-text-faint">
-              {session.recordCount} records · {session.malformedLines} malformed ·{" "}
-              {unknownRecordCount(session)} unknown
-            </p>
-            {/* The manifest's own statement, so what someone reads about the
-                Demo Sessions is the file that produced them rather than a copy. */}
-            {demoNote === undefined ? null : (
-              <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
-            )}
+            <TranscriptPanel session={session} snapshot={snapshot} demoNote={demoNote} />
           </RailPanel>
         </>
       }

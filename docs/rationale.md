@@ -109,4 +109,12 @@ the individual filters tell the same story. A second all/none control in the Cat
 heading covers every category and kind at once; its icon names the next action rather than
 the current state, so one click always has a predictable result.
 
+**Transcript detail follows the Scrubber without retaining raw text.** The Transcript panel
+pairs Session-level facts — API Calls, Compactions, elapsed time, and parse health — with
+the context items that entered the selected API Call. Those items are the same labels and
+scaled token counts the parser already sends across the Worker boundary, so stepping the
+Scrubber explains what changed without moving private prompt, reply, or tool-result text
+into React state. The trade-off is deliberate: it can say “Tool result, 8.4k,” but cannot
+preview the result itself.
+
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).

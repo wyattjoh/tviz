@@ -350,13 +350,16 @@ describe("App", () => {
     it("redraws the grid and the legend for the API Call the Scrubber selects", async () => {
       const range = await openStepped();
 
+      expect(screen.getByText("Selected API Call 4 of 4")).toBeDefined();
       fireEvent.click(screen.getByLabelText("First call"));
       expect(gridLabel()).toBe("Context grid: 30.0k of 200.0k tokens used");
+      expect(screen.getByText("Selected API Call 1 of 4")).toBeDefined();
       // The legend's free-space line is the window minus the selected call.
       expect(screen.getByText("170.0k")).toBeDefined();
 
       fireEvent.keyDown(range, { key: "ArrowRight" });
       expect(gridLabel()).toBe("Context grid: 62.0k of 200.0k tokens used");
+      expect(screen.getByText("Selected API Call 2 of 4")).toBeDefined();
       expect(screen.getByText("138.0k")).toBeDefined();
     });
 
