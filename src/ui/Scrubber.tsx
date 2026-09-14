@@ -212,7 +212,10 @@ export const Scrubber = ({ calls, windowSize, callIndex, onSelectCall }: Scrubbe
     <section
       aria-label="Scrubber"
       onKeyDown={onKeyDown}
-      className="border-t border-ui-border bg-ui-sunken px-4 py-2.5"
+      // No border of its own: the top border belongs to the Info Pane that
+      // holds this, so all three panes are bordered by the same rule rather
+      // than each bringing its own.
+      className="bg-ui-sunken px-4 py-2.5"
     >
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">

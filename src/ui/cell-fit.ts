@@ -33,7 +33,7 @@
  * and on desktop only for a 1M Session, which since ADR-0009 means one that
  * actually exceeded 200k.
  */
-export const MIN_CELL_PX = 32;
+export const MIN_CELL_PX = 44;
 
 /**
  * Largest Cell drawn, so a small Context Window in a big pane stops growing
@@ -98,12 +98,6 @@ export type CellFit = {
 export const gapFor = (size: number): number => Math.max(1, Math.floor(size * CELL_GAP_RATIO));
 
 /**
- * Columns of this size that fit across a pane of this width.
- */
-const columnsFor = (width: number, size: number, gap: number): number =>
-  Math.max(MINIMUM_COLUMNS, Math.floor((width + gap) / (size + gap)));
-
-/**
  * The block drawn before the pane has been measured.
  */
 const FALLBACK: CellFit = {
@@ -113,46 +107,85 @@ const FALLBACK: CellFit = {
 };
 
 /**
- * The block `count` Cells of this size make in a pane of this width.
- */
-const fitAt = (size: number, width: number): CellFit => {
-  const gap = gapFor(size);
-  return { size, gap, columns: columnsFor(width, size, gap) };
-};
-
-/**
- * Whether `count` Cells of this size fit the pane.
- *
- * Only one arrangement needs checking: packing as many columns as the width
- * takes is what makes the block shortest, so if that one is too tall, no other
- * arrangement of the same Cell fits either.
- */
-const fitsAt = (count: number, size: number, width: number, height: number): boolean => {
-  const { gap, columns } = fitAt(size, width);
-  if (columns * size + (columns - 1) * gap > width) return false;
-  const rows = Math.ceil(count / columns);
-  return rows * size + (rows - 1) * gap <= height;
-};
-
-/**
  * Fits `count` Cells into a pane of `width` × `height` pixels.
  *
- * Walks whole pixel sizes down from {@link MAX_CELL_PX} and takes the first
- * that fits, rather than solving for a size: the gap is floored to whole pixels
- * and the rows are a `ceil`, so the drawn block is a step function of the size
- * and an algebraic solution is only ever a conservative bound on it. The range
- * is short enough — a few dozen sizes — that walking it is exact and cheap.
+ * Solves for the **column count**, not for the Cell: a count divides the pane's
+ * width exactly, so the block always spans it. Picking a whole-pixel Cell first
+ * and deriving columns from it — which this did before — left whatever did not
+ * divide evenly as dead space at the edge, up to most of a Cell wide.
  *
- * Nothing fitting means the window is too big for the pane, which is the
- * scrolling case: the Cells stay at {@link MIN_CELL_PX} and the block runs off
- * the bottom, exactly as it did when Cells had one fixed size.
+ * The Cell size is then whatever that count implies, and the clamp decides
+ * which counts are allowed: too few columns and the Cell is over
+ * {@link MAX_CELL_PX}, too many and it is under {@link MIN_CELL_PX}. So the
+ * grid *scales* as the pane changes and *steps* a column in or out at the
+ * moment the Cell would leave the range — which is the breakpoint, derived
+ * rather than declared.
+ *
+ * Among the counts that qualify it takes the fewest — the largest Cell — unless
+ * that block is taller than the pane, in which case it adds columns while they
+ * still qualify, since more columns is fewer rows is less scrolling.
  */
 export const fitCells = (count: number, width: number, height: number): CellFit => {
+  const min = MIN_CELL_PX;
+  const max = MAX_CELL_PX;
+  const ratio = CELL_GAP_RATIO;
+  const minCols = MINIMUM_COLUMNS;
+
+  /**
+   * The Cell that `columns` columns implies, filling the width exactly.
+   *
+   * The gap is a fraction of the Cell and the Cell depends on the gap, so this
+   * estimates once to size the gap, then solves the Cell against that whole
+   * number of pixels.
+   */
+  const solve = (columns: number): CellFit => {
+    const estimate = width / (columns + (columns - 1) * ratio);
+    const gap = Math.max(1, Math.floor(estimate * ratio));
+    const size = (width - (columns - 1) * gap) / columns;
+    return { size, gap, columns };
+  };
+  const tallerThanPane = (fit: CellFit): boolean => {
+    const rows = Math.ceil(count / fit.columns);
+    return rows * fit.size + (rows - 1) * fit.gap > height;
+  };
   if (count <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return FALLBACK;
   if (width <= 0 || height <= 0) return FALLBACK;
 
-  for (let size = MAX_CELL_PX; size > MIN_CELL_PX; size -= 1) {
-    if (fitsAt(count, size, width, height)) return fitAt(size, width);
+  // Never more columns than there are Cells: a 5-Cell Session should not be
+  // drawn as five squares stretched across twenty tracks.
+  const ceiling = Math.max(1, Math.min(count, Math.floor(width / Math.max(1, min))));
+  const allowed: CellFit[] = [];
+  for (let columns = 1; columns <= ceiling; columns += 1) {
+    const fit = solve(columns);
+    if (fit.size <= max && fit.size >= min) allowed.push(fit);
   }
-  return fitAt(MIN_CELL_PX, width);
+
+  // No column count lands the Cell inside the clamp.
+  //
+  // This is not an edge case, it is arithmetic: going from `c` to `c + 1`
+  // columns shrinks the Cell by about `1 / c`, so unless `max / min` is at
+  // least `(c + 1) / c` there are pane widths that no count can serve. At six
+  // columns that needs `max >= 1.17 * min` — a 44–48 clamp spans 9% where the
+  // step is 16%, so it leaves gaps.
+  //
+  // Filling wins over the clamp there, because dead space at the edge is
+  // visible on every Cell while a Cell a few pixels outside the range is not.
+  // The count chosen is the one that misses by least.
+  const first = allowed[0];
+  if (first === undefined) {
+    const missBy = (fit: CellFit) => Math.max(min - fit.size, fit.size - max, 0);
+    let nearest = solve(1);
+    for (let columns = 2; columns <= ceiling; columns += 1) {
+      const fit = solve(columns);
+      if (missBy(fit) < missBy(nearest)) nearest = fit;
+    }
+    return nearest;
+  }
+
+  // Fewest columns is the largest Cell; add columns only to buy back height,
+  // and only while the Cell still qualifies. The column floor is honoured where
+  // the width allows it — it cannot force a Cell out of range.
+  const preferred = allowed.find((fit) => fit.columns >= minCols) ?? first;
+  if (!tallerThanPane(preferred)) return preferred;
+  return allowed.at(-1) ?? preferred;
 };

@@ -21,25 +21,30 @@ const scrubberPanel = (): HTMLElement => {
   return panel;
 };
 
-const shell = (revealRail?: boolean) =>
+const shell = (revealInspector?: boolean) =>
   render(
     <Workbench
       header={<div>session strip</div>}
       grid={<div>grid pane</div>}
       rail={<RailPanel title="Categories">legend</RailPanel>}
       scrubber={<div>scrubber</div>}
-      revealRail={revealRail}
+      inspector={<div>inspector</div>}
+      revealInspector={revealInspector}
     />,
   );
 
-const rerenderShell = (rerender: (ui: React.ReactElement) => void, revealRail: boolean): void => {
+const rerenderShell = (
+  rerender: (ui: React.ReactElement) => void,
+  revealInspector: boolean,
+): void => {
   rerender(
     <Workbench
       header={<div>session strip</div>}
       grid={<div>grid pane</div>}
       rail={<RailPanel title="Categories">legend</RailPanel>}
       scrubber={<div>scrubber</div>}
-      revealRail={revealRail}
+      inspector={<div>inspector</div>}
+      revealInspector={revealInspector}
     />,
   );
 };

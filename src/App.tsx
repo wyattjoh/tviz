@@ -336,6 +336,9 @@ const LoadedSession = ({
   // so a pinned Cell keeps answering "what is in this part of the window?"
   // across API Calls instead of going stale.
   const [inspectedIndex, setInspectedIndex] = useState<number | undefined>(undefined);
+  // Held here only to hand back down: the grid knows there is more to scroll
+  // to, the shell knows what is covering the place it would be announced.
+  const [gridHasMoreBelow, setGridHasMoreBelow] = useState(false);
   const [pinnedIndex, setPinnedIndex] = useState<number | undefined>(undefined);
 
   const windowSize = effectiveWindowSize(session, windowChoice);
@@ -390,10 +393,6 @@ const LoadedSession = ({
 
   return (
     <Workbench
-      // Pinning hands the rail to the Inspector. Below `md` the rail is behind
-      // a disclosure, and a phone has no hover — so without this, the one
-      // gesture that fills the Inspector would appear to do nothing.
-      revealRail={pinned}
       header={
         <SessionHeader
           session={session}
@@ -410,97 +409,86 @@ const LoadedSession = ({
           pinnedIndex={pinnedIndex}
           onInspect={setInspectedIndex}
           onPin={onPin}
+          onMoreBelowChange={setGridHasMoreBelow}
         />
       }
-      rail={
-        /* A pinned Cell takes the whole rail: the Inspector is the only
-             panel until it is unpinned. The heading's close control is the
-             rail's own way out; Escape and clicking the Cell again are the
-             other two. */
-        pinned ? (
-          <RailPanel
-            title="Inspector"
-            collapsible={false}
-            action={
-              <button
-                type="button"
-                onClick={unpin}
-                aria-label="Unpin cell"
-                title="Unpin cell · Esc"
-                className="-my-1 rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
-              >
-                <X aria-hidden="true" className="h-3.5 w-3.5" />
-              </button>
-            }
-          >
+      gridHasMoreBelow={gridHasMoreBelow}
+      inspector={
+        /* Its own region now, not a panel in the rail — so a pinned Cell no
+           longer displaces the legend, and the filters stay reachable while
+           reading one. Escape and clicking the Cell again still unpin. */
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
             <Inspector
               cell={shownIndex === undefined ? undefined : cells[shownIndex]}
               filters={filters}
               pinned={shownIndex === pinnedIndex}
             />
+          </div>
+          {pinned ? (
+            <button
+              type="button"
+              onClick={unpin}
+              aria-label="Unpin cell"
+              title="Unpin cell · Esc"
+              className="shrink-0 rounded p-1 text-ui-text-faint hover:bg-ui-panel hover:text-ui-text"
+            >
+              <X aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      }
+      rail={
+        <>
+          <RailPanel title="Categories">
+            <ContextLegend
+              snapshot={snapshot}
+              windowSize={windowSize}
+              filters={filters}
+              onToggleCategory={onToggleCategory}
+              onToggleMessageKind={onToggleMessageKind}
+              onColourByKind={onColourByKind}
+            />
           </RailPanel>
-        ) : (
-          <>
-            <RailPanel title="Categories">
-              <ContextLegend
-                snapshot={snapshot}
-                windowSize={windowSize}
-                filters={filters}
-                onToggleCategory={onToggleCategory}
-                onToggleMessageKind={onToggleMessageKind}
-                onColourByKind={onColourByKind}
-              />
-            </RailPanel>
 
-            {/* Fill level and the window override sit under the legend: the
+          {/* Fill level and the window override sit under the legend: the
               legend's Free space line is the other half of the same number,
               and the Session strip stayed one line on a narrow window once
               they left it. */}
-            <RailPanel
-              title="Context Window"
-              action={
-                <ContextWindowMenu
-                  windowChoice={windowChoice}
-                  onWindowChoiceChange={onWindowChoiceChange}
-                />
-              }
-            >
-              <ContextWindowPanel
-                measuredTotal={snapshot.measuredTotal}
-                windowSize={windowSize}
-                peak={peakMeasuredTotal(session.calls)}
+          <RailPanel
+            title="Context Window"
+            action={
+              <ContextWindowMenu
                 windowChoice={windowChoice}
+                onWindowChoiceChange={onWindowChoiceChange}
               />
-            </RailPanel>
+            }
+          >
+            <ContextWindowPanel
+              measuredTotal={snapshot.measuredTotal}
+              windowSize={windowSize}
+              peak={peakMeasuredTotal(session.calls)}
+              windowChoice={windowChoice}
+            />
+          </RailPanel>
 
-            {/* The Inspector docks here rather than following the pointer as a
-              tooltip; the panel holds its place until it is filled. Nothing is
-              pinned on this branch, so it only ever previews. */}
-            <RailPanel title="Inspector">
-              <Inspector
-                cell={shownIndex === undefined ? undefined : cells[shownIndex]}
-                filters={filters}
-                pinned={false}
-              />
-            </RailPanel>
-
-            <RailPanel title="Transcript">
-              {/* The window and its peak moved up to the Context Window panel,
+          <RailPanel title="Transcript">
+            {/* The window and its peak moved up to the Context Window panel,
                 beside the control that sets them; what is left here is what the
                 parse itself found. */}
-              <p className="text-[11px] leading-snug text-ui-text-faint">
-                {session.recordCount} records · {session.malformedLines} malformed ·{" "}
-                {unknownRecordCount(session)} unknown
-              </p>
-              {/* The manifest's own statement, so what someone reads about the
+            <p className="text-[11px] leading-snug text-ui-text-faint">
+              {session.recordCount} records · {session.malformedLines} malformed ·{" "}
+              {unknownRecordCount(session)} unknown
+            </p>
+            {/* The manifest's own statement, so what someone reads about the
                 Demo Sessions is the file that produced them rather than a copy. */}
-              {demoNote === undefined ? null : (
-                <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
-              )}
-            </RailPanel>
-          </>
-        )
+            {demoNote === undefined ? null : (
+              <p className="mt-2 text-[11px] leading-snug text-ui-text-faint">{demoNote}</p>
+            )}
+          </RailPanel>
+        </>
       }
+      revealInspector={pinned}
       scrubber={
         <Scrubber
           calls={session.calls}

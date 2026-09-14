@@ -21,6 +21,7 @@ import type { GridFilters } from "./filters.ts";
 import { isCellHidden } from "./filters.ts";
 import { formatTokens } from "./format.ts";
 import type { Cell } from "./grid.ts";
+import { ScrollArea } from "./ScrollArea.tsx";
 import { cellFillClass } from "./theme.ts";
 
 /**
@@ -96,16 +97,16 @@ const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
  * type size; anything longer scrolls inside the panel rather than moving
  * anything outside it.
  */
-const INSPECTOR_HEIGHT = "h-48 overflow-y-auto";
+const INSPECTOR_HEIGHT = "h-48";
 
 /**
  * Describes the Cell under the pointer, or the pinned one, at a height that
  * never depends on which Cell that is.
  */
 export const Inspector = (props: InspectorProps) => (
-  <div className={INSPECTOR_HEIGHT}>
+  <ScrollArea className={INSPECTOR_HEIGHT}>
     <InspectorBody {...props} />
-  </div>
+  </ScrollArea>
 );
 
 const InspectorBody = ({ cell, filters, pinned }: InspectorProps) => {

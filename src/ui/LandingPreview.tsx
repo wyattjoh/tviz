@@ -105,12 +105,9 @@ export const LandingPreview = ({ session }: LandingPreviewProps) => {
               windowChoice="auto"
             />
           </RailPanel>
-
-          <RailPanel title="Inspector">
-            <Inspector cell={midUsedCell(cells)} filters={ALL_SHOWN} pinned={false} />
-          </RailPanel>
         </>
       }
+      inspector={<Inspector cell={midUsedCell(cells)} filters={ALL_SHOWN} pinned={false} />}
       scrubber={
         <Scrubber
           calls={session.calls}
