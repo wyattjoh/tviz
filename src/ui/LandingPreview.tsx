@@ -90,7 +90,6 @@ export const LandingPreview = ({ session }: LandingPreviewProps) => {
               filters={ALL_SHOWN}
               onToggleCategory={noop}
               onToggleMessageKind={noop}
-              onColourByKind={noop}
             />
           </RailPanel>
 

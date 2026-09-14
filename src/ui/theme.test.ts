@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CATEGORY_ORDER, MESSAGE_KIND_ORDER } from "../domain/context.ts";
-import { ALL_SHOWN, toggleCategory, toggleMessageKind, withColourByKind } from "./filters.ts";
+import { ALL_SHOWN, toggleCategory, toggleMessageKind } from "./filters.ts";
 import type { Cell } from "./grid.ts";
 import {
   CATEGORY_FILL_CLASS,
@@ -11,6 +11,7 @@ import {
   HIDDEN_FILL_CLASS,
   MESSAGE_KIND_FILL_CLASS,
   MESSAGE_KIND_RING_CLASS,
+  messageKindSwatchBackground,
 } from "./theme.ts";
 
 const cellOf = (fill: Cell["fill"], kind: Cell["kind"] = undefined): Cell => ({
@@ -53,13 +54,32 @@ describe("theme", () => {
   });
 });
 
+describe("messageKindSwatchBackground", () => {
+  it("radiates one equal wedge from the center for every supplied Kind", () => {
+    const background = messageKindSwatchBackground(MESSAGE_KIND_ORDER);
+
+    expect(background).toMatch(/^conic-gradient\(from -45deg,/);
+    for (const token of ["user", "assistant", "tool-result", "reminder"]) {
+      expect(background).toContain(`--color-kind-${token}`);
+    }
+    expect(background).toContain("0% 25%");
+    expect(background).toContain("75% 100%");
+  });
+
+  it("contains only enabled Kinds and leaves an empty selection unfilled", () => {
+    expect(messageKindSwatchBackground(["user", "reminder"])).toContain("--color-kind-user");
+    expect(messageKindSwatchBackground(["user", "reminder"])).toContain("--color-kind-reminder");
+    expect(messageKindSwatchBackground(["user", "reminder"])).not.toContain(
+      "--color-kind-assistant",
+    );
+    expect(messageKindSwatchBackground([])).toBeUndefined();
+  });
+});
+
 describe("cellFillClass", () => {
   it("paints a Cell with its Category accent, and a Messages Cell with its Kind's", () => {
     expect(cellFillClass(cellOf("skills"), ALL_SHOWN)).toBe("bg-cat-skills");
     expect(cellFillClass(cellOf("messages", "user"), ALL_SHOWN)).toBe("bg-kind-user");
-    expect(cellFillClass(cellOf("messages", "user"), withColourByKind(ALL_SHOWN, false))).toBe(
-      "bg-cat-messages",
-    );
   });
 
   it("paints an empty Cell as free space", () => {
@@ -82,16 +102,15 @@ describe("cellFillClass", () => {
     expect(cellFillClass(cellOf("messages", "user"), filters)).toBe("bg-kind-user");
   });
 
-  it("recolours only Messages Cells when colouring by Message Kind", () => {
-    const filters = withColourByKind(withColourByKind(ALL_SHOWN, false), true);
-    expect(cellFillClass(cellOf("messages", "toolResult"), filters)).toBe("bg-kind-tool-result");
-    expect(cellFillClass(cellOf("messages", "assistant"), filters)).toBe("bg-kind-assistant");
-    expect(cellFillClass(cellOf("skills"), filters)).toBe("bg-cat-skills");
-    expect(cellFillClass(cellOf("free"), filters)).toBe("bg-cell-free");
+  it("uses Message Kind accents only for Messages Cells", () => {
+    expect(cellFillClass(cellOf("messages", "toolResult"), ALL_SHOWN)).toBe("bg-kind-tool-result");
+    expect(cellFillClass(cellOf("messages", "assistant"), ALL_SHOWN)).toBe("bg-kind-assistant");
+    expect(cellFillClass(cellOf("skills"), ALL_SHOWN)).toBe("bg-cat-skills");
+    expect(cellFillClass(cellOf("free"), ALL_SHOWN)).toBe("bg-cell-free");
   });
 
-  it("blanks before it recolours, so a hidden Kind stays hidden", () => {
-    const filters = withColourByKind(toggleMessageKind(ALL_SHOWN, "user"), true);
+  it("blanks before choosing an accent, so a hidden Kind stays hidden", () => {
+    const filters = toggleMessageKind(ALL_SHOWN, "user");
     expect(cellFillClass(cellOf("messages", "user"), filters)).toBe(HIDDEN_FILL_CLASS);
   });
 });

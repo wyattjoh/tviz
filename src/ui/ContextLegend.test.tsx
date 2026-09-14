@@ -14,14 +14,8 @@ import {
   type MessageKind,
 } from "../domain/context.ts";
 import { ContextLegend } from "./ContextLegend.tsx";
-import {
-  ALL_SHOWN,
-  type GridFilters,
-  toggleCategory,
-  toggleMessageKind,
-  withColourByKind,
-} from "./filters.ts";
-import { CATEGORY_FILL_CLASS, MESSAGE_KIND_FILL_CLASS } from "./theme.ts";
+import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./filters.ts";
+import { CATEGORY_FILL_CLASS, CATEGORY_RING_CLASS, MESSAGE_KIND_FILL_CLASS } from "./theme.ts";
 
 const snapshot: ContextSnapshot = {
   index: 0,
@@ -47,7 +41,6 @@ const renderLegend = (
   handlers: {
     readonly onToggleCategory?: (category: Category) => void;
     readonly onToggleMessageKind?: (kind: MessageKind) => void;
-    readonly onColourByKind?: (colourByKind: boolean) => void;
   } = {},
 ) => (
   <ContextLegend
@@ -56,14 +49,17 @@ const renderLegend = (
     filters={filters}
     onToggleCategory={handlers.onToggleCategory ?? (() => {})}
     onToggleMessageKind={handlers.onToggleMessageKind ?? (() => {})}
-    onColourByKind={handlers.onColourByKind ?? (() => {})}
   />
 );
 
 const row = (name: RegExp): HTMLElement => screen.getByRole("button", { name });
 
-const swatchClass = (name: RegExp): string =>
-  row(name).querySelector("span[aria-hidden='true']")?.getAttribute("class") ?? "";
+const swatch = (name: RegExp): HTMLElement =>
+  row(name).querySelector("span[aria-hidden='true']") as HTMLElement;
+
+const swatchClass = (name: RegExp): string => swatch(name).className;
+
+const swatchBackground = (name: RegExp): string => swatch(name).style.background;
 
 const labelClass = (name: RegExp): string =>
   row(name).querySelectorAll("span")[1]?.getAttribute("class") ?? "";
@@ -91,7 +87,7 @@ describe("ContextLegend", () => {
     expect(screen.getByText("150.0k")).toBeDefined();
   });
 
-  it("expands Messages into coloured Message Kinds without giving Messages a colour", () => {
+  it("summarises enabled Message Kinds as radial colour wedges", () => {
     render(renderLegend());
 
     for (const kind of MESSAGE_KIND_ORDER) {
@@ -102,17 +98,30 @@ describe("ContextLegend", () => {
     expect(row(/^Tool result/).textContent).toContain("7.0k");
     expect(row(/^Messages/).textContent).toContain("18.0k");
     expect(swatchClass(/^Messages/)).not.toContain(CATEGORY_FILL_CLASS.messages);
+    expect(swatchBackground(/^Messages/)).toContain("conic-gradient");
+    expect(swatchBackground(/^Messages/)).toContain("--color-kind-user");
+    expect(swatchBackground(/^Messages/)).toContain("--color-kind-tool-result");
   });
 
-  it("shows Messages as one coloured row when colour-by-Kind is off", () => {
-    render(renderLegend(withColourByKind(ALL_SHOWN, false)));
+  it("removes individually hidden Kinds from the Messages swatch", () => {
+    const { rerender } = render(renderLegend());
 
-    for (const kind of MESSAGE_KIND_ORDER) {
-      expect(
-        screen.queryByRole("button", { name: new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`) }),
-      ).toBeNull();
-    }
-    expect(swatchClass(/^Messages/)).toContain(CATEGORY_FILL_CLASS.messages);
+    rerender(renderLegend(toggleMessageKind(ALL_SHOWN, "toolResult")));
+
+    expect(swatchBackground(/^Messages/)).toContain("--color-kind-user");
+    expect(swatchBackground(/^Messages/)).not.toContain("--color-kind-tool-result");
+
+    const allKindsHidden = MESSAGE_KIND_ORDER.reduce(toggleMessageKind, ALL_SHOWN);
+    rerender(renderLegend(allKindsHidden));
+    expect(swatchBackground(/^Messages/)).toBe("");
+    expect(swatchClass(/^Messages/)).toContain(CATEGORY_RING_CLASS.messages);
+    expect(row(/^Messages/).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("does not offer an alternate Category-colour mode for Messages", () => {
+    render(renderLegend());
+
+    expect(screen.queryByLabelText("Colour Messages by kind")).toBeNull();
   });
 
   it("gives filter rows phone-sized targets without enlarging the desktop rail", () => {
@@ -300,17 +309,6 @@ describe("ContextLegend", () => {
 
     fireEvent.click(row(/^Tool result/));
     expect(onToggleMessageKind).not.toHaveBeenCalled();
-  });
-
-  it("offers colouring Messages by kind", () => {
-    const onColourByKind = vi.fn();
-    render(renderLegend(ALL_SHOWN, { onColourByKind }));
-
-    const toggle = screen.getByLabelText("Colour Messages by kind") as HTMLInputElement;
-    // On by default: the grid opens coloured by Kind, and the box turns it off.
-    expect(toggle.checked).toBe(true);
-    fireEvent.click(toggle);
-    expect(onColourByKind).toHaveBeenCalledWith(false);
   });
 
   it("has nothing to toggle on free space, which the grid always shows", () => {

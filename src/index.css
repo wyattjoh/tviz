@@ -64,10 +64,9 @@
   --color-cat-messages: var(--color-ctp-blue);
 
   /* --- Layer 2: one accent per Message Kind ---
-     Every Kind accent differs from the Messages Category accent it replaces, or
-     "colour Messages by kind" would leave part of the grid looking untouched:
-     User was `blue`, the Messages accent itself. `tokens.test.ts` holds the
-     line. */
+     Every Kind accent differs from the Messages Category accent, so the legend
+     and grid keep each Kind visually distinct from its parent Category.
+     `tokens.test.ts` holds the line. */
   --color-kind-user: var(--color-ctp-pink);
   --color-kind-assistant: var(--color-ctp-sky);
   --color-kind-tool-result: var(--color-ctp-teal);

@@ -77,7 +77,7 @@ The loaded view as a whole, in four regions: the Menu Bar, the Session Strip, a 
 _Avoid_: dashboard, console, main view
 
 **Cell**:
-One box in the grid, representing a fixed quantum of tokens and coloured by the Category that fills it.
+One box in the grid, representing a fixed quantum of tokens and coloured by the Category that fills it, or by the Message Kind when that Category is Messages.
 _Avoid_: box, tile, block
 
 **Scrubber**:
@@ -91,10 +91,6 @@ _Avoid_: empty cell, unused cell
 **Hidden Cell**:
 A Cell blanked because its Category — or, for a Messages Cell, its Message Kind — is toggled off in the legend. It keeps its position and its tokens and is drawn as an outlined recess, because filtering is a paint decision and never re-flows the grid (ADR-0006). A Hidden Cell is not a Free Cell: the tokens are still there.
 _Avoid_: removed cell, filtered-out cell, empty cell
-
-**Colour by Kind**:
-The legend mode that distinguishes Messages as separately coloured and filterable Message Kinds instead of one Category accent. When it is off, Messages is presented and filtered only as one Category; other Categories are unaffected.
-_Avoid_: group by kind, kind mode
 
 **Inspector**:
 The panel docked in the right rail describing one Cell — what fills it, the token range it covers, and the items reaching into it. Filled by hovering a Cell and held by clicking one (pinning).

@@ -9,7 +9,7 @@
  * avoid. Legend totals come from the Context Snapshot, so they are unaffected
  * too, and the proportions two Sessions are compared on stay stable.
  */
-import type { Category, MessageKind } from "../domain/context.ts";
+import { MESSAGE_KIND_ORDER, type Category, type MessageKind } from "../domain/context.ts";
 import type { Cell } from "./grid.ts";
 
 /**
@@ -25,23 +25,14 @@ export type GridFilters = {
    * Message Kinds toggled off, within the Messages Category.
    */
   readonly hiddenKinds: ReadonlySet<MessageKind>;
-  /**
-   * Whether Messages Cells take their colour from their Message Kind instead of
-   * the Messages Category accent. Other Categories are unaffected.
-   */
-  readonly colourByKind: boolean;
 };
 
 /**
- * Everything shown, with Messages Cells coloured by Message Kind: what a
- * Session opens on. "How much of this is tool output" is the question a
- * Session is usually opened with, and it cannot be read off a grid where every
- * Messages Cell is one blue.
+ * Every Category and Message Kind shown.
  */
 export const ALL_SHOWN: GridFilters = {
   hiddenCategories: new Set<Category>(),
   hiddenKinds: new Set<MessageKind>(),
-  colourByKind: true,
 };
 
 /**
@@ -54,12 +45,40 @@ const toggledIn = <A>(set: ReadonlySet<A>, value: A): ReadonlySet<A> => {
 };
 
 /**
- * Shows a hidden Category, or hides a shown one.
+ * Whether every Message Kind is currently hidden, either individually or by
+ * their parent Messages Category.
  */
-export const toggleCategory = (filters: GridFilters, category: Category): GridFilters => ({
-  ...filters,
-  hiddenCategories: toggledIn(filters.hiddenCategories, category),
-});
+const allMessageKindsHidden = (filters: GridFilters): boolean =>
+  filters.hiddenCategories.has("messages") ||
+  MESSAGE_KIND_ORDER.every((kind) => filters.hiddenKinds.has(kind));
+
+/**
+ * Shows a hidden Category, or hides a shown one.
+ *
+ * Messages is the bulk control for its Message Kinds. Hiding it selects none;
+ * showing it selects all and clears any individual Kind exclusions.
+ */
+export const toggleCategory = (filters: GridFilters, category: Category): GridFilters => {
+  if (category !== "messages") {
+    return {
+      ...filters,
+      hiddenCategories: toggledIn(filters.hiddenCategories, category),
+    };
+  }
+
+  const hiddenCategories = new Set(filters.hiddenCategories);
+  if (allMessageKindsHidden(filters)) {
+    hiddenCategories.delete("messages");
+    return { ...filters, hiddenCategories, hiddenKinds: new Set<MessageKind>() };
+  }
+
+  hiddenCategories.add("messages");
+  return {
+    ...filters,
+    hiddenCategories,
+    hiddenKinds: new Set<MessageKind>(MESSAGE_KIND_ORDER),
+  };
+};
 
 /**
  * Shows a hidden Message Kind, or hides a shown one.
@@ -70,23 +89,12 @@ export const toggleMessageKind = (filters: GridFilters, kind: MessageKind): Grid
 });
 
 /**
- * Switches Messages Cells between the Category accent and the Kind accents.
- *
- * Turning Kind colours off also clears the Kind filters: their controls leave
- * the legend in Category mode, so keeping one active would blank Cells with no
- * visible way to explain or reverse it.
- */
-export const withColourByKind = (filters: GridFilters, colourByKind: boolean): GridFilters => ({
-  ...filters,
-  hiddenKinds: colourByKind ? filters.hiddenKinds : new Set<MessageKind>(),
-  colourByKind,
-});
-
-/**
  * Whether a Category's Cells are currently blanked.
+ *
+ * Messages is also hidden when each of its Message Kinds is individually off.
  */
 export const isCategoryHidden = (filters: GridFilters, category: Category): boolean =>
-  filters.hiddenCategories.has(category);
+  category === "messages" ? allMessageKindsHidden(filters) : filters.hiddenCategories.has(category);
 
 /**
  * Whether a Message Kind's Cells are currently blanked — by its own toggle, or

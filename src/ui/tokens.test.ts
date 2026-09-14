@@ -107,8 +107,7 @@ describe("semantic colour tokens", () => {
 
   it("gives every Category and Message Kind an accent of its own", () => {
     // Two rows of the legend painted the same colour are one row as far as a
-    // reader is concerned — and User sharing the Messages accent would leave
-    // "colour Messages by kind" looking like it had done nothing to them.
+    // reader is concerned, including a Kind and its parent Messages Category.
     const tokens = [...CATEGORY_ORDER.map((category) => CATEGORY_TOKEN[category]), ...KIND_TOKENS];
     const byColour = new Map<string, string[]>();
     for (const token of tokens) {

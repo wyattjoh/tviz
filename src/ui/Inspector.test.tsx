@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ContextItem } from "../domain/context.ts";
-import { ALL_SHOWN, toggleCategory, withColourByKind } from "./filters.ts";
+import { ALL_SHOWN, toggleCategory } from "./filters.ts";
 import type { Cell, CellItem } from "./grid.ts";
 import { Inspector } from "./Inspector.tsx";
 
@@ -150,14 +150,10 @@ describe("Inspector", () => {
       "user",
     );
 
-    const { container, rerender } = render(
-      <Inspector cell={cell} filters={ALL_SHOWN} pinned={false} />,
-    );
-    const swatch = (): string => container.querySelector("span")?.className ?? "";
-    expect(swatch()).toContain("bg-kind-user");
+    const { container } = render(<Inspector cell={cell} filters={ALL_SHOWN} pinned={false} />);
+    const swatch = container.querySelector("span")?.className ?? "";
 
-    rerender(<Inspector cell={cell} filters={withColourByKind(ALL_SHOWN, false)} pinned={false} />);
-    expect(swatch()).toContain("bg-cat-messages");
+    expect(swatch).toContain("bg-kind-user");
   });
 });
 

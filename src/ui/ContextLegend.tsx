@@ -1,7 +1,7 @@
 /**
  * Legend and filters for the grid: tokens and percent of the Context Window per
- * Category, with Messages expanded into its Message Kinds while colour-by-Kind
- * mode is active, ending with the free-space line `/context` shows.
+ * Category, with Messages expanded into its separately coloured Message Kinds,
+ * ending with the free-space line `/context` shows.
  *
  * Every row is also its own filter. Toggling one blanks that Category's or that
  * Message Kind's Cells in place — it never re-flows the grid and it never
@@ -37,6 +37,7 @@ import {
   FREE_FILL_CLASS,
   MESSAGE_KIND_FILL_CLASS,
   MESSAGE_KIND_RING_CLASS,
+  messageKindSwatchBackground,
 } from "./theme.ts";
 
 /**
@@ -57,7 +58,7 @@ export type ContextLegendProps = {
    */
   readonly windowSize: number;
   /**
-   * Which rows are toggled off, and whether Messages is coloured by Kind.
+   * Which rows are toggled off.
    */
   readonly filters: GridFilters;
   /**
@@ -68,17 +69,14 @@ export type ContextLegendProps = {
    * Shows or hides one Message Kind's Cells.
    */
   readonly onToggleMessageKind: (kind: MessageKind) => void;
-  /**
-   * Switches Messages Cells between the Category accent and the Kind accents.
-   */
-  readonly onColourByKind: (colourByKind: boolean) => void;
 };
 
 /**
  * The swatch of a filter row: filled when shown, an outline when hidden.
  */
 type SwatchProps = {
-  readonly fillClass: string;
+  readonly fillClass: string | undefined;
+  readonly fillBackground: string | undefined;
   readonly ringClass: string;
   readonly hidden: boolean;
   readonly small: boolean;
@@ -87,11 +85,12 @@ type SwatchProps = {
 const swatchSizeClass = (small: boolean): string =>
   small ? "h-4 w-4 md:h-2 md:w-2" : "h-4 w-4 md:h-2.5 md:w-2.5";
 
-const Swatch = ({ fillClass, ringClass, hidden, small }: SwatchProps) => (
+const Swatch = ({ fillClass, fillBackground, ringClass, hidden, small }: SwatchProps) => (
   <span
     className={`inline-block shrink-0 rounded-[2px] ${swatchSizeClass(small)} ${
-      hidden ? `ring-1 ring-inset ${ringClass}` : fillClass
+      hidden ? `ring-1 ring-inset ${ringClass}` : (fillClass ?? "")
     }`}
+    style={hidden || fillBackground === undefined ? undefined : { background: fillBackground }}
     aria-hidden="true"
   />
 );
@@ -147,7 +146,8 @@ const RowDescription = ({ id, label, description, disabledReason }: RowDescripti
  * Messages again.
  */
 type FilterRowProps = {
-  readonly fillClass: string;
+  readonly fillClass: string | undefined;
+  readonly fillBackground: string | undefined;
   readonly ringClass: string;
   readonly label: string;
   readonly description: string;
@@ -160,12 +160,12 @@ type FilterRowProps = {
   readonly disabled: boolean;
   readonly disabledReason: string | undefined;
   readonly small: boolean;
-  readonly swatchVisible: boolean;
   readonly onToggle: () => void;
 };
 
 const FilterRow = ({
   fillClass,
+  fillBackground,
   ringClass,
   label,
   description,
@@ -178,7 +178,6 @@ const FilterRow = ({
   disabled,
   disabledReason,
   small,
-  swatchVisible,
   onToggle,
 }: FilterRowProps) => (
   // Laid out for the 340px rail: the description floats under its row rather
@@ -209,11 +208,13 @@ const FilterRow = ({
         hidden ? "opacity-60" : ""
       } ${small ? "text-sm md:text-[11px]" : "text-base md:text-xs"}`}
     >
-      {swatchVisible ? (
-        <Swatch fillClass={fillClass} ringClass={ringClass} hidden={hidden} small={small} />
-      ) : (
-        <span className={`shrink-0 ${swatchSizeClass(small)}`} aria-hidden="true" />
-      )}
+      <Swatch
+        fillClass={fillClass}
+        fillBackground={fillBackground}
+        ringClass={ringClass}
+        hidden={hidden}
+        small={small}
+      />
       <span
         className={`min-w-0 flex-1 leading-tight ${
           hidden ? "text-ui-text-muted line-through" : "text-ui-text-secondary"
@@ -249,12 +250,15 @@ export const ContextLegend = ({
   filters,
   onToggleCategory,
   onToggleMessageKind,
-  onColourByKind,
 }: ContextLegendProps) => {
   const free = Math.max(0, windowSize - snapshot.measuredTotal);
-  // Hiding Messages blanks every Cell its Kinds could have blanked, so the Kind
-  // rows below it are already answered and stop taking clicks until it is back.
-  const messagesHidden = isCategoryHidden(filters, "messages");
+  const enabledMessageKinds = MESSAGE_KIND_ORDER.filter(
+    (kind) => !isMessageKindHidden(filters, kind),
+  );
+  const messagesSwatchBackground = messageKindSwatchBackground(enabledMessageKinds);
+  // Explicitly hiding Messages blanks every Kind, so its rows stop taking
+  // clicks until the parent bulk control selects them all again.
+  const messagesCategoryHidden = filters.hiddenCategories.has("messages");
 
   // One row describes itself at a time: the cards float over their neighbours,
   // so two of them open at once would overlap. Leaving only clears the row that
@@ -270,7 +274,8 @@ export const ContextLegend = ({
         {CATEGORY_ORDER.map((category) => (
           <Fragment key={category}>
             <FilterRow
-              fillClass={CATEGORY_FILL_CLASS[category]}
+              fillClass={category === "messages" ? undefined : CATEGORY_FILL_CLASS[category]}
+              fillBackground={category === "messages" ? messagesSwatchBackground : undefined}
               ringClass={CATEGORY_RING_CLASS[category]}
               label={CATEGORY_LABELS[category]}
               description={CATEGORY_DESCRIPTIONS[category]}
@@ -283,18 +288,18 @@ export const ContextLegend = ({
               disabled={false}
               disabledReason={undefined}
               small={false}
-              swatchVisible={category !== "messages" || !filters.colourByKind}
               onToggle={() => onToggleCategory(category)}
             />
-            {/* Messages is the one Category with an inside: its Kinds hang off
-                its row with toggles of their own. */}
-            {category === "messages" && filters.colourByKind ? (
+            {/* Messages is the one Category with an inside: its Kinds always
+                hang off its row with toggles of their own. */}
+            {category === "messages" ? (
               <li>
                 <ul className="mt-1 ml-3 space-y-1 border-l border-ui-border pl-2 md:mt-0.5 md:space-y-0.5">
                   {MESSAGE_KIND_ORDER.map((kind) => (
                     <FilterRow
                       key={kind}
                       fillClass={MESSAGE_KIND_FILL_CLASS[kind]}
+                      fillBackground={undefined}
                       ringClass={MESSAGE_KIND_RING_CLASS[kind]}
                       label={MESSAGE_KIND_LABELS[kind]}
                       description={MESSAGE_KIND_DESCRIPTIONS[kind]}
@@ -304,10 +309,9 @@ export const ContextLegend = ({
                       tokens={snapshot.byKind[kind]}
                       windowSize={windowSize}
                       hidden={isMessageKindHidden(filters, kind)}
-                      disabled={messagesHidden}
-                      disabledReason={messagesHidden ? MESSAGES_HIDDEN_HINT : undefined}
+                      disabled={messagesCategoryHidden}
+                      disabledReason={messagesCategoryHidden ? MESSAGES_HIDDEN_HINT : undefined}
                       small
-                      swatchVisible
                       onToggle={() => onToggleMessageKind(kind)}
                     />
                   ))}
@@ -351,16 +355,6 @@ export const ContextLegend = ({
           ) : null}
         </li>
       </ul>
-
-      <label className="mt-2 flex min-h-11 items-center gap-2 px-2 text-sm text-ui-text-muted md:min-h-0 md:px-1 md:text-[11px]">
-        <input
-          type="checkbox"
-          checked={filters.colourByKind}
-          onChange={(event) => onColourByKind(event.target.checked)}
-          className="accent-ui-action"
-        />
-        Colour Messages by kind
-      </label>
     </div>
   );
 };

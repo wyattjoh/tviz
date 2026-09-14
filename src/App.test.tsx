@@ -484,11 +484,14 @@ describe("App", () => {
       expect(row(rail, /^Messages/).getAttribute("aria-pressed")).toBe("true");
     });
 
-    it("stops the Message Kind rows claiming to be shown once Messages is hidden", async () => {
+    it("uses Messages to deselect and select every Message Kind", async () => {
       const rail = await open();
       const toolResult = lastFilledCell();
       expect(row(rail, /^Tool result/).getAttribute("aria-pressed")).toBe("true");
 
+      // A bulk re-selection clears exclusions made on individual Kind rows.
+      fireEvent.click(row(rail, /^Reminder/));
+      expect(row(rail, /^Reminder/).getAttribute("aria-pressed")).toBe("false");
       fireEvent.click(row(rail, /^Messages/));
 
       // Every Messages Cell is blanked, so no Kind row may still say its Cells
@@ -500,25 +503,23 @@ describe("App", () => {
         expect.soft((kindRow as HTMLButtonElement).disabled).toBe(true);
       }
 
-      // Showing Messages again hands the Kinds back exactly as they were.
+      // Showing Messages again selects every Kind, including Reminder.
       fireEvent.click(row(rail, /^Messages/));
-      expect(row(rail, /^Tool result/).getAttribute("aria-pressed")).toBe("true");
+      for (const kind of ["User", "Assistant", "Tool result", "Reminder"]) {
+        expect(row(rail, new RegExp(`^${kind}`)).getAttribute("aria-pressed")).toBe("true");
+      }
       expect(cellFill(toolResult)).toBe("bg-kind-tool-result");
     });
 
-    it("opens with Messages Cells in the Kind accents, and returns them to the Messages accent on request", async () => {
+    it("always shows Messages Cells with their Kind accents", async () => {
       await open();
       const toolResult = lastFilledCell();
       const skills = firstCellOf("Skills");
+
       expect(cellFill(toolResult)).toBe("bg-kind-tool-result");
       expect(cellTitles()[toolResult]).toContain("Messages · Tool result ·");
-
-      fireEvent.click(screen.getByLabelText("Colour Messages by kind"));
-
-      expect(cellFill(toolResult)).toBe("bg-cat-messages");
-      expect(cellTitles()[toolResult]).not.toContain("Tool result ·");
-      // The other Categories keep their accents either way.
       expect(cellFill(skills)).toBe("bg-cat-skills");
+      expect(screen.queryByLabelText("Colour Messages by kind")).toBeNull();
     });
 
     it("says System is derived rather than logged, when its row is pointed at", async () => {

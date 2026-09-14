@@ -2,8 +2,8 @@
  * The bridge between the domain vocabulary and the semantic colour tokens
  * declared in `src/index.css`.
  *
- * Components import class names from here; they never name a Catppuccin colour
- * or a hex literal themselves.
+ * Components import semantic classes and generated styles from here; they never
+ * name a Catppuccin colour or a hex literal themselves.
  */
 import type { Category, MessageKind } from "../domain/context.ts";
 import { type GridFilters, isCellHidden } from "./filters.ts";
@@ -36,8 +36,8 @@ export const CATEGORY_RING_CLASS: Readonly<Record<Category, string>> = {
 };
 
 /**
- * Background utility for each Message Kind, used when Messages Cells are
- * coloured by Kind and by the Kind rows of the legend.
+ * Background utility for each Message Kind, used by Messages Cells and the
+ * Kind rows of the legend.
  */
 export const MESSAGE_KIND_FILL_CLASS: Readonly<Record<MessageKind, string>> = {
   user: "bg-kind-user",
@@ -55,6 +55,36 @@ export const MESSAGE_KIND_RING_CLASS: Readonly<Record<MessageKind, string>> = {
   assistant: "ring-kind-assistant",
   toolResult: "ring-kind-tool-result",
   reminder: "ring-kind-reminder",
+};
+
+/**
+ * Semantic colour variable for each Message Kind. Kept in this adapter so UI
+ * components never name colour tokens directly.
+ */
+const MESSAGE_KIND_COLOR_VAR: Readonly<Record<MessageKind, string>> = {
+  user: "var(--color-kind-user)",
+  assistant: "var(--color-kind-assistant)",
+  toolResult: "var(--color-kind-tool-result)",
+  reminder: "var(--color-kind-reminder)",
+};
+
+/**
+ * A radial-segment background representing the supplied Message Kinds.
+ *
+ * Equal conic-gradient wedges radiate from the swatch's center. An empty list
+ * has no background, leaving the swatch's existing hidden outline visible.
+ */
+export const messageKindSwatchBackground = (kinds: readonly MessageKind[]): string | undefined => {
+  const first = kinds[0];
+  if (first === undefined) return undefined;
+  if (kinds.length === 1) return MESSAGE_KIND_COLOR_VAR[first];
+
+  const segment = 100 / kinds.length;
+  const stop = (index: number): number => Number((index * segment).toFixed(4));
+  const wedges = kinds.map(
+    (kind, index) => `${MESSAGE_KIND_COLOR_VAR[kind]} ${stop(index)}% ${stop(index + 1)}%`,
+  );
+  return `conic-gradient(from -45deg, ${wedges.join(", ")})`;
 };
 
 /**
@@ -94,13 +124,13 @@ export const CATEGORY_SVG_FILL_CLASS: Readonly<Record<Category, string>> = {
 /**
  * The background utility one Cell is painted with, honouring the filters.
  *
- * The order matters: a blanked Cell is blank whatever it holds, and "colour by
- * kind" only ever repaints Messages Cells.
+ * The order matters: a blanked Cell is blank whatever it holds, then Messages
+ * Cells use their Message Kind accent while every other Cell uses its Category.
  */
 export const cellFillClass = (cell: Cell, filters: GridFilters): string => {
   if (cell.fill === "free") return FREE_FILL_CLASS;
   if (isCellHidden(cell, filters)) return HIDDEN_FILL_CLASS;
-  if (filters.colourByKind && cell.fill === "messages" && cell.kind !== undefined) {
+  if (cell.fill === "messages" && cell.kind !== undefined) {
     return MESSAGE_KIND_FILL_CLASS[cell.kind];
   }
   return CATEGORY_FILL_CLASS[cell.fill];

@@ -82,7 +82,9 @@ the pointer moves can't be read down, compared with the next cell, or kept while
 scrub. So the inspector lives beside the grid, and clicking a cell pins it — and while a
 cell is pinned the rail clears down to the inspector alone, so the cell you chose is the
 only thing beside the grid until you close it. Message kinds get the same treatment as
-categories — hide in place, recolour (on by default) — because "how much of this session
-is tool output" is the question people actually arrive with.
+categories — they hide in place and always keep their own colours — because "how much of
+this session is tool output" is the question people actually arrive with. The Messages
+row gathers the enabled kinds into one radial, multicolour swatch and remains the all/none
+control, so the overview and the individual filters tell the same story.
 
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).

@@ -86,9 +86,9 @@ const describeCell = (cell: Cell, filters: GridFilters): string => {
   const range = `${formatTokens(cell.start)}–${formatTokens(cell.end)}`;
   if (cell.fill === "free") return `Free · ${range}`;
   const category =
-    filters.colourByKind && cell.kind !== undefined
-      ? `${CATEGORY_LABELS[cell.fill]} · ${MESSAGE_KIND_LABELS[cell.kind]}`
-      : CATEGORY_LABELS[cell.fill];
+    cell.kind === undefined
+      ? CATEGORY_LABELS[cell.fill]
+      : `${CATEGORY_LABELS[cell.fill]} · ${MESSAGE_KIND_LABELS[cell.kind]}`;
   const items = cell.items.map((entry) => entry.item.label).join(", ");
   const hidden = isCellHidden(cell, filters) ? " · hidden" : "";
   return `${category} · ${range} · ${items}${hidden}`;
@@ -146,8 +146,7 @@ export type ContextGridProps = {
    */
   readonly measuredTotal: number;
   /**
-   * Which Categories and Message Kinds are blanked, and how Messages Cells are
-   * coloured.
+   * Which Categories and Message Kinds are blanked.
    */
   readonly filters: GridFilters;
   /**

@@ -267,21 +267,11 @@ describe("ContextGrid", () => {
       expect(fills()[4]).toBe("bg-cell-free");
     });
 
-    it("opens coloured by Message Kind, and falls back to the Messages accent when that is off", () => {
-      const { rerender } = render(renderGrid(items, 200_000));
+    it("always colours and describes Messages Cells by Message Kind", () => {
+      render(renderGrid(items, 200_000));
+
       expect(fills().slice(2, 4)).toEqual(["bg-kind-user", "bg-kind-tool-result"]);
       expect(titles()[2]).toBe("Messages · User · 2.0k–3.0k · User message");
-
-      rerender(renderGrid(items, 200_000, { ...ALL_SHOWN, colourByKind: false }));
-
-      // Only the Messages Cells change; the other Categories keep their accents.
-      expect(fills().slice(0, 4)).toEqual([
-        "bg-cat-system",
-        "bg-cat-skills",
-        "bg-cat-messages",
-        "bg-cat-messages",
-      ]);
-      expect(titles()[2]).toBe("Messages · 2.0k–3.0k · User message");
     });
   });
 

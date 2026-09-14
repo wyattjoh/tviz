@@ -62,13 +62,7 @@ import { ContextGrid } from "./ui/ContextGrid.tsx";
 import { ContextWindowMenu, ContextWindowPanel } from "./ui/ContextWindowPanel.tsx";
 import { ContextLegend } from "./ui/ContextLegend.tsx";
 import { DropZone } from "./ui/DropZone.tsx";
-import {
-  ALL_SHOWN,
-  type GridFilters,
-  toggleCategory,
-  toggleMessageKind,
-  withColourByKind,
-} from "./ui/filters.ts";
+import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./ui/filters.ts";
 import { buildCells } from "./ui/grid.ts";
 import { Inspector } from "./ui/Inspector.tsx";
 import { LandingPreview } from "./ui/LandingPreview.tsx";
@@ -359,10 +353,6 @@ const LoadedSession = ({
     (kind: MessageKind) => setFilters((current) => toggleMessageKind(current, kind)),
     [],
   );
-  const onColourByKind = useCallback(
-    (colourByKind: boolean) => setFilters((current) => withColourByKind(current, colourByKind)),
-    [],
-  );
   // Clicking the pinned Cell again releases it, so the rail can be handed back
   // to whatever the pointer is over.
   const onPin = useCallback(
@@ -447,7 +437,6 @@ const LoadedSession = ({
               filters={filters}
               onToggleCategory={onToggleCategory}
               onToggleMessageKind={onToggleMessageKind}
-              onColourByKind={onColourByKind}
             />
           </RailPanel>
 

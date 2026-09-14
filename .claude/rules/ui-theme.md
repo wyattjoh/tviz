@@ -251,12 +251,16 @@ upwards by **index**, not as objects, so a pinned Cell keeps meaning something w
 Scrubber rebuilds the layout. Grid Cells are buttons on a roving tabindex under a
 `role="group"` block — a 1M window is 1,000 Cells and must not be 1,000 tab stops.
 
-`ALL_SHOWN` opens with `colourByKind` **on**: "how much of this is tool output" is the
-question a Session is usually opened with, and it cannot be read off a grid where every
-Messages Cell is one blue. In that mode the Message Kind rows own the colour swatches and
-the Messages row has no swatch of its own. Turning the checkbox off folds those Kind rows
-away, restores the Messages Category swatch and clears hidden-Kind filters so no invisible
-control keeps Cells blanked. The Category accent is the fallback, not the default.
+Messages Cells always use their Message Kind accents: "how much of this is tool output" is
+the question a Session is usually opened with, and it cannot be read off a grid where every
+Messages Cell is one blue. The Message Kind rows are always present and own their individual
+colour swatches. The Messages Category row summarizes the enabled Kinds as equal
+`conic-gradient` wedges radiating from the swatch's center; `messageKindSwatchBackground`
+in `src/ui/theme.ts` constructs it from semantic Kind tokens so the component never names a
+colour. Hidden Kinds leave the aggregate swatch, and no enabled Kinds produces the normal
+outlined hidden state. Clicking Messages is a true all/none control: any enabled Kind means
+hide all, while none enabled means show all and clear every individual exclusion. There is
+no alternate Category-colour mode or setting; `GridFilters` only tracks what is hidden.
 
 The Scrubber is a stacked-area chart of Category totals over every API Call, dragged to
 scrub, with transport controls, a 0.5x-4x speed control and a range input for keyboard

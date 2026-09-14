@@ -8,7 +8,6 @@ import {
   isMessageKindHidden,
   toggleCategory,
   toggleMessageKind,
-  withColourByKind,
 } from "./filters.ts";
 
 const cellOf = (fill: Cell["fill"], kind: Cell["kind"] = undefined): Cell => ({
@@ -21,10 +20,9 @@ const cellOf = (fill: Cell["fill"], kind: Cell["kind"] = undefined): Cell => ({
 });
 
 describe("GridFilters", () => {
-  it("opens with everything shown and Messages Cells coloured by Kind", () => {
+  it("opens with every Category and Message Kind shown", () => {
     expect(ALL_SHOWN.hiddenCategories.size).toBe(0);
     expect(ALL_SHOWN.hiddenKinds.size).toBe(0);
-    expect(ALL_SHOWN.colourByKind).toBe(true);
   });
 
   it("hides a Category, then shows it again", () => {
@@ -41,17 +39,26 @@ describe("GridFilters", () => {
     expect(isMessageKindHidden(toggleMessageKind(hidden, "toolResult"), "toolResult")).toBe(false);
   });
 
-  it("hides every Message Kind while Messages, the Category they live in, is off", () => {
-    // The Kinds are inside Messages: hiding it blanks their Cells too, so a
-    // Kind reporting itself shown would contradict the grid — and the legend
-    // row that says so, filled swatch and all, would be lying to the reader.
-    const hidden = toggleCategory(ALL_SHOWN, "messages");
-    for (const kind of MESSAGE_KIND_ORDER) expect(isMessageKindHidden(hidden, kind)).toBe(true);
+  it("uses Messages as an all-or-none control for its Message Kinds", () => {
+    const partiallyHidden = toggleMessageKind(ALL_SHOWN, "user");
+    const allHidden = toggleCategory(partiallyHidden, "messages");
 
-    // The Kind's own toggle survives the Category coming back.
-    const withKind = toggleMessageKind(hidden, "user");
-    expect(isMessageKindHidden(toggleCategory(withKind, "messages"), "user")).toBe(true);
-    expect(isMessageKindHidden(toggleCategory(withKind, "messages"), "assistant")).toBe(false);
+    expect(isCategoryHidden(allHidden, "messages")).toBe(true);
+    for (const kind of MESSAGE_KIND_ORDER) {
+      expect(isMessageKindHidden(allHidden, kind)).toBe(true);
+      expect(allHidden.hiddenKinds.has(kind)).toBe(true);
+    }
+
+    const allShown = toggleCategory(allHidden, "messages");
+    expect(isCategoryHidden(allShown, "messages")).toBe(false);
+    for (const kind of MESSAGE_KIND_ORDER) expect(isMessageKindHidden(allShown, kind)).toBe(false);
+  });
+
+  it("selects all from a set whose Kinds were individually deselected", () => {
+    const allKindsHidden = MESSAGE_KIND_ORDER.reduce(toggleMessageKind, ALL_SHOWN);
+
+    expect(isCategoryHidden(allKindsHidden, "messages")).toBe(true);
+    expect(toggleCategory(allKindsHidden, "messages")).toEqual(ALL_SHOWN);
   });
 
   it("leaves the filters it was given untouched, so a re-render sees a new value", () => {
@@ -59,19 +66,6 @@ describe("GridFilters", () => {
     expect(ALL_SHOWN.hiddenCategories.size).toBe(0);
     expect(hidden).not.toBe(ALL_SHOWN);
     expect(hidden.hiddenKinds).toBe(ALL_SHOWN.hiddenKinds);
-  });
-
-  it("switches Messages between the Category accent and the Kind accents", () => {
-    expect(withColourByKind(ALL_SHOWN, true).colourByKind).toBe(true);
-    expect(withColourByKind(withColourByKind(ALL_SHOWN, true), false).colourByKind).toBe(false);
-  });
-
-  it("clears hidden Kind filters when their rows leave the legend", () => {
-    const withHiddenKind = toggleMessageKind(ALL_SHOWN, "toolResult");
-    const byCategory = withColourByKind(withHiddenKind, false);
-
-    expect(byCategory.hiddenKinds.size).toBe(0);
-    expect(isCellHidden(cellOf("messages", "toolResult"), byCategory)).toBe(false);
   });
 });
 
