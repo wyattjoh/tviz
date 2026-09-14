@@ -1,20 +1,15 @@
 /**
- * What fills one Cell, docked in the right rail.
+ * What fills one Cell, docked in the Workbench's Inspector region.
  *
  * Docked rather than a floating tooltip: the list of items is the answer to
  * "what is actually in there", and a tooltip that vanishes when the pointer
  * moves cannot be read, compared or clicked through. Hovering a Cell fills the
- * panel; clicking one pins it so the list survives the pointer leaving the
- * grid. While a Cell is pinned the rail holds nothing else: the other panels
- * step aside so the pinned Cell is the only thing beside the grid, and the
- * heading's close control — or Escape, or clicking the Cell again — unpins it
- * and hands the rail back.
+ * region; clicking one pins it so the list survives the pointer leaving the
+ * grid. The rail remains available beside it, and on a phone the Workbench
+ * raises this region as an Info Pane.
  *
- * The panel is a fixed height at every width and scrolls within it, so the one
- * thing in the rail whose content varies cannot change the rail's size. Below
- * `md` that matters twice over: the rail is a grid row there, so its height
- * comes out of the grid pane's, and the pane's height is what sizes every
- * Cell.
+ * The panel is a fixed height at every width and scrolls within it, so changing
+ * the Cell cannot resize either the desktop row or the phone overlay.
  */
 import { CATEGORY_LABELS, MESSAGE_KIND_LABELS } from "../domain/context.ts";
 import type { GridFilters } from "./filters.ts";
@@ -25,13 +20,11 @@ import { ScrollArea } from "./ScrollArea.tsx";
 import { cellFillClass } from "./theme.ts";
 
 /**
- * How many items to list before summarising the rest, while the Inspector
- * shares the rail.
+ * How many items to list before summarising the rest in a hover preview.
  *
  * A Cell of 1,000 tokens can overlap dozens of small items, and past a dozen
- * the hover preview stops being readable. A pinned Cell has the rail to
- * itself, so its list runs in full and scrolls inside the panel's fixed
- * height — the panel never grows, whichever Cell is being read.
+ * the preview stops being readable. A pinned Cell is an intentional detailed
+ * reading, so its full list scrolls inside the panel's fixed height.
  */
 const ITEM_LIMIT = 12;
 
@@ -89,13 +82,10 @@ const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
 /**
  * The Inspector's fixed height.
  *
- * Fixed, not `auto`: below `md` the rail is a grid row, so its height is taken
- * out of the grid pane's — and `cell-fit.ts` sizes every Cell from that pane's
- * height. A panel that grew with the item count therefore re-sized the whole
- * grid each time a different Cell was tapped, which is the one thing the
- * append-only layout exists to avoid (ADR-0006). Roughly eight rows at this
- * type size; anything longer scrolls inside the panel rather than moving
- * anything outside it.
+ * Fixed, not `auto`: the Inspector is a desktop row and a phone overlay, and
+ * neither should change size as the reader moves between Cells. Roughly eight
+ * rows fit at this type size; anything longer scrolls inside the panel rather
+ * than moving anything outside it (ADR-0006).
  */
 const INSPECTOR_HEIGHT = "h-48";
 

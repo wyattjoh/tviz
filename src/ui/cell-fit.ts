@@ -1,26 +1,25 @@
 /**
  * How large a Cell is drawn.
  *
- * A Cell is always {@link CELL_TOKENS} tokens, but its *physical* size is
- * whatever makes the whole Context Window fill the grid pane: the largest
- * square that fits `count` Cells inside the pane's width **and** height, within
- * a clamp (ADR-0006). A 1M window in a wide pane therefore draws smaller Cells
- * than a 200k window in the same pane — the block fills the space either way,
- * and how full the window is stays the thing the grid answers.
+ * A Cell is always {@link CELL_TOKENS} tokens, but its *physical* size follows
+ * the column count that makes the block span the pane exactly (ADR-0006). The
+ * preferred count keeps Cells inside a nominal size clamp, then adds columns
+ * when doing so buys back enough height. A larger Context Window can therefore
+ * draw smaller Cells in the same pane while every row still fills its width.
  *
- * The clamp is what keeps both ends honest. Below {@link MIN_CELL_PX} the Cells
- * stop shrinking and the pane scrolls instead — a Cell is a button, and one
- * sized only to make the whole window fit on a phone is too small to tap;
- * above {@link MAX_CELL_PX} a small window stops growing rather than becoming a
- * wall of tiles.
+ * The clamp keeps normal cases tappable without turning a small Context Window
+ * into a wall of tiles. It is nominal because integer column counts leave
+ * widths no count can serve: there the nearest size wins, and a short final row
+ * may exceed the maximum rather than inventing empty tracks. A block that is
+ * still too tall scrolls vertically instead of shrinking to fit its height.
  *
  * The geometry lives here rather than in the component so the shape of the
  * block is testable without a DOM, the way the Scrubber's chart is.
  */
 
 /**
- * Smallest Cell drawn. Past this the pane scrolls rather than shrinking Cells
- * further.
+ * Nominal smallest Cell. Past this the pane scrolls rather than shrinking the
+ * whole Context Window to fit; an unserviceable pane width may miss slightly.
  *
  * This is a **tap target** before it is a visual floor. A Cell is a button, and
  * the size that fits a whole Context Window into a phone-sized pane is far
@@ -36,8 +35,8 @@
 export const MIN_CELL_PX = 44;
 
 /**
- * Largest Cell drawn, so a small Context Window in a big pane stops growing
- * instead of filling it with a handful of tiles.
+ * Nominal largest Cell. A final row with fewer Cells than available tracks may
+ * exceed it so those Cells still span the pane without empty tracks.
  */
 export const MAX_CELL_PX = 48;
 
@@ -52,9 +51,7 @@ export const CELL_GAP_RATIO = 3 / 16;
  * Cell size used before the pane has been measured — the first paint, and any
  * environment without `ResizeObserver` (jsdom).
  *
- * Kept at {@link MIN_CELL_PX} so the first paint is never smaller than any
- * measured one: the grid settles by growing, never by jumping up from a size
- * the clamp would not allow.
+ * Kept at {@link MIN_CELL_PX} so the first paint starts from the nominal floor.
  */
 export const FALLBACK_CELL_PX = MIN_CELL_PX;
 
@@ -64,8 +61,8 @@ export const FALLBACK_CELL_PX = MIN_CELL_PX;
 export const FALLBACK_COLUMNS = 20;
 
 /**
- * Fewest columns to draw, so a pane too narrow even for minimum-size Cells
- * scrolls sideways instead of collapsing the grid into a single tall strip.
+ * Preferred minimum column count when the pane is wide enough to hold it.
+ * Narrower panes use fewer columns rather than introducing horizontal scroll.
  */
 export const MINIMUM_COLUMNS = 8;
 

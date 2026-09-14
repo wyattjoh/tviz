@@ -79,14 +79,15 @@ load a grouped layout hides.
 **A docked inspector, not a tooltip.** Hovering a cell answers "what is actually in
 there", and the answer is a list with a token count per item. A tooltip that vanishes when
 the pointer moves can't be read down, compared with the next cell, or kept while you
-scrub. So the inspector lives beside the grid, and clicking a cell pins it — and while a
-cell is pinned the rail clears down to the inspector alone, so the cell you chose is the
-only thing beside the grid until you close it. Message kinds get the same treatment as
-categories — they hide in place and always keep their own colours — because "how much of
-this session is tool output" is the question people actually arrive with. The Messages
-row gathers the enabled kinds into one radial, multicolour swatch and remains the all/none
-control, so the overview and the individual filters tell the same story. A second all/none
-control in the Categories heading covers every category and kind at once; its icon names
-the next action rather than the current state, so one click always has a predictable result.
+scrub. So the inspector is its own region below the desktop grid and one of three floating
+Info Panes on a phone. Clicking a cell pins it and raises that pane without taking the
+legend or Context Window controls away; hovering another cell previews it, then returns to
+the pinned reading. Message kinds get the same treatment as categories — they hide in
+place and always keep their own colours — because "how much of this session is tool output"
+is the question people actually arrive with. The Messages row gathers the enabled kinds
+into one radial, multicolour swatch and remains the all/none control, so the overview and
+the individual filters tell the same story. A second all/none control in the Categories
+heading covers every category and kind at once; its icon names the next action rather than
+the current state, so one click always has a predictable result.
 
 The decisions above are recorded in more detail in [`docs/adr/`](adr/).

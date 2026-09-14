@@ -5,8 +5,8 @@
  * The loaded view fills `Workbench`, the shell the throwaway UI prototype
  * settled on (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a
  * menu bar above it, then a Session strip, the grid pane on the flexible left,
- * a fixed 340px right rail holding the legend and the Inspector, and the
- * Scrubber docked across the bottom. The regions live in `src/ui/Workbench.tsx`
+ * a fixed 340px right rail holding the legend and settings, and separate
+ * Inspector and Scrubber rows below. The regions live in `src/ui/Workbench.tsx`
  * so the filter and Inspector work fills a region instead of re-laying out the
  * app — and so the landing page's preview is the same shell rather than a
  * drawing of it.
@@ -27,11 +27,10 @@
  * The root is the drop target, so the whole window takes a transcript and the
  * browser never gets the chance to navigate the tab to a dropped file.
  *
- * Pinning a Cell focuses the rail: the legend, the Context Window panel and
- * the Transcript panel step aside and the Inspector is the only panel until
- * the Cell is unpinned — by the close control in its heading, by Escape, or by
- * clicking the Cell again. Hover keeps previewing into the Inspector either
- * way; only a click changes what the rail holds.
+ * Pinning a Cell focuses the Inspector without taking the rail away. On a
+ * phone it also raises the Inspector Info Pane; at every width the Cell stays
+ * pinned until its close control, Escape, or a second click releases it. Hover
+ * keeps previewing other Cells and returns to the pinned reading when it leaves.
  *
  * {@link useSessionLoader} owns the Session list — which files parsed, which
  * are still parsing, which failed, and Subagent Session counts — so switching
@@ -363,8 +362,8 @@ const LoadedSession = ({
     () => setFilters((current) => toggleAllFilters(current)),
     [],
   );
-  // Clicking the pinned Cell again releases it, so the rail can be handed back
-  // to whatever the pointer is over.
+  // Clicking the pinned Cell again releases it, so the Inspector can return to
+  // whatever the pointer is over.
   const onPin = useCallback(
     (index: number) => setPinnedIndex((current) => (current === index ? undefined : index)),
     [],

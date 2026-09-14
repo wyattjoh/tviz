@@ -95,7 +95,8 @@ describe("LandingPreview", () => {
 
     expect(screen.getByRole("region", { name: "Session" })).toBeDefined();
     expect(screen.getByRole("main", { name: "Context grid" })).toBeDefined();
-    expect(screen.getByRole("complementary", { name: "Legend and Inspector" })).toBeDefined();
+    expect(screen.getByRole("complementary", { name: "Legend and Context Window" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "Inspector" })).toBeDefined();
     expect(screen.getByRole("group", { name: /^Context grid:/ })).toBeDefined();
     expect(screen.getByRole("region", { name: "Scrubber" })).toBeDefined();
   });

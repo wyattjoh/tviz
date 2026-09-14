@@ -158,10 +158,9 @@ describe("Inspector", () => {
 });
 
 describe("the Inspector's height", () => {
-  // Below `md` the rail is a grid row, so its height comes out of the grid
-  // pane's — and `cell-fit.ts` sizes every Cell from that pane's height. A
-  // panel that grew with the item count re-sized the whole grid each time a
-  // different Cell was tapped.
+  // The Inspector is an overlay on a phone and a row under the desktop grid.
+  // A fixed box keeps its contents from changing either layout as the reader
+  // moves between Cells with different item counts.
   const boxOf = (cell: Cell | undefined): string => {
     const { container } = render(<Inspector cell={cell} filters={ALL_SHOWN} pinned={false} />);
     const box = container.firstElementChild;
@@ -195,7 +194,14 @@ describe("the Inspector's height", () => {
     expect(crowded).toBe(empty);
   });
 
-  it("scrolls inside itself rather than growing", () => {
-    expect(boxOf(manyItems(40))).toContain("overflow-y-auto");
+  it("scrolls its inner viewport rather than clipping its edge fades", () => {
+    const { container } = render(
+      <Inspector cell={manyItems(40)} filters={ALL_SHOWN} pinned={false} />,
+    );
+    const wrapper = container.firstElementChild;
+    const scroller = wrapper?.firstElementChild;
+
+    expect(wrapper?.className).toContain("relative");
+    expect(scroller?.className).toContain("overflow-y-auto");
   });
 });

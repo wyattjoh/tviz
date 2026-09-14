@@ -24,81 +24,73 @@ const blockHeight = (count: number, { size, gap, columns }: CellFit): number => 
   return rows * size + (rows - 1) * gap;
 };
 
-/**
- * Whether `count` Cells of exactly this size fit the pane in *some*
- * arrangement — the question `fitCells` answers, asked by brute force so a test
- * can check the search found the best size rather than merely a working one.
- */
-const fitsAt = (count: number, size: number, width: number, height: number): boolean => {
-  const gap = gapFor(size);
-  for (let columns = 1; columns <= count; columns += 1) {
-    const rows = Math.ceil(count / columns);
-    const across = columns * size + (columns - 1) * gap;
-    const down = rows * size + (rows - 1) * gap;
-    if (across <= width && down <= height) return true;
-  }
-  return false;
-};
-
 describe("fitCells", () => {
-  it("grows Cells until the whole Context Window fills the pane", () => {
-    const fit = fitCells(500, 1_360, 660);
+  it("fills the pane width and uses the largest clamped Cell that also fits its height", () => {
+    const fit = fitCells(200, 1_360, 660);
 
-    expect(blockWidth(fit)).toBeLessThanOrEqual(1_360);
-    expect(blockHeight(500, fit)).toBeLessThanOrEqual(660);
-    // The size is the largest that fits, not merely one that does: a Cell a
-    // pixel bigger overflows the pane at every column count.
-    expect(fitsAt(500, fit.size + 1, 1_360, 660)).toBe(false);
-    // Solved rather than clamped at either end.
-    expect(fit.size).toBeGreaterThan(MIN_CELL_PX);
-    expect(fit.size).toBeLessThan(MAX_CELL_PX);
+    expect(blockWidth(fit)).toBeCloseTo(1_360);
+    expect(blockHeight(200, fit)).toBeLessThanOrEqual(660);
+    expect(fit.size).toBeGreaterThanOrEqual(MIN_CELL_PX);
+    expect(fit.size).toBeLessThanOrEqual(MAX_CELL_PX);
+
+    // One fewer column would make the Cell too large for the clamp.
+    const fewerColumns = fit.columns - 1;
+    const estimate = 1_360 / (fewerColumns + (fewerColumns - 1) * (3 / 16));
+    const fewerGap = gapFor(estimate);
+    const larger = (1_360 - (fewerColumns - 1) * fewerGap) / fewerColumns;
+    expect(larger).toBeGreaterThan(MAX_CELL_PX);
   });
 
-  // A Cell is a button. Sizing purely to fit the pane always succeeds and
-  // always produces something untappable — a 1M window in a phone-sized pane
-  // solved to 12px — so past the floor the pane scrolls instead.
-  it("keeps Cells tappable rather than fitting a big window into a small pane", () => {
+  it("keeps phone Cells tappable and scrolls vertically once the window cannot fit", () => {
     const phone = fitCells(1_000, 350, 560);
 
-    expect(phone.size).toBe(MIN_CELL_PX);
+    // No whole column count puts this width inside the narrow 44–48px clamp,
+    // so filling the width wins by less than one pixel at the lower edge.
+    expect(phone.size).toBeCloseTo(MIN_CELL_PX - 6 / 7);
     expect(phone.size).toBeGreaterThanOrEqual(24);
+    expect(blockWidth(phone)).toBeCloseTo(350);
     expect(blockHeight(1_000, phone)).toBeGreaterThan(560);
   });
 
-  it("draws a bigger Context Window with smaller Cells in the same pane", () => {
-    const small = fitCells(400, 1_360, 660);
-    const large = fitCells(1_200, 1_360, 660);
+  it("steps to smaller Cells when a larger Context Window needs another column", () => {
+    const small = fitCells(300, 1_360, 660);
+    const large = fitCells(325, 1_360, 660);
 
+    expect(large.columns).toBeGreaterThan(small.columns);
     expect(large.size).toBeLessThan(small.size);
   });
 
-  it("stops growing at the maximum, rather than filling a pane with tiles", () => {
+  it("lets a short row exceed the nominal maximum rather than stretching empty tracks", () => {
     const fit = fitCells(20, 1_360, 660);
 
-    expect(fit.size).toBe(MAX_CELL_PX);
+    expect(fit.columns).toBe(20);
+    expect(fit.size).toBeGreaterThan(MAX_CELL_PX);
+    expect(blockWidth(fit)).toBeCloseTo(1_360);
     expect(blockHeight(20, fit)).toBeLessThan(660);
   });
 
-  it("stops shrinking at the minimum and lets the pane scroll instead", () => {
+  it("uses a clamped Cell and lets a large Context Window scroll vertically", () => {
     const fit = fitCells(4_000, 600, 200);
 
-    expect(fit.size).toBe(MIN_CELL_PX);
-    expect(blockWidth(fit)).toBeLessThanOrEqual(600);
+    expect(fit.size).toBeGreaterThanOrEqual(MIN_CELL_PX);
+    expect(fit.size).toBeLessThanOrEqual(MAX_CELL_PX);
+    expect(blockWidth(fit)).toBeCloseTo(600);
     expect(blockHeight(4_000, fit)).toBeGreaterThan(200);
   });
 
-  it("fills the width even when the Cell size was clamped", () => {
-    // At either end of the clamp the size stops following the pane, but the
-    // columns never do: one more column always overflows the width.
-    const grown = fitCells(20, 1_360, 660);
-    expect(blockWidth(grown) + grown.size + grown.gap).toBeGreaterThan(1_360);
+  it("prefers the minimum column count when the pane can hold it", () => {
+    const fit = fitCells(1_000, 400, 660);
 
-    const shrunk = fitCells(4_000, 600, 200);
-    expect(blockWidth(shrunk) + shrunk.size + shrunk.gap).toBeGreaterThan(600);
+    expect(fit.columns).toBe(MINIMUM_COLUMNS);
+    expect(blockWidth(fit)).toBeCloseTo(400);
   });
 
-  it("keeps a floor under the column count, so a narrow pane scrolls sideways", () => {
-    expect(fitCells(1_000, 20, 660).columns).toBe(MINIMUM_COLUMNS);
+  it("does not invent horizontal space when the pane is narrower than one Cell", () => {
+    const fit = fitCells(1_000, 20, 660);
+
+    expect(fit.columns).toBe(1);
+    expect(fit.size).toBe(20);
+    expect(blockWidth(fit)).toBe(20);
   });
 
   it("falls back to the fixed Cell before the pane has been measured", () => {
@@ -128,8 +120,6 @@ describe("gapFor", () => {
   });
 });
 
-it("never paints smaller before measuring than after", () => {
-  // The grid settles by growing into the pane, never by jumping up from a size
-  // the clamp would not have allowed.
+it("never paints smaller before measuring than the nominal floor", () => {
   expect(FALLBACK_CELL_PX).toBeGreaterThanOrEqual(MIN_CELL_PX);
 });

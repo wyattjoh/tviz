@@ -55,59 +55,50 @@ Scrubber's chart — never by tag.
 
 The main view is the **Workbench** shell the throwaway UI prototype settled on (branch
 `wyattjoh/ui-prototype`; see its `src/prototype/README.md`): a menu bar carrying the File
-menu, a Session strip (`SessionHeader`), a body of `minmax(0,1fr)_340px` — grid pane on the
-flexible left, fixed right rail holding the legend-filters, the Context Window panel and the
-docked Inspector — and the Scrubber across the bottom. The grid pane is the scroll container,
-and both of its dimensions drive `ContextGrid`: `src/ui/cell-fit.ts` sizes the Cells to fill
-it and hands back the column count. Fill a region; do not restructure the shell.
+menu, a Session strip (`SessionHeader`), and five slotted regions — grid pane, right rail,
+Inspector, and Scrubber inside the shell, with the Menu Bar above it. From `md` up the body
+is `minmax(0,1fr)_340px`: the grid and settings rail share the first row, then the Inspector
+and Scrubber each span both columns below them. The grid pane is the scroll container, and
+both of its dimensions drive `ContextGrid`. Fill a region; do not restructure the shell.
 
-**That body is the layout from `md` up. Below `md` the two regions that compete with the
-grid for height — the rail and the Scrubber — are each behind a disclosure**: the grid pane
-takes the full width, and each region gets a `md:hidden` toggle row above content that is
-`hidden` until pressed (`md:block` brings it back). A 340px rail beside a 390px phone
-viewport leaves the grid 50px — but merely stacking things underneath still spent most of
-the screen on a legend and a chart nobody had asked for, which is why they are closed by
-default rather than just moved.
+**Below `md` the grid pane keeps the whole body and the rail, Inspector, and Scrubber become
+three mutually exclusive Info Panes floating over its bottom edge.** A phone-only tab bar
+raises one pane at a time; tapping the raised tab lowers it, and all three start lowered.
+They are tabs, not disclosures: a chevron would promise a drawer that pushes the grid down,
+which is precisely what the overlays avoid. The grid pads its scroll content by the tab bar
+plus the measured open-pane height through `--tviz-obscured-bottom`, so the last Cell can be
+scrolled clear without changing the pane size used by `cell-fit.ts`.
 
-The two layouts are the *same regions in a different flow* — not a second shell, and not a
-mobile view. **The disclosure wraps each region rather than substituting for it**, so the
-same `<aside>` is the panel and the rail column; `LoadedSession` and `LandingPreview` still
-fill one geometry, and `cell-fit.ts` needs no breakpoint of its own because it measures the
-pane it is given.
+The two layouts reuse the *same elements* — `absolute md:static` — rather than rendering a
+second shell. The same `<aside>` is the Legend pane on a phone and the right rail on desktop;
+the same Inspector and Scrubber are overlays below `md` and full-width rows from `md` up.
+`LoadedSession` and `LandingPreview` therefore fill one geometry.
 
-Four constraints:
+Five constraints:
 
-- **Nothing measures the viewport.** Which layout is on screen is media queries plus two
-  booleans; there is no `matchMedia`, no resize listener, no measured breakpoint. A jsdom
-  component test needs no stand-in to mount the shell, and `Workbench.test.tsx` pins that.
-- **Closed means `display: none`**, not a translate or a zero height, so a hidden region's
-  controls leave the tab order on their own — no `inert` to apply below `md` and undo above
-  it. (It also means jsdom still *finds* those controls, since no CSS is applied there; a
-  test asserting a region is hidden reads the class, not the layout.)
-- **The open flags are the only state the shell holds**, and they describe the shell rather
-  than a Session. They stay in `Workbench` for the same reason a `RailPanel`'s fold stays in
-  `RailPanel`: nothing outside reads them, and lifting them to `App` would make both callers
-  thread a boolean and a setter to say the same thing.
-- **A disclosure answers to its content, not only to a click.** `revealRail` opens the rail
-  when a caller has just put something in it worth reading — pinning a Cell hands the rail
-  to the Inspector, and a phone has no hover, so pin is the *only* gesture that fills it;
-  landing that in a closed disclosure makes the tap look like it did nothing. It only ever
-  opens: the reader may close it again while the Cell is still pinned, and the adjustment
-  keys on the prop's transition so nothing re-opens under them. Both callers otherwise get
-  the same disclosures, `LandingPreview` included — on a phone its preview shows the grid
-  rather than a chart.
-- **The Inspector is a fixed height** (`h-48`, scrolling inside) at every width. It is the
-  one thing in the rail whose content varies, and below `md` the rail is a grid *row*, so
-  its height comes out of the grid pane's — which is what `cell-fit.ts` sizes every Cell
-  from. A panel that grew with the item count re-sized the whole grid each time a different
-  Cell was tapped, which is the re-flow ADR-0006 exists to prevent.
+- **Nothing measures the viewport.** Media queries choose the layout; there is no
+  `matchMedia`, viewport resize listener, or measured breakpoint. `ResizeObserver` measures
+  only the open pane's own height for scroll clearance. A jsdom component test needs no
+  viewport stand-in to mount the shell, and `Workbench.test.tsx` pins that.
+- **Lowered means `display: none`**, not a translate or zero height, so a hidden pane's
+  controls leave the tab order on their own. From `md` up `md:flex`/`md:block` restores the
+  same regions regardless of the phone tab state.
+- **`openPane` and the desktop Inspector fold are the only state the shell holds.** Both are
+  view state local to `Workbench`; a `RailPanel` likewise keeps its own fold. Nothing about
+  a Session is lifted into the shell.
+- **`revealInspector` only raises the Inspector on a false-to-true transition.** Pinning a
+  Cell puts something worth reading there and a phone has no hover, so the pane opens on
+  pin. The reader may lower it while the Cell remains pinned; re-rendering the same true
+  value must not reopen it under them.
+- **The Inspector is a fixed `h-48` and scrolls through `ScrollArea`'s inner viewport.** Its
+  varying item count therefore changes neither the phone overlay nor the desktop row. The
+  wrapper positions the edge fades while the inner element owns `overflow-y-auto`; putting
+  both jobs on one element clips the fades.
 
-The regions themselves are `src/ui/Workbench.tsx`: a slotted shell (`header`/`grid`/`rail`/
-`scrubber`) plus `RailPanel`. Its only state is the two disclosure flags above, and its only
-handlers are their toggles — everything else about a Session stays outside. The menu bar
-sits above it, in `src/App.tsx`, and so does the drop handling; neither belongs to a
-Session. Two callers fill the same shell, `LoadedSession` and `LandingPreview`, so the
-geometry cannot drift between the interface and the landing state that claims to show it.
+The regions live in `src/ui/Workbench.tsx`: a slotted shell
+(`header`/`grid`/`rail`/`inspector`/`scrubber`) plus `RailPanel`. The menu bar and drop
+handling stay above it in `src/App.tsx`. Both `LoadedSession` and `LandingPreview` fill the
+same slots, so the landing state cannot drift from the interface it claims to preview.
 
 ## Touch
 
@@ -179,17 +170,14 @@ nothing else reads it, and which panels are folded is a view preference rather t
 Session state. The `action` slot stays in the heading row through a collapse, which is the
 same rule as above: a setting in force must not need a panel opened to be seen.
 
-**Pinning a Cell focuses the rail.** While a Cell is pinned the rail holds the Inspector
-and nothing else: Categories, Context Window and Transcript unmount, and the Inspector is
-rendered with `collapsible={false}` — a plain heading, no chevron — because folding the
-only panel would leave an empty rail under a heading row. Its `action` slot is the close
-control (`aria-label="Unpin cell"`), and Escape or clicking the pinned Cell again do the
-same. Hover is never a trigger: it previews into the docked Inspector on both branches,
-and only a click changes what the rail holds — a hover-driven rail flips every time the
-pointer crosses the grid edge, and a close control can never be reached under it. The
-filters and the window override are one unpin away, which is the deliberate trade for a
-rail with one thing in it. Escape leaves the pin alone while a menu is open, so one
-keypress closes one thing.
+**Pinning a Cell focuses the Inspector without taking the rail away.** The Inspector is its
+own region, so Categories, Context Window and Transcript remain mounted and reachable while
+a Cell is pinned. The pin adds the close control (`aria-label="Unpin cell"`) beside the
+Inspector; Escape or clicking the pinned Cell again does the same. On a phone the pin also
+raises the Inspector Info Pane. Hover is never a trigger for pane state: it previews another
+Cell in the Inspector while the pinned Cell remains raised, and leaving the grid returns to
+the pinned reading. Escape leaves the pin alone while a menu is open, so one keypress closes
+one thing.
 
 The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
 Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
@@ -198,17 +186,16 @@ sidebar — a new way into the app is a File-menu entry.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a
-fixed number of pixels: it grows to fill the pane, clamped to 32–48px, and bottoms out into
-the scrolling grid the fixed Cell always drew. **The floor is a tap target, not a visual
-minimum.** A Cell is a button, and sizing purely to make the whole window fit a phone-sized
-pane always succeeds and always lands under WCAG 2.5.8's 24px — a 1M window in a 350×560
-pane solved to 12px. Past the floor the pane scrolls instead, which is what `MIN_CELL_PX`
-was always documented to do and never reached at 8px. `FALLBACK_CELL_PX` tracks the floor,
-so the first paint is never smaller than a measured one. That geometry is a pure function in
-`src/ui/cell-fit.ts` so the shape of the block is testable without a DOM, the way
-`scrubber.ts` holds the chart's. Filtering blanks Cells in place; it
-never removes them, so legend totals never change when a Category or Message Kind is
-hidden.
+fixed number of pixels: `fitCells` chooses a column count and CSS divides the pane into equal
+`1fr` tracks, so every row spans the width without a rounding remainder. The nominal clamp
+is 44–48px. When no integer column count can serve that narrow range, filling the width wins
+by the smallest miss; when there are fewer Cells than tracks, the Cells may exceed the
+maximum rather than stretching empty columns across the row. The 44px fallback keeps first
+paint tappable, and a block too tall for the pane scrolls vertically rather than shrinking
+the whole Context Window to fit. That geometry is pure in `src/ui/cell-fit.ts`, while
+`ContextGrid` reproduces it with equal tracks and `aspect-square`. Filtering blanks Cells in
+place; it never removes them, so legend totals never change when a Category or Message Kind
+is hidden.
 
 ## Filtering and the Inspector
 

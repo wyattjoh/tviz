@@ -8,7 +8,7 @@ import {
   emptyCategoryTokens,
   emptyMessageKindTokens,
 } from "../domain/context.ts";
-import { FALLBACK_CELL_PX, FALLBACK_COLUMNS, MIN_CELL_PX } from "./cell-fit.ts";
+import { FALLBACK_COLUMNS } from "./cell-fit.ts";
 import { ContextGrid } from "./ContextGrid.tsx";
 import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./filters.ts";
 import { buildCells } from "./grid.ts";
@@ -84,13 +84,9 @@ const grid = (): HTMLElement => screen.getByRole("group", { name: /^Context grid
 const gridColumns = (): string => grid().style.getPropertyValue("grid-template-columns");
 
 /**
- * The one size every Cell is drawn at, as `width×height`.
+ * The number of equal-width tracks the grid draws.
  */
-const cellSize = (): string => {
-  const sizes = new Set(cells().map((cell) => `${cell.style.width}×${cell.style.height}`));
-  expect(sizes.size).toBe(1);
-  return [...sizes][0] ?? "";
-};
+const columnCount = (): number => Number.parseInt(gridColumns().slice("repeat(".length), 10);
 
 const cells = (): readonly HTMLElement[] => Array.from(grid().children) as HTMLElement[];
 
@@ -124,61 +120,55 @@ describe("ContextGrid", () => {
     expect(grid().childElementCount).toBe(1_000);
   });
 
-  it("sizes the Cells to fill the grid pane, in both directions", () => {
+  it("sizes equal-width square Cells to fill the grid pane in both directions", () => {
     render(renderGrid([], 200_000));
 
-    // Before the pane is measured the grid falls back to a fixed Cell — at the
-    // floor, so the first paint is never smaller than a measured one.
-    expect(gridColumns()).toBe(`repeat(${FALLBACK_COLUMNS}, ${FALLBACK_CELL_PX}px)`);
-    expect(cellSize()).toBe(`${FALLBACK_CELL_PX}px\u00d7${FALLBACK_CELL_PX}px`);
+    // Before measurement the fallback is a stable column count. CSS divides
+    // the pane into equal tracks and each Cell makes that track square.
+    expect(gridColumns()).toBe(`repeat(${FALLBACK_COLUMNS}, minmax(0, 1fr))`);
+    expect(cells().every((cell) => cell.className.includes("aspect-square"))).toBe(true);
+    expect(cells().every((cell) => cell.className.includes("w-full"))).toBe(true);
 
     resizePaneTo(1_360, 660);
-    const wide = cellSize();
-    expect(Number.parseInt(wide, 10)).toBeGreaterThan(FALLBACK_CELL_PX);
+    const wide = columnCount();
 
-    // A taller pane is more room for the same 200 Cells, so the Cell grows
-    // until it hits the clamp rather than leaving the space empty.
+    // Less height adds a column so the same Cells wrap into fewer rows.
     resizePaneTo(1_360, 200);
-    const short = cellSize();
-    expect(Number.parseInt(short, 10)).toBeLessThan(Number.parseInt(wide, 10));
+    expect(columnCount()).toBeGreaterThan(wide);
 
-    // Narrowing the pane still takes columns away.
-    const columnsIn = (): number => Number.parseInt(gridColumns().slice("repeat(".length), 10);
-    resizePaneTo(1_360, 660);
-    const columns = columnsIn();
+    // Less width removes columns while the tracks continue to fill it exactly.
     resizePaneTo(400, 660);
-    expect(columnsIn()).toBeLessThan(columns);
+    expect(columnCount()).toBeLessThan(wide);
   });
 
-  it("gives a bigger Context Window smaller Cells in the same pane", () => {
+  it("gives a bigger Context Window more, smaller tracks in the same pane", () => {
     const items = [
       { category: "system", kind: undefined, label: "System", tokens: 20_000 },
     ] as const;
 
     const { rerender } = render(renderGrid(items, 200_000));
     resizePaneTo(1_360, 660);
-    const small = Number.parseInt(cellSize(), 10);
+    const small = columnCount();
 
     rerender(renderGrid(items, 1_000_000));
     resizePaneTo(1_360, 660);
-    expect(Number.parseInt(cellSize(), 10)).toBeLessThan(small);
+    expect(columnCount()).toBeGreaterThan(small);
   });
 
-  it("keeps every Cell at one size, in a pane that scrolls once they cannot shrink", () => {
+  it("keeps every Cell square and lets the pane scroll vertically when the block is too tall", () => {
     const items = [
       { category: "system", kind: undefined, label: "System", tokens: 20_000 },
     ] as const;
 
     render(renderGrid(items, 1_000_000));
-
-    // 1,000 Cells cannot fit a pane this short at a Cell big enough to tap, so
-    // the Cell bottoms out at the floor and the pane — not the Cell — absorbs
-    // the rest.
     resizePaneTo(600, 120);
-    expect(cellSize()).toBe(`${MIN_CELL_PX}px\u00d7${MIN_CELL_PX}px`);
+
+    expect(cells().every((cell) => cell.className.includes("aspect-square"))).toBe(true);
+    expect(cells().every((cell) => cell.style.width === "" && cell.style.height === "")).toBe(true);
 
     const pane = grid().parentElement;
-    expect(pane?.className).toContain("overflow-auto");
+    expect(pane?.className).toContain("overflow-x-hidden");
+    expect(pane?.className).toContain("overflow-y-auto");
     // The pane fills the Workbench's grid region rather than sizing itself.
     expect(pane?.className).toContain("flex-1");
   });

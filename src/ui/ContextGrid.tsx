@@ -3,9 +3,9 @@
  * Window, laid out in the order items entered the context (ADR-0006).
  *
  * Cells are sized to fill the grid pane — `fitCells` takes the pane's width and
- * height and hands back the Cell, the gap and the column count that make the
- * whole Context Window fill it, clamped at both ends so a small window stops
- * growing and a big one bottoms out and scrolls.
+ * height and hands back the Cell, gap, and column count. Equal tracks span the
+ * pane exactly; a nominal size clamp keeps normal cases tappable, and a block
+ * too tall for the pane scrolls vertically.
  *
  * The layout arrives already built (`buildCells`), which is what keeps
  * filtering honest: filters reach the Cell's *colour* and nothing else, so a
@@ -97,8 +97,8 @@ const describeCell = (cell: Cell, filters: GridFilters): string => {
 /**
  * Every Cell's classes: the shape, and the lift on hover or keyboard focus.
  *
- * Pure CSS rather than pointer-tracking tilt: at the 8px end of the Cell range
- * a tilt is invisible, and a lift reads as depth at every size. `relative` is
+ * Pure CSS rather than pointer-tracking tilt: a lift reads as depth at every
+ * Cell size. `relative` is
  * what lets the raised `z-index` paint the lifted Cell over its neighbours.
  * `motion-reduce` drops the transition, not the lift — the state still has to
  * be seen.

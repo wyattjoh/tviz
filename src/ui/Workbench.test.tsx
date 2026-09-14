@@ -3,112 +3,98 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { RailPanel, Workbench } from "./Workbench.tsx";
 
-afterEach(() => {
-  cleanup();
-});
+afterEach(cleanup);
 
-const railToggle = (): HTMLElement => screen.getByRole("button", { name: "Legend and inspector" });
+const view = (revealInspector: boolean | undefined) => (
+  <Workbench
+    header={<div>session strip</div>}
+    grid={<div>grid pane</div>}
+    rail={<RailPanel title="Categories">legend</RailPanel>}
+    inspector={<div>inspector</div>}
+    scrubber={<div>scrubber</div>}
+    revealInspector={revealInspector}
+  />
+);
 
-const rail = (): HTMLElement => screen.getByRole("complementary", { name: "Legend and Inspector" });
+const shell = (revealInspector: boolean | undefined = undefined) => render(view(revealInspector));
 
-const scrubberToggle = (): HTMLElement => screen.getByRole("button", { name: "Scrubber" });
-
-/** The wrapper the Scrubber's disclosure hides, found via the toggle. */
-const scrubberPanel = (): HTMLElement => {
-  const id = scrubberToggle().getAttribute("aria-controls");
-  const panel = id === null ? null : document.getElementById(id);
-  if (panel === null) throw new Error("the Scrubber toggle controls nothing");
-  return panel;
-};
-
-const shell = (revealInspector?: boolean) =>
-  render(
-    <Workbench
-      header={<div>session strip</div>}
-      grid={<div>grid pane</div>}
-      rail={<RailPanel title="Categories">legend</RailPanel>}
-      scrubber={<div>scrubber</div>}
-      inspector={<div>inspector</div>}
-      revealInspector={revealInspector}
-    />,
-  );
-
-const rerenderShell = (
-  rerender: (ui: React.ReactElement) => void,
-  revealInspector: boolean,
-): void => {
-  rerender(
-    <Workbench
-      header={<div>session strip</div>}
-      grid={<div>grid pane</div>}
-      rail={<RailPanel title="Categories">legend</RailPanel>}
-      scrubber={<div>scrubber</div>}
-      inspector={<div>inspector</div>}
-      revealInspector={revealInspector}
-    />,
-  );
-};
-
-/** The body is the element holding both the grid pane and the rail. */
 const body = (): HTMLElement => {
-  const main = screen.getByRole("main");
-  const parent = main.parentElement;
+  const parent = screen.getByRole("main", { name: "Context grid" }).parentElement;
   if (parent === null) throw new Error("the grid pane has no body around it");
   return parent;
 };
 
+const rail = (): HTMLElement =>
+  screen.getByRole("complementary", { name: "Legend and Context Window" });
+
+const inspector = (): HTMLElement => screen.getByRole("region", { name: "Inspector" });
+
+const tab = (name: "Legend" | "Inspector" | "Scrubber"): HTMLElement =>
+  screen.getByRole("tab", { name });
+
+const controlledPanel = (name: "Legend" | "Inspector" | "Scrubber"): HTMLElement => {
+  const id = tab(name).getAttribute("aria-controls");
+  const panel = id === null ? null : document.getElementById(id);
+  if (panel === null) throw new Error(`${name} controls nothing`);
+  return panel;
+};
+
+const inspectorBody = (): HTMLElement => {
+  const body = Array.from(inspector().children).find((child) =>
+    (child as HTMLElement).className.includes("p-3"),
+  );
+  if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no drawer body");
+  return body;
+};
+
 describe("the Workbench shell", () => {
-  it("fills all four regions", () => {
+  it("fills every region", () => {
     shell();
 
     expect(screen.getByText("session strip")).toBeDefined();
     expect(screen.getByText("grid pane")).toBeDefined();
     expect(screen.getByText("legend")).toBeDefined();
+    expect(screen.getByText("inspector")).toBeDefined();
     expect(screen.getByText("scrubber")).toBeDefined();
   });
 
-  // The geometry contract in `.claude/rules/ui-theme.md`: one column with the
-  // rail underneath below `md`, the 340px rail beside the grid from `md` up.
-  // jsdom applies no CSS, so the class names are the only thing a test can
-  // see — the same reading `theme.test.ts` takes.
-  it("stacks into one column below md and puts the rail beside the grid from md up", () => {
-    shell();
-
-    const className = body().className;
-    // Three rows below md — grid, the disclosure toggle, the rail — collapsing
-    // to a single row at md, where the rail is a column instead.
-    expect(className).toContain("grid-rows-[minmax(0,1fr)_auto_auto]");
-    expect(className).toContain("md:grid-cols-[minmax(0,1fr)_340px]");
-    expect(className).toContain("md:grid-rows-1");
-  });
-
-  // A grid's implicit column is `auto`, which floors at its items' min-content
-  // — one unbreakable string then widens the track past the viewport and
-  // scrolls the page sideways. The `md:` track list always carried the
-  // `minmax(0,1fr)` floor; the narrow layout has to carry it too.
-  it("floors both regions at zero width so nothing inside can widen the page", () => {
+  it("keeps one full-height grid below md and lays the other regions around it from md up", () => {
     shell();
 
     expect(body().className).toContain("grid-cols-[minmax(0,1fr)]");
-    expect(screen.getByRole("main").className).toContain("min-w-0");
-    expect(screen.getByRole("complementary", { name: "Legend and Inspector" }).className).toContain(
-      "min-w-0",
-    );
+    expect(body().className).toContain("md:grid-cols-[minmax(0,1fr)_340px]");
+    expect(body().className).toContain("md:grid-rows-[minmax(0,1fr)_auto_auto]");
+
+    expect(rail().className).toContain("absolute");
+    expect(rail().className).toContain("md:static");
+    expect(rail().className).toContain("md:col-start-2");
+    expect(inspector().className).toContain("md:col-span-2");
+    expect(inspector().className).toContain("md:row-start-2");
+    expect(controlledPanel("Scrubber").className).toContain("md:row-start-3");
   });
 
-  it("caps the rail's height below md so the Scrubber stays on screen", () => {
+  it("floors the grid and rail at zero width so their contents cannot widen the page", () => {
     shell();
 
-    const rail = screen.getByRole("complementary", { name: "Legend and Inspector" });
-    expect(rail.className).toContain("max-h-[45vh]");
-    expect(rail.className).toContain("overflow-y-auto");
-    // Lifted at md, where the rail is a full-height column again.
-    expect(rail.className).toContain("md:max-h-none");
+    expect(screen.getByRole("main", { name: "Context grid" }).className).toContain("min-w-0");
+    expect(rail().className).toContain("min-w-0");
   });
 
-  // Which layout is on screen is decided by media queries, never measured. A
-  // shell that started reading the viewport would need a `matchMedia`
-  // stand-in here, and so would every component test that mounts it.
+  it("caps and scrolls the phone legend pane, then restores the desktop rail", () => {
+    shell();
+
+    expect(rail().className).toContain("max-h-[35vh]");
+    expect(rail().className).toContain("md:max-h-none");
+    expect(rail().querySelector(".overflow-y-auto")).not.toBeNull();
+  });
+
+  it("reserves the tab bar's height in the grid's scroll clearance", () => {
+    shell();
+
+    expect(body().style.getPropertyValue("--tviz-obscured-bottom")).toBe("36px");
+    expect(body().className).toContain("md:[--tviz-obscured-bottom:0px]");
+  });
+
   it("never measures the viewport", () => {
     const seen: string[] = [];
     const realMatchMedia = window.matchMedia;
@@ -119,7 +105,7 @@ describe("the Workbench shell", () => {
 
     try {
       shell();
-      fireEvent.click(railToggle());
+      fireEvent.click(tab("Legend"));
     } finally {
       window.matchMedia = realMatchMedia;
     }
@@ -128,95 +114,97 @@ describe("the Workbench shell", () => {
   });
 });
 
-describe("the rail disclosure", () => {
-  // jsdom applies no CSS, so `hidden` and `md:block` are class names here
-  // rather than a computed layout — the same reading `theme.test.ts` takes.
-  // What the test can check for real is the toggle's state and its wiring.
-  it("starts closed and says so", () => {
+describe("the phone Info Pane tabs", () => {
+  it("starts with every pane lowered", () => {
     shell();
 
-    expect(railToggle().getAttribute("aria-expanded")).toBe("false");
-    expect(rail().className).toContain("hidden");
+    for (const name of ["Legend", "Inspector", "Scrubber"] as const) {
+      expect(tab(name).getAttribute("aria-selected")).toBe("false");
+      expect(tab(name).getAttribute("aria-expanded")).toBe("false");
+      expect(controlledPanel(name).className).toContain("hidden");
+    }
   });
 
-  it("opens on click and closes again", () => {
+  it("marks the raised tab by joining it to the pane surface", () => {
     shell();
 
-    fireEvent.click(railToggle());
-    expect(railToggle().getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(tab("Legend"));
+    expect(tab("Legend").className).toContain("bg-ui-sunken");
+    expect(tab("Inspector").className).not.toContain("bg-ui-sunken");
+  });
+
+  it("raises one pane at a time and lowers the raised pane when tapped again", () => {
+    shell();
+
+    fireEvent.click(tab("Legend"));
     expect(rail().className).not.toContain("hidden");
+    expect(tab("Legend").getAttribute("aria-selected")).toBe("true");
 
-    fireEvent.click(railToggle());
-    expect(railToggle().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(tab("Inspector"));
     expect(rail().className).toContain("hidden");
+    expect(inspector().className).not.toContain("hidden");
+    expect(tab("Legend").getAttribute("aria-selected")).toBe("false");
+    expect(tab("Inspector").getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(tab("Inspector"));
+    expect(inspector().className).toContain("hidden");
+    expect(tab("Inspector").getAttribute("aria-selected")).toBe("false");
   });
 
-  // Pinning a Cell hands the rail to the Inspector, and a phone has no hover,
-  // so pin is the only gesture that fills it. Landing that in a closed
-  // disclosure makes the tap look like it did nothing.
-  it("opens when the caller reveals it", () => {
+  it("raises the Inspector when the caller reveals it, without reopening it under the reader", () => {
     const { rerender } = shell(false);
-    expect(rail().className).toContain("hidden");
+    expect(inspector().className).toContain("hidden");
 
-    rerenderShell(rerender, true);
+    rerender(view(true));
+    expect(inspector().className).not.toContain("hidden");
 
-    expect(rail().className).not.toContain("hidden");
-    expect(railToggle().getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(tab("Inspector"));
+    expect(inspector().className).toContain("hidden");
+
+    rerender(view(true));
+    expect(inspector().className).toContain("hidden");
   });
 
-  // The reader is allowed to close it again; re-opening under them would be
-  // the shell arguing back.
-  it("stays closed if the reader closes it while the reason still holds", () => {
+  it("raises the Inspector again after the reveal reason clears and returns", () => {
     const { rerender } = shell(false);
-    rerenderShell(rerender, true);
 
-    fireEvent.click(railToggle());
-    expect(rail().className).toContain("hidden");
+    rerender(view(true));
+    fireEvent.click(tab("Inspector"));
+    expect(inspector().className).toContain("hidden");
 
-    // Still revealed, still closed: the effect keys on the transition.
-    rerenderShell(rerender, true);
-    expect(rail().className).toContain("hidden");
+    rerender(view(false));
+    rerender(view(true));
+    expect(inspector().className).not.toContain("hidden");
   });
 
-  // `md:block` is what keeps the disclosure phone-only: the same element is
-  // the rail column on a wide window, so a closed toggle cannot hide it there.
-  it("is a phone-only affordance", () => {
+  it("keeps the tab bar phone-only and points every tab at its pane", () => {
     shell();
 
-    expect(rail().className).toContain("md:block");
-    expect(railToggle().className).toContain("md:hidden");
-  });
+    expect(screen.getByRole("tablist", { name: "Info panes" }).className).toContain("md:hidden");
+    expect(rail().className).toContain("md:flex");
+    expect(inspector().className).toContain("md:block");
+    expect(controlledPanel("Scrubber").className).toContain("md:block");
 
-  // `display: none` rather than a translate or a zero height, so the rail's
-  // controls leave the tab order without an `inert` to undo at `md`.
-  it("points the toggle at the rail it controls", () => {
-    shell();
-
-    expect(railToggle().getAttribute("aria-controls")).toBe(rail().getAttribute("id"));
-    expect(rail().getAttribute("id")).toBeTruthy();
+    for (const name of ["Legend", "Inspector", "Scrubber"] as const) {
+      expect(tab(name).getAttribute("aria-controls")).toBe(controlledPanel(name).id);
+    }
   });
 });
 
-describe("the Scrubber disclosure", () => {
-  // ~180px of chart and transport, the largest single thing competing with the
-  // grid for a phone's height.
-  it("starts closed below md and is a phone-only affordance", () => {
+describe("the desktop Inspector drawer", () => {
+  it("folds to its heading and opens again", () => {
     shell();
+    const toggle = screen.getByRole("button", { name: "Inspector" });
 
-    expect(scrubberToggle().getAttribute("aria-expanded")).toBe("false");
-    expect(scrubberPanel().className).toContain("hidden");
-    expect(scrubberPanel().className).toContain("md:block");
-    expect(scrubberToggle().className).toContain("md:hidden");
-  });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(inspectorBody().className).not.toContain("md:hidden");
 
-  it("opens on click and closes again", () => {
-    shell();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(inspectorBody().className).toContain("md:hidden");
 
-    fireEvent.click(scrubberToggle());
-    expect(scrubberToggle().getAttribute("aria-expanded")).toBe("true");
-    expect(scrubberPanel().className).not.toContain("hidden");
-
-    fireEvent.click(scrubberToggle());
-    expect(scrubberPanel().className).toContain("hidden");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(inspectorBody().className).not.toContain("md:hidden");
   });
 });

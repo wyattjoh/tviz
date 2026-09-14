@@ -398,9 +398,8 @@ export type RailPanelProps = {
    */
   readonly action?: ReactNode;
   /**
-   * Whether the heading folds the panel. Off for the one panel the rail holds
-   * while a Cell is pinned: folding it would leave an empty rail under a lone
-   * heading row. Defaults to on.
+   * Whether the heading folds the panel. Defaults to on; a caller can disable
+   * it when a panel's contents must always remain visible.
    */
   readonly collapsible?: boolean;
   /**
@@ -412,13 +411,11 @@ export type RailPanelProps = {
 /**
  * A panel in the rail, collapsed to its heading row by clicking that heading.
  *
- * The rail stacks four panels — a 340px column from `md` up, a capped
- * scrolling strip under the grid below it — and on a short window the ones a
- * reader is not using push the ones they are below the fold. Each panel keeps
- * its own open state rather than lifting it out: nothing else reads it, and a
- * collapsed panel is a view preference, not Session state. That holds at every
- * width: below `md` the whole rail is behind a disclosure, so a panel never
- * needs to hide itself as well.
+ * The rail stacks panels in a 340px column from `md` up and in the capped
+ * Legend Info Pane below it. On a short window the ones a reader is not using
+ * push the others below the fold. Each panel keeps its own open state rather
+ * than lifting it out: nothing else reads it, and a collapsed panel is a view
+ * preference, not Session state.
  *
  * Collapsing unmounts the body rather than hiding it, so a collapsed panel
  * costs no layout — and the `action` control stays in the heading row either

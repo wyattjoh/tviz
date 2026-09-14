@@ -146,7 +146,7 @@ describe("App", () => {
     expect(screen.getByText("155.0k")).toBeDefined();
   });
 
-  it("lays a loaded Session out in the four Workbench regions", async () => {
+  it("lays a loaded Session out in every Workbench region", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
@@ -162,26 +162,29 @@ describe("App", () => {
     expect(strip.contains(screen.getByRole("button", { name: "close" }))).toBe(true);
     expect(strip.textContent).not.toContain("tokens");
 
-    // 3 — grid pane on the flexible left, scrolling under its own column count.
+    // 3 — grid pane on the flexible left, scrolling vertically under its own
+    // column count while horizontal rounding stays clipped.
     const grid = contextGrid();
     const pane = screen.getByRole("main", { name: "Context grid" });
     expect(pane.contains(grid)).toBe(true);
-    expect(grid.parentElement?.className).toContain("overflow-auto");
+    expect(grid.parentElement?.className).toContain("overflow-x-hidden");
+    expect(grid.parentElement?.className).toContain("overflow-y-auto");
 
-    // 4 — the fixed 340px right rail, holding the legend and the docked
-    // Inspector panel the Inspector work fills.
-    const rail = screen.getByRole("complementary", { name: "Legend and Inspector" });
+    // 4 — the fixed 340px right rail holds the legend and settings.
+    const rail = screen.getByRole("complementary", { name: "Legend and Context Window" });
     expect(rail.contains(screen.getByText("Free space"))).toBe(true);
-    expect(rail.contains(screen.getByText("Inspector"))).toBe(true);
-    // The fill meter lives under the legend, whose Free space line is the other
-    // half of the same number; the override is the cog in that panel's header.
     expect(rail.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
     expect(rail.contains(screen.getByRole("button", { name: "Context Window override" }))).toBe(
       true,
     );
     expect(pane.parentElement?.className).toContain("grid-cols-[minmax(0,1fr)_340px]");
 
-    // 5 — the Scrubber across the bottom.
+    // 5 — the Inspector is its own full-width region, not a rail panel.
+    const inspector = screen.getByRole("region", { name: "Inspector" });
+    expect(inspector.contains(screen.getByText("Hover a Cell."))).toBe(true);
+    expect(rail.contains(inspector)).toBe(false);
+
+    // 6 — the Scrubber is the final full-width row.
     const scrubber = screen.getByRole("region", { name: "Scrubber" });
     expect(scrubber.contains(screen.getByLabelText("API call"))).toBe(true);
   });
@@ -426,7 +429,7 @@ describe("App", () => {
       render(<App />);
       drop(transcriptFile("session-a.jsonl", transcript()));
       await findContextGrid();
-      return screen.getByRole("complementary", { name: "Legend and Inspector" });
+      return screen.getByRole("complementary", { name: "Legend and Context Window" });
     };
 
     /**
@@ -527,7 +530,7 @@ describe("App", () => {
       const systemRow = row(rail, /^System/).closest("li");
       expect(systemRow).not.toBeNull();
 
-      fireEvent.mouseOver(systemRow as HTMLElement);
+      fireEvent.pointerEnter(systemRow as HTMLElement, { pointerType: "mouse" });
 
       expect(screen.getByRole("tooltip").textContent).toContain(
         "system prompt, built-in tool schemas and root CLAUDE.md",
@@ -536,18 +539,17 @@ describe("App", () => {
     });
   });
 
-  describe("inspecting a Cell in the right rail", () => {
+  describe("inspecting a Cell in the Inspector region", () => {
+    const inspector = (): HTMLElement => screen.getByRole("region", { name: "Inspector" });
+
+    const rail = (): HTMLElement =>
+      screen.getByRole("complementary", { name: "Legend and Context Window" });
+
     const open = async (): Promise<HTMLElement> => {
       render(<App />);
       drop(transcriptFile("session-a.jsonl", transcript()));
       await findContextGrid();
-      return screen.getByRole("complementary", { name: "Legend and Inspector" });
-    };
-
-    const inspector = (): HTMLElement => {
-      const panel = screen.getByRole("heading", { name: "Inspector" }).closest("section");
-      if (panel === null) throw new Error("the Inspector has no panel");
-      return panel;
+      return inspector();
     };
 
     it("reports an item's share of the hovered Cell, not the item's own size", async () => {
@@ -562,116 +564,115 @@ describe("App", () => {
     });
 
     it("lists the items overlapping a hovered Cell", async () => {
-      const rail = await open();
-      expect(rail.textContent).toContain("Hover a Cell");
+      const panel = await open();
+      expect(panel.textContent).toContain("Hover a Cell");
 
       const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
       fireEvent.mouseOver(cellAt(skills));
 
-      expect(rail.textContent).toContain("Skills");
-      expect(rail.textContent).toContain("Skill listing");
-      expect(rail.textContent).toContain(`cell ${skills + 1}`);
+      expect(panel.textContent).toContain("Skills");
+      expect(panel.textContent).toContain("Skill listing");
+      expect(panel.textContent).toContain(`cell ${skills + 1}`);
     });
 
     it("calls an empty Cell free rather than listing items for it", async () => {
-      const rail = await open();
+      const panel = await open();
 
       const free = cellTitles().findIndex((title) => title.startsWith("Free ·"));
       fireEvent.mouseOver(cellAt(free));
 
-      expect(rail.textContent).toContain("free — nothing has reached this part");
+      expect(panel.textContent).toContain("free — nothing has reached this part");
     });
 
     it("pins a clicked Cell so its items survive the pointer leaving the grid", async () => {
-      const rail = await open();
+      const panel = await open();
       const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
 
       fireEvent.click(cellAt(skills));
       fireEvent.mouseLeave(contextGrid());
 
-      expect(rail.textContent).toContain("Skill listing");
-      expect(rail.textContent).toContain("pinned");
+      expect(panel.textContent).toContain("Skill listing");
+      expect(panel.textContent).toContain("pinned");
       expect(cellAt(skills).getAttribute("aria-pressed")).toBe("true");
 
-      // Clicking the pinned Cell again hands the rail back.
+      // Clicking the pinned Cell again returns the Inspector to its empty state.
       fireEvent.click(cellAt(skills));
       fireEvent.mouseLeave(contextGrid());
-      expect(rail.textContent).toContain("Hover a Cell");
+      expect(panel.textContent).toContain("Hover a Cell");
     });
 
-    it("focuses the rail on a pinned Cell: the other panels step aside until it is unpinned", async () => {
-      const rail = await open();
+    it("keeps the rail available while the Inspector holds a pinned Cell", async () => {
+      const panel = await open();
       const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
-      expect(rail.textContent).toContain("Free space");
+      expect(rail().textContent).toContain("Free space");
 
       fireEvent.click(cellAt(skills));
 
-      // Only the Inspector is left, and it cannot be folded away from under
-      // the close control — its heading is no longer a button.
-      expect(rail.textContent).not.toContain("Free space");
-      expect(screen.queryByRole("button", { name: "Context Window override" })).toBeNull();
-      expect(rail.textContent).not.toContain("records ·");
-      expect(screen.queryByRole("button", { name: /^Inspector$/i })).toBeNull();
-      expect(rail.textContent).toContain("Skill listing");
+      expect(rail().textContent).toContain("Free space");
+      expect(screen.getByRole("button", { name: "Context Window override" })).toBeDefined();
+      expect(rail().textContent).toContain("records ·");
+      expect(panel.textContent).toContain("Skill listing");
+      expect(panel.textContent).toContain("pinned");
       expect(cellAt(skills).className.split(" ")).toContain("scale-125");
 
       fireEvent.click(screen.getByRole("button", { name: "Unpin cell" }));
 
-      expect(rail.textContent).toContain("Free space");
-      expect(screen.getByRole("button", { name: "Context Window override" })).toBeDefined();
-      expect(screen.getByRole("button", { name: /^Inspector$/i })).toBeDefined();
+      expect(rail().textContent).toContain("Free space");
+      expect(panel.textContent).toContain("Hover a Cell");
       expect(cellAt(skills).getAttribute("aria-pressed")).toBe("false");
       expect(cellAt(skills).className.split(" ")).not.toContain("scale-125");
     });
 
     it("unpins on Escape, but leaves the pin alone while Escape is closing a menu", async () => {
-      const rail = await open();
+      const panel = await open();
       const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
       fireEvent.click(cellAt(skills));
-      expect(rail.textContent).not.toContain("Free space");
+      expect(panel.textContent).toContain("pinned");
+      expect(rail().textContent).toContain("Free space");
 
       // One keypress closes one thing: the open menu, not the pin under it.
       const file = screen.getByRole("button", { name: "File" });
       fireEvent.click(file);
       fireEvent.keyDown(document, { key: "Escape" });
       expect(file.getAttribute("aria-expanded")).toBe("false");
-      expect(rail.textContent).not.toContain("Free space");
+      expect(panel.textContent).toContain("pinned");
 
       fireEvent.keyDown(document, { key: "Escape" });
-      expect(rail.textContent).toContain("Free space");
+      expect(panel.textContent).toContain("Hover a Cell");
       expect(cellAt(skills).getAttribute("aria-pressed")).toBe("false");
     });
 
     it("keeps previewing hovered Cells while another is pinned, and returns to the pinned one", async () => {
-      const rail = await open();
+      const panel = await open();
       const skills = cellTitles().findIndex((title) => title.startsWith("Skills ·"));
       const free = cellTitles().findIndex((title) => title.startsWith("Free ·"));
       fireEvent.click(cellAt(skills));
 
       fireEvent.mouseOver(cellAt(free));
-      expect(rail.textContent).toContain("free — nothing has reached this part");
-      expect(rail.textContent).not.toContain("pinned");
+      expect(panel.textContent).toContain("free — nothing has reached this part");
+      expect(panel.textContent).not.toContain("pinned");
 
       fireEvent.mouseLeave(contextGrid());
-      expect(rail.textContent).toContain("Skill listing");
-      expect(rail.textContent).toContain("pinned");
+      expect(panel.textContent).toContain("Skill listing");
+      expect(panel.textContent).toContain("pinned");
     });
 
-    it("collapses a rail panel to its heading row, and opens it again", async () => {
-      const rail = await open();
-      const heading = (name: string): HTMLElement =>
-        screen.getByRole("button", { name: new RegExp(`^${name}$`, "i") });
-      expect(rail.textContent).toContain("Hover a Cell");
+    it("collapses the desktop Inspector drawer to its heading and opens it again", async () => {
+      const panel = await open();
+      const toggle = screen.getByRole("button", { name: /^Inspector$/i });
+      const body = Array.from(panel.children).find((child) =>
+        (child as HTMLElement).className.includes("p-3"),
+      );
+      if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no drawer body");
 
-      fireEvent.click(heading("Inspector"));
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(body.className).toContain("md:hidden");
+      expect(rail().textContent).toContain("Free space");
 
-      expect(heading("Inspector").getAttribute("aria-expanded")).toBe("false");
-      expect(rail.textContent).not.toContain("Hover a Cell");
-      // Only the panel that was clicked closes; the rest of the rail stands.
-      expect(rail.textContent).toContain("Free space");
-
-      fireEvent.click(heading("Inspector"));
-      expect(rail.textContent).toContain("Hover a Cell");
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(body.className).not.toContain("md:hidden");
     });
 
     it("keeps a collapsed panel's setting reachable in its heading row", async () => {
