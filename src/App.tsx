@@ -34,9 +34,9 @@
  *
  * {@link useSessionLoader} owns the Session list — which files parsed, which
  * are still parsing, which failed, and Subagent Session counts — so switching
- * Sessions from the File menu never re-parses anything. The selected API Call
- * and the Context Window override live here because the menu bar, grid, legend
- * and Scrubber all read them.
+ * Sessions from the filename menu never re-parses anything. `LoadedSession` owns
+ * the selected API Call because the grid, legend and Scrubber all read it; the
+ * Context Window override stays above that Session state so it survives a switch.
  *
  * The Demo Sessions are fetched by `loadDemoSessions` and then handed to the
  * same Session list as a dropped file, so there is no demo-only view: only
@@ -114,15 +114,10 @@ const NO_DEMO: DemoState = {
 
 const App = () => {
   const loader = useSessionLoader();
-  // Not per-Session: switching Sessions from the File menu keeps whatever
+  // Not per-Session: switching Sessions from the filename menu keeps whatever
   // override is selected, matching the throwaway prototype this was settled
   // against.
   const [windowChoice, setWindowChoice] = useState<WindowChoice>("auto");
-  // Paired with its Session so switching files can immediately fall back to
-  // that Session's last API Call without an effect or one stale render.
-  const [callSelection, setCallSelection] = useState<
-    { readonly sessionId: string; readonly index: number } | undefined
-  >(undefined);
   const [demo, setDemo] = useState<DemoState>(NO_DEMO);
   // The landing page's background. Held here rather than in `useSessionLoader`
   // on purpose: it must not be an open Session. Putting it in the loader would
@@ -204,29 +199,11 @@ const App = () => {
   );
 
   const selectedSession = loader.sessions.find((session) => session.id === loader.selectedId);
-  const callIndex =
-    selectedSession === undefined
-      ? undefined
-      : callSelection?.sessionId === selectedSession.id
-        ? callSelection.index
-        : selectedSession.calls.length - 1;
-  const selectedSnapshot =
-    selectedSession === undefined || callIndex === undefined
-      ? undefined
-      : selectedSession.calls[callIndex];
-  const onSelectCall = useCallback(
-    (index: number) => {
-      if (selectedSession === undefined) return;
-      setCallSelection({ sessionId: selectedSession.id, index });
-    },
-    [selectedSession],
-  );
   const onCloseSession = loader.closeSession;
 
   const menuBarProps = {
     sessions: loader.sessions,
     selectedId: loader.selectedId,
-    selectedSnapshot,
     pending: loader.pending,
     errors: loader.errors,
     onFiles: loader.addEntries,
@@ -292,8 +269,6 @@ const App = () => {
             <LoadedSession
               key={shown.id}
               session={shown}
-              callIndex={callIndex ?? shown.calls.length - 1}
-              onSelectCall={onSelectCall}
               windowChoice={windowChoice}
               onWindowChoiceChange={setWindowChoice}
               demoNote={demo.labels.has(shown.id) ? demo.note : undefined}
@@ -330,8 +305,6 @@ const App = () => {
 
 type LoadedSessionProps = {
   readonly session: Session;
-  readonly callIndex: number;
-  readonly onSelectCall: (index: number) => void;
   readonly windowChoice: WindowChoice;
   readonly onWindowChoiceChange: (choice: WindowChoice) => void;
   /**
@@ -343,12 +316,13 @@ type LoadedSessionProps = {
 
 const LoadedSession = ({
   session,
-  callIndex,
-  onSelectCall,
   windowChoice,
   onWindowChoiceChange,
   demoNote,
 }: LoadedSessionProps) => {
+  // The last API Call answers "where did it end up?", which is the question a
+  // finished Session is usually opened with.
+  const [callIndex, setCallIndex] = useState(session.calls.length - 1);
   const [filters, setFilters] = useState<GridFilters>(ALL_SHOWN);
   // Cells are addressed by index rather than held as objects: an index stays
   // meaningful when the Scrubber moves and the Cell at that position is rebuilt,
@@ -508,7 +482,7 @@ const LoadedSession = ({
           calls={session.calls}
           windowSize={windowSize}
           callIndex={callIndex}
-          onSelectCall={onSelectCall}
+          onSelectCall={setCallIndex}
         />
       }
     />

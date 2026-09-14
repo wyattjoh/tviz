@@ -72,8 +72,8 @@ scrolled clear without changing the pane size used by `cell-fit.ts`.
 The two layouts reuse the *same elements* — `absolute md:static` — rather than rendering a
 second shell. The same `<aside>` is the Legend pane on a phone and the right rail on desktop;
 the same Inspector and Scrubber are overlays below `md` and full-width rows from `md` up.
-`LoadedSession` and `LandingPreview` therefore fill one geometry. The active Session's
-API Call index is owned by `App`, because both the top bar and the Scrubber read it.
+`LoadedSession` and `LandingPreview` therefore fill one geometry. `LoadedSession` owns its
+API Call index because the grid, legend and Scrubber read it; the top bar does not.
 
 Five constraints:
 
@@ -155,11 +155,14 @@ transport.
 and `DropZone` only draws the `isOver` it is handed. A second drop handler anywhere inside
 would bubble to that root and import every dropped file twice.
 
-The top bar's Session region is identity plus one action — id, model, CC version, call
-index, `close`, and the filename as its rightmost item. Lower-priority identity fields hide
-at narrow breakpoints so the filename and call index keep their space. It carries no fill
-controls: the fill meter and Context Window override are `ContextWindowPanel` in the rail,
-under Categories. New per-Session state belongs in a rail panel, not back in the top bar.
+The top bar's Session region is static file identity only — id, model, CC version, Subagent
+Session count, and the filename menu as its rightmost item. Lower-priority identity fields
+hide at narrow breakpoints so the filename keeps its space. The filename is a button that
+opens individual transcripts, reports pending or failed loads, and switches among open
+Sessions. API Call state stays in the Scrubber; "Close session" stays in the File menu beside
+"Close all sessions"; and the fill meter and Context Window override stay in
+`ContextWindowPanel` under Categories. New per-Session state belongs in a rail panel, not
+back in the top bar.
 
 A rail panel is a reading; a setting that changes it rides in the panel's header row
 through `RailPanel`'s `action` slot, as `ContextWindowMenu`'s cog does — not as a row of
@@ -182,10 +185,11 @@ Cell in the Inspector while the pinned Cell remains raised, and leaving the grid
 the pinned reading. Escape leaves the pin alone while a menu is open, so one keypress closes
 one thing.
 
-The menu bar (`src/ui/MenuBar.tsx`) carries the whole File menu: Open files…, Open folder…,
-Load demo sessions, the list of open Sessions (a Demo Session shows its manifest name and
-"(demo)" rather than the file it is served as), and Close all sessions. There is no session
-sidebar — a new way into the app is a File-menu entry.
+The menu bar (`src/ui/MenuBar.tsx`) splits navigation by intent. The filename menu carries
+Open session…, pending and failed file status, and the list of open Sessions (a Demo Session
+shows its manifest name and "(demo)" rather than the file it is served as). The File menu
+keeps Open folder…, Load demo sessions, Close session, and Close all sessions. There is no
+session sidebar.
 
 The grid itself is append-only with fixed-quantum Cells — see ADR-0006 before changing
 Cell size, ordering, or how filtering hides Cells. A Cell is a fixed 1,000 tokens but not a

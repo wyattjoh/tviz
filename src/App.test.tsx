@@ -157,7 +157,8 @@ describe("App", () => {
     const sessionDetails = screen.getByRole("region", { name: "Session" });
     expect(menuBar.contains(sessionDetails)).toBe(true);
     expect(sessionDetails.contains(screen.getByText("session-a.jsonl"))).toBe(true);
-    expect(sessionDetails.contains(screen.getByRole("button", { name: "close" }))).toBe(true);
+    expect(within(sessionDetails).queryByRole("button", { name: /close/i })).toBeNull();
+    expect(sessionDetails.textContent).not.toMatch(/call \d+\/\d+/);
     expect(sessionDetails.textContent).not.toContain("tokens");
 
     // 2 — grid pane on the flexible left, scrolling vertically under its own
@@ -187,21 +188,21 @@ describe("App", () => {
     expect(scrubber.contains(screen.getByLabelText("API call"))).toBe(true);
   });
 
-  it("opens and closes the File menu the Session list will fill", async () => {
+  it("opens and closes the filename menu used to open and switch Sessions", async () => {
     render(<App />);
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    const file = screen.getByRole("button", { name: "File" });
-    expect(file.getAttribute("aria-expanded")).toBe("false");
+    const filename = within(screen.getByRole("region", { name: "Session" })).getByRole("button");
+    expect(filename.getAttribute("aria-expanded")).toBe("false");
 
-    fireEvent.click(file);
-    expect(file.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Open files…")).toBeDefined();
+    fireEvent.click(filename);
+    expect(filename.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Open session…")).toBeDefined();
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(file.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText("Open files…")).toBeNull();
+    expect(filename.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Open session…")).toBeNull();
   });
 
   it("lays Cells out in the order items entered the context", async () => {
@@ -302,7 +303,7 @@ describe("App", () => {
     drop(transcriptFile("session-a.jsonl", transcript()));
     await findContextGrid();
 
-    fireEvent.click(screen.getByRole("button", { name: "close" }));
+    closeSessionFromFileMenu();
 
     expect(screen.getByText("drop a .jsonl transcript")).toBeDefined();
     expect(queryContextGrid()).toBeNull();
@@ -310,8 +311,8 @@ describe("App", () => {
 
   describe("stepping through the Session with the Scrubber", () => {
     /**
-     * Four API Calls, the third of which is a compaction, so the grid, the
-     * legend and the header each have something different to say at every stop.
+     * Four API Calls, the third of which is a compaction, so the grid, legend
+     * and Scrubber each have something different to say at every stop.
      */
     const steppedTranscript = (): string =>
       Fixture.toJsonl([
@@ -409,16 +410,6 @@ describe("App", () => {
 
       expect(after[granted]).toMatch(/^MCP ·/);
       expect(after.slice(0, frontier)).toEqual(before.slice(0, frontier));
-    });
-
-    it("names the compaction in the header on the API Call that compacted", async () => {
-      const range = await openStepped();
-
-      fireEvent.change(range, { target: { value: "2" } });
-      expect(screen.getByText("· compaction")).toBeDefined();
-
-      fireEvent.keyDown(range, { key: "ArrowLeft" });
-      expect(screen.queryByText("· compaction")).toBeNull();
     });
   });
 
@@ -686,7 +677,7 @@ describe("App", () => {
   });
 
   describe("folder drop, the Session list, and the Context Window override", () => {
-    it("collects only .jsonl files from a multi-file drop, listing every Session in the File menu", async () => {
+    it("collects only .jsonl files from a multi-file drop, listing every Session in the filename menu", async () => {
       render(<App />);
       Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000a1");
       const fileA = transcriptFile("session-a.jsonl", transcript());
@@ -698,11 +689,15 @@ describe("App", () => {
       dropMany([{ file: fileA }, { file: fileB }, { file: notes }]);
       await findContextGrid();
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
-      // The selected Session's file name is also in the top bar behind the
-      // menu, so the Session-list row is found by its button role.
-      expect(screen.getByRole("button", { name: /session-a\.jsonl/ })).toBeDefined();
-      expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+      openSessionMenu();
+      // The selected Session's filename is also the menu trigger, so rows are
+      // identified by the pressed state carried only by menu items.
+      expect(sessionMenuRows().some((row) => row.textContent?.includes("session-a.jsonl"))).toBe(
+        true,
+      );
+      expect(sessionMenuRows().some((row) => row.textContent?.includes("session-b.jsonl"))).toBe(
+        true,
+      );
       expect(screen.queryByText("README.md")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
     });
@@ -729,13 +724,13 @@ describe("App", () => {
 
       expect(screen.getByText("2 subagent sessions")).toBeDefined();
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      openSessionMenu();
       expect(screen.queryByText("agent-1.jsonl")).toBeNull();
       expect(screen.queryByText("agent-2.jsonl")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
     });
 
-    it("switches the grid to a different Session from the File menu", async () => {
+    it("switches the grid to a different Session from the filename menu", async () => {
       render(<App />);
       Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000c1");
       const fileA = transcriptFile("session-a.jsonl", transcript());
@@ -749,7 +744,7 @@ describe("App", () => {
       const strip = screen.getByRole("region", { name: "Session" });
       expect(strip.textContent).toContain("session-a.jsonl");
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      openSessionMenu();
       fireEvent.click(screen.getByRole("button", { name: /^session-b\.jsonl/ }));
 
       expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
@@ -757,7 +752,7 @@ describe("App", () => {
       );
     });
 
-    it("closes only the Session on screen, leaving the rest open in the File menu", async () => {
+    it("closes only the Session on screen, leaving the rest in the filename menu", async () => {
       render(<App />);
       Fixture.setFixtureSessionId("00000000-0000-4000-8000-0000000000d1");
       const fileA = transcriptFile("session-a.jsonl", transcript());
@@ -771,19 +766,20 @@ describe("App", () => {
         "session-a.jsonl",
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "close" }));
+      closeSessionFromFileMenu();
 
       // Still on the Workbench — session-b.jsonl took the vacated slot —
       // rather than dropped back to the empty state with an open Session
-      // still parsed and waiting in the File menu.
+      // still parsed and waiting in the filename menu.
       await findContextGrid();
       expect(screen.getByRole("region", { name: "Session" }).textContent).toContain(
         "session-b.jsonl",
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      openSessionMenu();
       expect(screen.queryByText("session-a.jsonl")).toBeNull();
-      expect(screen.getByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+      expect(sessionMenuRows()).toHaveLength(1);
+      expect(sessionMenuRows()[0]?.textContent).toContain("session-b.jsonl");
     });
 
     it("hands the keyboard from the drop panel to the Workbench when a Session loads, without unmounting either", async () => {
@@ -813,7 +809,7 @@ describe("App", () => {
       drop(transcriptFile("session-a.jsonl", transcript()));
       await findContextGrid();
 
-      fireEvent.click(screen.getByRole("button", { name: "close" }));
+      closeSessionFromFileMenu();
 
       await waitFor(() => expect(dropPanelLayer().hasAttribute("inert")).toBe(false));
       expect(layer("workbench").hasAttribute("inert")).toBe(true);
@@ -852,11 +848,13 @@ describe("App", () => {
       // (now unmounted) empty-state drop zone.
       dropManyOntoWorkbench([{ file: fileB }]);
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
-      expect(screen.getByRole("button", { name: /session-a\.jsonl/ })).toBeDefined();
+      openSessionMenu();
+      expect(sessionMenuRows().some((row) => row.textContent?.includes("session-a.jsonl"))).toBe(
+        true,
+      );
       // Collecting the drop's entries is async even for a flat file list, so
       // the second row arrives a tick after the drop event itself.
-      expect(await screen.findByRole("button", { name: /session-b\.jsonl/ })).toBeDefined();
+      await screen.findByRole("button", { name: /session-b\.jsonl/ });
     });
 
     it("counts a Subagent Session sidecar once even when the same folder is dropped twice", async () => {
@@ -901,7 +899,7 @@ describe("App", () => {
       expect(contextGrid().getAttribute("aria-label")).toBe(
         "Context grid: 45.0k of 1.0M tokens used",
       );
-      // Picking a window closes the menu, the way the File menu's rows do.
+      // Picking a window closes the menu, the way the top-bar menus' rows do.
       expect(screen.queryByRole("group", { name: "Context Window" })).toBeNull();
       expect(screen.getByText(/45\.0k \/ 1\.0M tokens/)).toBeDefined();
       // The legend's free-space line is the overridden window minus the total.
@@ -926,7 +924,7 @@ describe("App", () => {
       dropMany([{ file: fileA }, { file: stuck }]);
       await findContextGrid();
 
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      openSessionMenu();
       // Scoped to the menu's own row: the always-mounted live region
       // (`[aria-live]`, covered in `MenuBar.test.tsx`) says the same thing.
       expect(screen.getByText(/parsing 1 file/, { selector: "div" })).toBeDefined();
@@ -943,9 +941,9 @@ describe("App", () => {
       // The good file still loaded and is on screen despite the other failing.
       expect(screen.getByRole("region", { name: "Session" }).textContent).toContain("good.jsonl");
 
-      // Once a Session is loaded, per-file failures surface from the File
+      // Once a Session is loaded, per-file failures surface from the filename
       // menu rather than the (now unmounted) empty-state drop zone.
-      fireEvent.click(screen.getByRole("button", { name: "File" }));
+      openSessionMenu();
       const alert = await screen.findByRole("alert");
       expect(alert.textContent).toBe("bad.jsonl");
     });
@@ -1037,6 +1035,17 @@ const openFileMenu = (): void => {
   fireEvent.click(screen.getByRole("button", { name: "File" }));
 };
 
+const openSessionMenu = (): HTMLElement => {
+  const button = within(screen.getByRole("region", { name: "Session" })).getByRole("button");
+  fireEvent.click(button);
+  return button;
+};
+
+const closeSessionFromFileMenu = (): void => {
+  openFileMenu();
+  fireEvent.click(screen.getByRole("button", { name: "Close session" }));
+};
+
 /**
  * The Context Window override is behind the cog in the rail panel's header, so
  * reaching a choice takes a click first.
@@ -1051,14 +1060,14 @@ const loadDemoFromFileMenu = (): void => {
 };
 
 /**
- * The Session rows of the File menu, which is where the Workbench lists open
- * Sessions instead of a sidebar.
+ * The Session rows of the filename menu, which lists open Sessions without a
+ * sidebar.
  */
 const sessionMenuRows = (): readonly HTMLElement[] => {
   // The dropdown has no role of its own, so it is reached through the heading
   // that only ever exists inside it.
   const panel = screen.getByText("Open sessions").parentElement;
-  if (panel === null) throw new Error("the File menu has no panel");
+  if (panel === null) throw new Error("the filename menu has no panel");
   return within(panel)
     .getAllByRole("button")
     .filter((button) => button.getAttribute("aria-pressed") !== null);
@@ -1069,14 +1078,14 @@ describe("App demo mode", () => {
     vi.unstubAllGlobals();
   });
 
-  it("lists the Demo Sessions in the File menu and shows the medium one", async () => {
+  it("lists the Demo Sessions in the filename menu and shows the medium one", async () => {
     stubDemoFetch();
     render(<App />);
 
     loadDemo();
     await findContextGrid();
 
-    openFileMenu();
+    openSessionMenu();
     const rows = sessionMenuRows();
     expect(rows).toHaveLength(3);
     expect(rows.map((row) => row.textContent?.startsWith("Small session"))).toEqual([
@@ -1105,7 +1114,7 @@ describe("App demo mode", () => {
     // a component: change the manifest and the app says something else.
     expect(screen.getByText(DEMO_MANIFEST.note)).toBeDefined();
 
-    openFileMenu();
+    openSessionMenu();
     expect(sessionMenuRows().every((row) => row.textContent?.includes("(demo)"))).toBe(true);
   });
 
@@ -1124,7 +1133,7 @@ describe("App demo mode", () => {
     loadDemo();
     await findContextGrid();
 
-    openFileMenu();
+    openSessionMenu();
     fireEvent.click(screen.getByRole("button", { name: /^Large session \(demo\)/ }));
 
     expect(contextGrid().getAttribute("aria-label")).toBe(
@@ -1143,7 +1152,7 @@ describe("App demo mode", () => {
 
     // The dropped Session stays open beside the Demo Sessions; the demo does
     // not replace what the user loaded.
-    openFileMenu();
+    openSessionMenu();
     expect(sessionMenuRows()).toHaveLength(4);
     expect(screen.getByRole("region", { name: "Session" }).textContent).toContain("medium.jsonl");
   });

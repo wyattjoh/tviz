@@ -40,7 +40,6 @@ const session = (id: string, fileName: string, peak: number): Session => ({
 const baseProps = (overrides: Partial<MenuBarProps> = {}): MenuBarProps => ({
   sessions: [],
   selectedId: undefined,
-  selectedSnapshot: undefined,
   pending: [],
   errors: [],
   onFiles: vi.fn(),
@@ -53,19 +52,34 @@ const baseProps = (overrides: Partial<MenuBarProps> = {}): MenuBarProps => ({
   ...overrides,
 });
 
-const openMenu = (): HTMLElement => {
+const openFileMenu = (): HTMLElement => {
   const button = screen.getByRole("button", { name: "File" });
   fireEvent.click(button);
   return button;
+};
+
+const openSessionMenu = (fileName: string): HTMLElement => {
+  const button = screen.getByRole("button", { name: fileName });
+  fireEvent.click(button);
+  return button;
+};
+
+const sessionRow = (fileName: RegExp): HTMLElement => {
+  const row = screen
+    .getAllByRole("button", { name: fileName })
+    .find((button) => button.getAttribute("aria-pressed") !== null);
+  if (row === undefined) throw new Error(`no Session row matched ${fileName}`);
+  return row;
 };
 
 describe("MenuBar", () => {
   it("opens the File menu and closes it on Escape", () => {
     render(<MenuBar {...baseProps()} />);
 
-    const button = openMenu();
+    const button = openFileMenu();
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Open files…")).toBeDefined();
+    expect(screen.getByText("Open folder…")).toBeDefined();
+    expect(screen.queryByText("Open session…")).toBeNull();
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(button.getAttribute("aria-expanded")).toBe("false");
@@ -73,27 +87,16 @@ describe("MenuBar", () => {
 
   it("merges the selected Session into the bar with its filename at the far right", () => {
     const selected = session("s1", "session-a.jsonl", 45_000);
-    const onCloseSession = vi.fn();
-    render(
-      <MenuBar
-        {...baseProps({
-          sessions: [selected],
-          selectedId: selected.id,
-          selectedSnapshot: selected.calls[0],
-          onCloseSession,
-        })}
-      />,
-    );
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id })} />);
 
     const bar = screen.getByRole("banner", { name: "tviz" });
     const details = screen.getByRole("region", { name: "Session" });
-    const filename = screen.getByText("session-a.jsonl");
+    const filename = screen.getByRole("button", { name: "session-a.jsonl" });
     expect(bar.contains(details)).toBe(true);
-    expect(filename.className).toContain("ml-auto");
-    expect(details.lastElementChild).toBe(filename);
-
-    fireEvent.click(screen.getByRole("button", { name: "close" }));
-    expect(onCloseSession).toHaveBeenCalledWith(selected.id);
+    expect(filename.parentElement?.className).toContain("ml-auto");
+    expect(details.lastElementChild).toBe(filename.parentElement);
+    expect(details.textContent).not.toContain("call 1/1");
+    expect(screen.queryByRole("button", { name: /^close$/i })).toBeNull();
   });
 
   it("closes on a click outside the menu", () => {
@@ -104,7 +107,7 @@ describe("MenuBar", () => {
       </div>,
     );
 
-    const button = openMenu();
+    const button = openFileMenu();
     fireEvent.pointerDown(screen.getByTestId("outside"));
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
@@ -116,10 +119,10 @@ describe("MenuBar", () => {
     ];
     render(<MenuBar {...baseProps({ sessions, selectedId: "s2" })} />);
 
-    openMenu();
+    openSessionMenu("session-b.jsonl");
 
-    const rowA = screen.getByRole("button", { name: /^session-a\.jsonl/ });
-    const rowB = screen.getByRole("button", { name: /^session-b\.jsonl/ });
+    const rowA = sessionRow(/^session-a\.jsonl/);
+    const rowB = sessionRow(/^session-b\.jsonl/);
     expect(rowA?.textContent).toContain("1 · 45.0k");
     expect(rowB?.getAttribute("aria-pressed")).toBe("true");
     expect(rowA?.getAttribute("aria-pressed")).toBe("false");
@@ -127,46 +130,60 @@ describe("MenuBar", () => {
 
   it("switches the selected Session and closes the menu", () => {
     const onSelectSession = vi.fn();
-    const sessions = [session("s1", "session-a.jsonl", 45_000)];
-    render(<MenuBar {...baseProps({ sessions, onSelectSession })} />);
+    const sessions = [
+      session("s1", "session-a.jsonl", 45_000),
+      session("s2", "session-b.jsonl", 9_000),
+    ];
+    render(<MenuBar {...baseProps({ sessions, selectedId: "s1", onSelectSession })} />);
 
-    const button = openMenu();
-    fireEvent.click(screen.getByRole("button", { name: /^session-a\.jsonl/ }));
+    const button = openSessionMenu("session-a.jsonl");
+    fireEvent.click(sessionRow(/^session-b\.jsonl/));
 
-    expect(onSelectSession).toHaveBeenCalledWith("s1");
+    expect(onSelectSession).toHaveBeenCalledWith("s2");
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("shows how many files are still parsing", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
     render(
-      <MenuBar {...baseProps({ pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }] })} />,
+      <MenuBar
+        {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
+          pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }],
+        })}
+      />,
     );
 
-    openMenu();
+    openSessionMenu(selected.fileName);
     // Scoped to the menu's own row: the always-mounted live region
     // (`[aria-live]`, covered separately below) says the same thing.
     expect(screen.getByText(/parsing 1 file/, { selector: "div" })).toBeDefined();
   });
 
-  it("keeps the File button's accessible name plain even with a pending or failed count badge", () => {
+  it("keeps the filename button's accessible name plain with status badges", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
     render(
       <MenuBar
         {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
           pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }],
           errors: [{ id: "2", path: "b.jsonl", fileName: "b.jsonl", message: "b.jsonl is empty." }],
         })}
       />,
     );
 
-    // The count badges are `aria-hidden`, so they add a visible hint without
-    // turning "File" into "File 1 1" for anyone using a screen reader.
-    expect(screen.getByRole("button", { name: "File" })).toBeDefined();
+    expect(screen.getByRole("button", { name: selected.fileName })).toBeDefined();
   });
 
   it("lists a failed file as an error row", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
     render(
       <MenuBar
         {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
           errors: [
             { id: "1", path: "bad.jsonl", fileName: "bad.jsonl", message: "bad.jsonl is empty." },
           ],
@@ -174,15 +191,33 @@ describe("MenuBar", () => {
       />,
     );
 
-    openMenu();
+    openSessionMenu(selected.fileName);
     expect(screen.getByRole("alert").textContent).toBe("bad.jsonl");
+  });
+
+  it("closes only the selected Session from the File menu", () => {
+    const selected = session("s1", "session-a.jsonl", 1_000);
+    const onCloseSession = vi.fn();
+    render(
+      <MenuBar
+        {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
+          onCloseSession,
+        })}
+      />,
+    );
+
+    openFileMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Close session" }));
+    expect(onCloseSession).toHaveBeenCalledWith(selected.id);
   });
 
   it("disables Close all sessions until something is open, then closes everything", () => {
     const onCloseAll = vi.fn();
     const { rerender } = render(<MenuBar {...baseProps({ onCloseAll })} />);
 
-    openMenu();
+    openFileMenu();
     const closeButton = screen.getByRole("button", { name: /Close all sessions/ });
     expect(closeButton).toHaveProperty("disabled", true);
 
@@ -195,22 +230,25 @@ describe("MenuBar", () => {
     expect(onCloseAll).toHaveBeenCalled();
   });
 
-  it("forwards files picked from Open files… to the caller", () => {
+  it("opens a new transcript from the filename menu", () => {
     const onFiles = vi.fn();
-    render(<MenuBar {...baseProps({ onFiles })} />);
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id, onFiles })} />);
 
-    openMenu();
-    const file = transcriptFile("session-a.jsonl", "{}\n");
-    fireEvent.change(screen.getByLabelText("Open files…"), { target: { files: fileListOf(file) } });
+    openSessionMenu(selected.fileName);
+    const file = transcriptFile("session-b.jsonl", "{}\n");
+    fireEvent.change(screen.getByLabelText("Open session…"), {
+      target: { files: fileListOf(file) },
+    });
 
-    expect(onFiles).toHaveBeenCalledWith([{ file, path: "session-a.jsonl" }]);
+    expect(onFiles).toHaveBeenCalledWith([{ file, path: "session-b.jsonl" }]);
   });
 
   it("forwards folders picked from Open folder… to the caller, reading webkitRelativePath", () => {
     const onFiles = vi.fn();
     render(<MenuBar {...baseProps({ onFiles })} />);
 
-    openMenu();
+    openFileMenu();
     const input = screen.getByLabelText("Open folder…") as HTMLInputElement;
     // The folder picker's directory attribute is applied through an untyped
     // spread (`webkitdirectory` is not in `lib.dom`), so a regression that
@@ -227,7 +265,7 @@ describe("MenuBar", () => {
   it("does not advertise a keyboard shortcut nothing in the app implements", () => {
     render(<MenuBar {...baseProps()} />);
 
-    openMenu();
+    openFileMenu();
     // No `metaKey`/`ctrlKey` handler exists anywhere in the app; a hint here
     // would send someone at the browser's own ⌘O/⌘W instead.
     expect(screen.queryByText("⌘O")).toBeNull();
@@ -236,20 +274,29 @@ describe("MenuBar", () => {
   });
 
   it("announces parsing progress and failures to a screen reader even while the menu is closed", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
     const { rerender } = render(
-      <MenuBar {...baseProps({ pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }] })} />,
+      <MenuBar
+        {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
+          pending: [{ id: "1", path: "a.jsonl", fileName: "a.jsonl" }],
+        })}
+      />,
     );
 
-    // The menu is closed (`openMenu` was never called), so only an
-    // always-mounted live region — not the menu's own rows — can carry this.
-    expect(screen.getByRole("button", { name: "File" }).getAttribute("aria-expanded")).toBe(
-      "false",
-    );
+    // The Session menu is closed, so only its always-mounted live region can
+    // carry this update.
+    expect(
+      screen.getByRole("button", { name: selected.fileName }).getAttribute("aria-expanded"),
+    ).toBe("false");
     expect(screen.getByText(/parsing 1 file/, { selector: "[aria-live]" })).toBeDefined();
 
     rerender(
       <MenuBar
         {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
           errors: [{ id: "1", path: "b.jsonl", fileName: "b.jsonl", message: "b.jsonl is empty." }],
         })}
       />,
@@ -260,9 +307,12 @@ describe("MenuBar", () => {
   it("gives each error row a stable key even when two failures share a path", () => {
     // Two entries with the same `path` (the same file dropped twice) must
     // not collide on a shared React key — each carries its own `id`.
+    const selected = session("s1", "session-a.jsonl", 45_000);
     render(
       <MenuBar
         {...baseProps({
+          sessions: [selected],
+          selectedId: selected.id,
           errors: [
             { id: "1", path: "dup.jsonl", fileName: "dup.jsonl", message: "dup.jsonl is empty." },
             { id: "2", path: "dup.jsonl", fileName: "dup.jsonl", message: "dup.jsonl is empty." },
@@ -271,7 +321,7 @@ describe("MenuBar", () => {
       />,
     );
 
-    openMenu();
+    openSessionMenu(selected.fileName);
     expect(screen.getAllByRole("alert")).toHaveLength(2);
   });
 
@@ -287,19 +337,21 @@ describe("MenuBar", () => {
         })}
       />,
     );
-    openMenu();
+    openSessionMenu("medium.jsonl");
 
     // A Demo Session is named by the manifest and says so, rather than showing
     // the file name it happens to be served under.
-    expect(screen.getByRole("button", { name: /^Medium session \(demo\)/ })).toBeDefined();
+    expect(sessionRow(/^Medium session \(demo\)/)).toBeDefined();
+    fireEvent.keyDown(document, { key: "Escape" });
 
+    openFileMenu();
     fireEvent.click(screen.getByRole("button", { name: "Load demo sessions" }));
     expect(onLoadDemo).toHaveBeenCalledTimes(1);
   });
 
   it("does not start a second demo load while one is in flight", () => {
     render(<MenuBar {...baseProps({ demoBusy: true })} />);
-    openMenu();
+    openFileMenu();
 
     expect(
       screen.getByRole("button", { name: "Load demo sessions" }).hasAttribute("disabled"),

@@ -1,19 +1,15 @@
 /**
- * The Workbench's top region: the wordmark, the File menu, and the standing
- * statement that nothing leaves the tab.
+ * The Workbench's top region: the wordmark, the File menu, static Session
+ * identity, and the active filename's Session menu.
  *
- * The File menu is where Sessions are opened and switched — Open files… and
- * Open folder… collect entries the same way the drop zone does
- * (`collectFileListEntries` / `collectDataTransferEntries`), and every open
- * Session is listed with its call count and peak so the grid can be switched
- * without a session sidebar.
- *
- * "Load demo sessions" is here too, so someone with no transcript has the
- * same way in once the empty state's drop zone is gone.
+ * The filename menu opens individual transcripts and switches among loaded
+ * Sessions. The File menu keeps project-folder import, Demo Sessions, and close
+ * actions. Both pickers feed the same `collectFileListEntries` path as the drop
+ * zone.
  */
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { type ContextSnapshot, peakMeasuredTotal, type Session } from "../domain/context.ts";
+import { peakMeasuredTotal, type Session } from "../domain/context.ts";
 import { collectFileListEntries, type PathedFile } from "./collect-files.ts";
 import { formatTokens } from "./format.ts";
 import { SessionHeader } from "./SessionHeader.tsx";
@@ -105,6 +101,32 @@ const PickerMenuItem = ({ label, hint, directory, onFiles, onPicked }: PickerMen
 };
 
 /**
+ * Shared open/close behavior for the two top-bar menus.
+ */
+const useDismissibleMenu = () => {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return { container, open, setOpen } as const;
+};
+
+/**
  * Props for {@link MenuBar}.
  */
 export type MenuBarProps = {
@@ -116,10 +138,6 @@ export type MenuBarProps = {
    * The Session the grid currently shows.
    */
   readonly selectedId: string | undefined;
-  /**
-   * The selected Session's Context Snapshot, when a Session is open.
-   */
-  readonly selectedSnapshot: ContextSnapshot | undefined;
   /**
    * Transcripts still parsing.
    */
@@ -160,57 +178,35 @@ export type MenuBarProps = {
 };
 
 /**
- * The File menu: open on click, closed by Escape or a click outside it.
+ * The filename button and menu for opening or switching Sessions.
  */
-const FileMenu = ({
+const SessionMenu = ({
+  selectedSession,
   sessions,
   selectedId,
   pending,
   errors,
   onFiles,
   onSelectSession,
-  onCloseAll,
-  onLoadDemo,
-  demoBusy,
   demoLabels,
-}: MenuBarProps) => {
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: globalThis.PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
+}: MenuBarProps & { readonly selectedSession: Session }) => {
+  const { container, open, setOpen } = useDismissibleMenu();
   const close = () => setOpen(false);
 
   return (
-    <div ref={container} className="relative">
+    <div ref={container} className="relative ml-auto min-w-0">
       <button
         type="button"
+        title={selectedSession.fileName}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${
-          open ? "bg-ui-panel-active text-ui-text" : "text-ui-text-secondary hover:bg-ui-panel"
+        className={`flex max-w-full min-w-0 items-center gap-1.5 rounded px-2 py-0.5 text-right text-ui-focus ${
+          open ? "bg-ui-panel-active" : "hover:bg-ui-panel"
         }`}
       >
-        File
-        {/* Purely visual, and `aria-hidden` so it never joins the button's
-            accessible name — visible without opening the menu, so a folder
-            drop's progress and failures are noticed rather than hidden
-            behind a click; the menu's own rows carry the accessible text. */}
+        <span className="truncate">{selectedSession.fileName}</span>
+        <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
         {pending.length === 0 ? null : (
           <span
             aria-hidden="true"
@@ -228,10 +224,6 @@ const FileMenu = ({
           </span>
         )}
       </button>
-      {/* The badges above are `aria-hidden` and only ever visible once the
-          menu is open, so this always-mounted live region is what tells a
-          screen-reader user a folder drop is still parsing or that files
-          failed — independent of whether the menu happens to be open. */}
       <span aria-live="polite" className="sr-only">
         {pending.length === 0
           ? ""
@@ -241,67 +233,38 @@ const FileMenu = ({
           : ` ${errors.length} file${errors.length === 1 ? "" : "s"} failed to parse.`}
       </span>
       {!open ? null : (
-        <div className="absolute top-full left-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
+        <div className="absolute top-full right-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
           <PickerMenuItem
-            label="Open files…"
+            label="Open session…"
             hint={undefined}
             directory={false}
             onFiles={onFiles}
             onPicked={close}
           />
-          <PickerMenuItem
-            label="Open folder…"
-            hint={undefined}
-            directory={true}
-            onFiles={onFiles}
-            onPicked={close}
-          />
-          <MenuItem
-            label="Load demo sessions"
-            hint={undefined}
-            checked={undefined}
-            disabled={demoBusy}
-            onClick={() => {
-              onLoadDemo();
-              close();
-            }}
-          />
           <div className="my-1 border-t border-ui-border" />
           <div className="px-3 py-1 text-[10px] tracking-wide text-ui-text-faint uppercase">
             Open sessions
           </div>
-          {/* The placeholder and status rows below stand in the session rows'
-              place, so they take the session rows' indent rather than the
-              section heading's. */}
-          {sessions.length === 0 ? (
-            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">none</div>
-          ) : (
-            sessions.map((session) => (
-              <MenuItem
-                key={session.id}
-                label={
-                  demoLabels.has(session.id)
-                    ? `${demoLabels.get(session.id)} (demo)`
-                    : session.fileName
-                }
-                hint={`${session.calls.length} · ${formatTokens(peakMeasuredTotal(session.calls))}`}
-                checked={session.id === selectedId}
-                disabled={false}
-                onClick={() => {
-                  onSelectSession(session.id);
-                  close();
-                }}
-              />
-            ))
-          )}
+          {sessions.map((session) => (
+            <MenuItem
+              key={session.id}
+              label={
+                demoLabels.has(session.id)
+                  ? `${demoLabels.get(session.id)} (demo)`
+                  : session.fileName
+              }
+              hint={`${session.calls.length} · ${formatTokens(peakMeasuredTotal(session.calls))}`}
+              checked={session.id === selectedId}
+              disabled={false}
+              onClick={() => {
+                onSelectSession(session.id);
+                close();
+              }}
+            />
+          ))}
           {pending.length === 0 ? null : (
             <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
               parsing {pending.length} file{pending.length === 1 ? "" : "s"}…
-            </div>
-          )}
-          {!demoBusy ? null : (
-            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
-              loading demo sessions…
             </div>
           )}
           {errors.length === 0 ? null : (
@@ -321,7 +284,79 @@ const FileMenu = ({
               ))}
             </>
           )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * The File menu: open on click, closed by Escape or a click outside it.
+ */
+const FileMenu = ({
+  sessions,
+  selectedId,
+  onFiles,
+  onCloseSession,
+  onCloseAll,
+  onLoadDemo,
+  demoBusy,
+}: MenuBarProps) => {
+  const { container, open, setOpen } = useDismissibleMenu();
+  const close = () => setOpen(false);
+
+  return (
+    <div ref={container} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${
+          open ? "bg-ui-panel-active text-ui-text" : "text-ui-text-secondary hover:bg-ui-panel"
+        }`}
+      >
+        File
+      </button>
+      {!open ? null : (
+        <div className="absolute top-full left-0 z-40 mt-1 w-[290px] overflow-hidden rounded-md border border-ui-border bg-ui-sunken py-1 shadow-lg">
+          <PickerMenuItem
+            label="Open folder…"
+            hint={undefined}
+            directory={true}
+            onFiles={onFiles}
+            onPicked={close}
+          />
+          <MenuItem
+            label="Load demo sessions"
+            hint={undefined}
+            checked={undefined}
+            disabled={demoBusy}
+            onClick={() => {
+              onLoadDemo();
+              close();
+            }}
+          />
+          {!demoBusy ? null : (
+            <div className="py-1.5 pr-3 pl-9 text-xs text-ui-text-faint">
+              loading demo sessions…
+            </div>
+          )}
           <div className="my-1 border-t border-ui-border" />
+          <MenuItem
+            label="Close session"
+            hint={undefined}
+            checked={undefined}
+            disabled={selectedId === undefined}
+            onClick={
+              selectedId === undefined
+                ? undefined
+                : () => {
+                    onCloseSession(selectedId);
+                    close();
+                  }
+            }
+          />
           <MenuItem
             label="Close all sessions"
             hint={undefined}
@@ -355,11 +390,10 @@ export const MenuBar = (props: MenuBarProps) => {
     >
       <span className="shrink-0 text-xs tracking-[0.18em] text-ui-text-faint uppercase">tviz</span>
       <FileMenu {...props} />
-      {selectedSession === undefined || props.selectedSnapshot === undefined ? null : (
+      {selectedSession === undefined ? null : (
         <SessionHeader
           session={selectedSession}
-          snapshot={props.selectedSnapshot}
-          onClose={() => props.onCloseSession(selectedSession.id)}
+          sessionMenu={<SessionMenu {...props} selectedSession={selectedSession} />}
         />
       )}
     </header>

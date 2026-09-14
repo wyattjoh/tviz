@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   type ContextSnapshot,
   emptyCategoryTokens,
@@ -37,9 +37,8 @@ const session: Session = {
 };
 
 /**
- * A Session with three API Calls and a distinct id/model/version, so the
- * bar's id, model, version, call index and timestamp can each be pinned
- * against a value nothing else in the fixture could produce by accident.
+ * A Session with a distinct id/model/version, so the header's static identity
+ * can be pinned against values nothing else in the fixture produces.
  */
 const identifiableSession: Session = {
   id: "00000000-0000-4000-8000-00000000ab12",
@@ -59,12 +58,11 @@ const identifiableSession: Session = {
 };
 
 describe("SessionHeader", () => {
-  it("carries the Session's id, model, CC version, call index and timestamp", () => {
+  it("carries static identity and leaves the Session menu at the right edge", () => {
     render(
       <SessionHeader
         session={identifiableSession}
-        snapshot={identifiableSession.calls[2] as ContextSnapshot}
-        onClose={vi.fn()}
+        sessionMenu={<button type="button">{identifiableSession.fileName}</button>}
       />,
     );
 
@@ -72,33 +70,19 @@ describe("SessionHeader", () => {
     expect(details.textContent).toContain(identifiableSession.id);
     expect(details.textContent).toContain("claude-opus-4-9");
     expect(details.textContent).toContain("cc 2.1.140");
-    // Call index is 1-based against the total ("call 3/3"), not the raw
-    // zero-based `ContextSnapshot.index` a reader would have to decode.
-    expect(details.textContent).toContain("call 3");
-    expect(details.textContent).toContain("/3");
-    expect(details.textContent).toContain(new Date("2026-01-15T09:30:00.000Z").toLocaleString());
     expect(details.lastElementChild?.textContent).toBe(identifiableSession.fileName);
   });
 
-  it("falls back to an em dash rather than blanking the row when a Call has no timestamp", () => {
+  it("leaves API Call state and close actions out of the header", () => {
     render(
       <SessionHeader
-        session={identifiableSession}
-        snapshot={identifiableSession.calls[0] as ContextSnapshot}
-        onClose={vi.fn()}
+        session={session}
+        sessionMenu={<button type="button">{session.fileName}</button>}
       />,
     );
 
     const details = screen.getByRole("region", { name: "Session" });
-    expect(details.textContent).toContain("call 1");
-    expect(details.textContent).toContain("—");
-  });
-
-  it("closes this Session, and only this one, when the close button is clicked", () => {
-    const onClose = vi.fn();
-    render(<SessionHeader session={session} snapshot={snapshot} onClose={onClose} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "close" }));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(details.textContent).not.toContain("call 1/1");
+    expect(screen.queryByRole("button", { name: /close/i })).toBeNull();
   });
 });

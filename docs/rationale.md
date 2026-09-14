@@ -67,12 +67,14 @@ with tab stops in it is a trap; and it stops animating under `prefers-reduced-mo
 cost is 110 KB on every first view and a preview thin enough — five API calls — that the
 loop reads as a slow pulse rather than a session filling up.
 
-**One compact top bar, not stacked file chrome.** The filename, model, Claude Code
-version and current API call used to occupy a Session strip below the File menu. That
-made identity clear, but it permanently took height away from the visualization. The
-same details now share the menu bar, with lower-priority metadata disappearing at narrow
-breakpoints and the active filename anchored at the right. The File menu remains a stable
-control on the left, while the grid gets the reclaimed row.
+**One compact top bar, not stacked file chrome.** File identity used to occupy a Session
+strip below the File menu. That made identity clear, but it permanently took height away
+from the visualization. The static details now share the menu bar, with lower-priority
+metadata disappearing at narrow breakpoints and the active filename anchored at the right.
+That filename is the Session switcher: its menu opens another transcript or selects one
+already loaded, while the File menu keeps folder import, demos, and close actions. API-call
+position stays in the Scrubber. The grid gets the reclaimed row without turning the header
+into a second transport.
 
 **A fixed-cell grid, not a treemap.** A treemap packs more into each pixel, but the grid is
 the picture Claude Code users already have in their heads, and because every cell is the
