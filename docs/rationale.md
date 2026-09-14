@@ -73,9 +73,9 @@ strip below the File menu. That made identity clear, but it permanently took hei
 from the visualization. The static details now share the menu bar, with lower-priority
 metadata disappearing at narrow breakpoints and the active filename anchored at the right.
 That filename opens the only file dropdown: it imports transcripts or folders, loads demos,
-switches among open Sessions, and closes them. With no Session selected, the same right-side
-control says “File” so demo mode and file import remain reachable. Its trigger and rows grow
-to 44px touch targets on phones while desktop keeps the compact treatment. API-call position
+switches among open Sessions, and closes them. With no Session selected, the dropdown is
+hidden because the landing panel already exposes file import and demo mode. Its trigger and
+rows grow to 44px touch targets on phones while desktop keeps the compact treatment. API-call position
 stays in the Scrubber. The grid gets the reclaimed row without turning the header into a
 second transport.
 

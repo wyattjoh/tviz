@@ -52,12 +52,6 @@ const baseProps = (overrides: Partial<MenuBarProps> = {}): MenuBarProps => ({
   ...overrides,
 });
 
-const openFileMenu = (): HTMLElement => {
-  const button = screen.getByRole("button", { name: "File" });
-  fireEvent.click(button);
-  return button;
-};
-
 const openSessionMenu = (fileName: string): HTMLElement => {
   const button = screen.getByRole("button", { name: fileName });
   fireEvent.click(button);
@@ -73,10 +67,17 @@ const sessionRow = (fileName: RegExp): HTMLElement => {
 };
 
 describe("MenuBar", () => {
-  it("opens the unified file dropdown and closes it on Escape", () => {
+  it("hides the file dropdown when no Session is selected", () => {
     render(<MenuBar {...baseProps()} />);
 
-    const button = openFileMenu();
+    expect(screen.queryByRole("button", { name: "File" })).toBeNull();
+  });
+
+  it("opens the selected Session's file dropdown and closes it on Escape", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id })} />);
+
+    const button = openSessionMenu(selected.fileName);
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("Open session…")).toBeDefined();
     expect(screen.getByText("Open folder…")).toBeDefined();
@@ -117,14 +118,15 @@ describe("MenuBar", () => {
   });
 
   it("closes on a click outside the menu", () => {
+    const selected = session("s1", "session-a.jsonl", 45_000);
     render(
       <div>
-        <MenuBar {...baseProps()} />
+        <MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id })} />
         <div data-testid="outside" />
       </div>,
     );
 
-    const button = openFileMenu();
+    const button = openSessionMenu(selected.fileName);
     fireEvent.pointerDown(screen.getByTestId("outside"));
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
@@ -231,19 +233,14 @@ describe("MenuBar", () => {
     expect(onCloseSession).toHaveBeenCalledWith(selected.id);
   });
 
-  it("disables Close all sessions until something is open, then closes everything", () => {
+  it("closes every open Session from the filename dropdown", () => {
     const onCloseAll = vi.fn();
-    const { rerender } = render(<MenuBar {...baseProps({ onCloseAll })} />);
-
-    openFileMenu();
-    const closeButton = screen.getByRole("button", { name: /Close all sessions/ });
-    expect(closeButton).toHaveProperty("disabled", true);
-
-    rerender(
-      <MenuBar
-        {...baseProps({ sessions: [session("s1", "session-a.jsonl", 1_000)], onCloseAll })}
-      />,
+    const selected = session("s1", "session-a.jsonl", 1_000);
+    render(
+      <MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id, onCloseAll })} />,
     );
+
+    openSessionMenu(selected.fileName);
     fireEvent.click(screen.getByRole("button", { name: /Close all sessions/ }));
     expect(onCloseAll).toHaveBeenCalled();
   });
@@ -264,9 +261,10 @@ describe("MenuBar", () => {
 
   it("forwards folders picked from Open folder… to the caller, reading webkitRelativePath", () => {
     const onFiles = vi.fn();
-    render(<MenuBar {...baseProps({ onFiles })} />);
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id, onFiles })} />);
 
-    openFileMenu();
+    openSessionMenu(selected.fileName);
     const input = screen.getByLabelText("Open folder…") as HTMLInputElement;
     // The folder picker's directory attribute is applied through an untyped
     // spread (`webkitdirectory` is not in `lib.dom`), so a regression that
@@ -281,9 +279,10 @@ describe("MenuBar", () => {
   });
 
   it("does not advertise a keyboard shortcut nothing in the app implements", () => {
-    render(<MenuBar {...baseProps()} />);
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(<MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id })} />);
 
-    openFileMenu();
+    openSessionMenu(selected.fileName);
     // No `metaKey`/`ctrlKey` handler exists anywhere in the app; a hint here
     // would send someone at the browser's own ⌘O/⌘W instead.
     expect(screen.queryByText("⌘O")).toBeNull();
@@ -368,8 +367,11 @@ describe("MenuBar", () => {
   });
 
   it("does not start a second demo load while one is in flight", () => {
-    render(<MenuBar {...baseProps({ demoBusy: true })} />);
-    openFileMenu();
+    const selected = session("s1", "session-a.jsonl", 45_000);
+    render(
+      <MenuBar {...baseProps({ sessions: [selected], selectedId: selected.id, demoBusy: true })} />,
+    );
+    openSessionMenu(selected.fileName);
 
     expect(
       screen.getByRole("button", { name: "Load demo sessions" }).hasAttribute("disabled"),

@@ -1,6 +1,6 @@
 /**
- * The Workbench's top region: the wordmark, static Session identity, and one
- * right-aligned file dropdown.
+ * The Workbench's top region: the wordmark and, while a Session is selected,
+ * its static identity and right-aligned file dropdown.
  *
  * The dropdown opens individual transcripts or folders, loads Demo Sessions,
  * switches among loaded Sessions, and closes Sessions. Both pickers feed the
@@ -180,7 +180,7 @@ export type MenuBarProps = {
 };
 
 /**
- * The single file dropdown, labeled by the selected Session when one is open.
+ * The file dropdown labeled by the selected Session.
  */
 const FileDropdown = ({
   selectedSession,
@@ -195,7 +195,7 @@ const FileDropdown = ({
   onLoadDemo,
   demoBusy,
   demoLabels,
-}: MenuBarProps & { readonly selectedSession: Session | undefined }) => {
+}: MenuBarProps & { readonly selectedSession: Session }) => {
   const { container, open, setOpen } = useDismissibleMenu();
   const close = () => setOpen(false);
 
@@ -203,19 +203,15 @@ const FileDropdown = ({
     <div ref={container} className="relative ml-auto min-w-0">
       <button
         type="button"
-        title={selectedSession?.fileName}
+        title={selectedSession.fileName}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         aria-expanded={open}
         aria-haspopup="menu"
         className={`flex min-h-11 max-w-full min-w-0 touch-manipulation items-center gap-1.5 rounded px-3 text-right text-sm md:min-h-0 md:px-2 md:py-0.5 md:text-xs ${
-          open
-            ? "bg-ui-panel-active text-ui-text"
-            : selectedSession === undefined
-              ? "text-ui-text-secondary hover:bg-ui-panel"
-              : "text-ui-focus hover:bg-ui-panel"
+          open ? "bg-ui-panel-active text-ui-text" : "text-ui-focus hover:bg-ui-panel"
         }`}
       >
-        <span className="truncate">{selectedSession?.fileName ?? "File"}</span>
+        <span className="truncate">{selectedSession.fileName}</span>
         <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
         {pending.length === 0 ? null : (
           <span
@@ -367,9 +363,7 @@ export const MenuBar = (props: MenuBarProps) => {
       className="flex min-w-0 items-center gap-3 border-b border-ui-border bg-ui-shell px-3 py-1.5"
     >
       <span className="shrink-0 text-xs tracking-[0.18em] text-ui-text-faint uppercase">tviz</span>
-      {selectedSession === undefined ? (
-        <FileDropdown {...props} selectedSession={undefined} />
-      ) : (
+      {selectedSession === undefined ? null : (
         <SessionHeader
           session={selectedSession}
           sessionMenu={<FileDropdown {...props} selectedSession={selectedSession} />}

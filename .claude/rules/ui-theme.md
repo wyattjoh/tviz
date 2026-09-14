@@ -141,8 +141,9 @@ control nobody can see; without it on the faded panel, an invisible layer coveri
 Workbench keeps its tab stops. Tests read which state the app is in off those attributes
 rather than off what is mounted.
 
-The menu bar sits *outside* the stack and stays sharp: the right-aligned file dropdown says
-“File” when no Session is selected, which is how a visitor reaches the Demo Sessions.
+The menu bar sits *outside* the stack and stays sharp. With no Session selected it shows only
+the wordmark; the drop panel already exposes file import and Demo Sessions, so the file
+dropdown stays hidden until a Session is open.
 
 Keep the Workbench layer at exactly the size and position the real one gets — no scaling, no
 inset, nothing that would show a layout the loaded view never has. `LandingPreview` uses the
@@ -165,7 +166,7 @@ Session count, and the file dropdown as its rightmost item. Lower-priority ident
 hide at narrow breakpoints so the filename keeps its space. The filename button opens the
 single dropdown for transcript and folder import, Demo Sessions, pending or failed load
 status, switching among open Sessions, and both close actions. When no Session is selected,
-the same right-aligned dropdown says “File.” API Call state stays in the Scrubber; the fill
+the dropdown is hidden. API Call state stays in the Scrubber; the fill
 meter and Context Window override stay in `ContextWindowPanel` under Categories. New
 per-Session state belongs in a rail panel, not back in the top bar.
 
@@ -190,8 +191,8 @@ Cell in the Inspector while the pinned Cell remains raised, and leaving the grid
 the pinned reading. Escape leaves the pin alone while a menu is open, so one keypress closes
 one thing.
 
-The menu bar (`src/ui/MenuBar.tsx`) uses one right-aligned file dropdown rather than splitting
-navigation across two menus. It carries Open session…, Open folder…, Load demo sessions,
+When a Session is selected, the menu bar (`src/ui/MenuBar.tsx`) uses one right-aligned file
+dropdown rather than splitting navigation across two menus. It carries Open session…, Open folder…, Load demo sessions,
 pending and failed file status, the list of open Sessions, Close session, and Close all
 sessions. A Demo Session shows its manifest name and "(demo)" rather than the file it is
 served as. The trigger and every actionable row use a 44px minimum height and larger text

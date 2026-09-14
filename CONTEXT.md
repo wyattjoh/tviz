@@ -101,11 +101,11 @@ The horizontal band under the Menu Bar naming the Session on screen — file nam
 _Avoid_: header, toolbar, breadcrumb
 
 **Menu Bar**:
-The top region of the Workbench, holding the wordmark and the File menu.
+The top region of the Workbench, holding the wordmark and, while a Session is selected, its identity and File menu.
 _Avoid_: navbar, toolbar
 
 **File menu**:
-The only way into the app besides a drop: Open files…, Open folder…, Load demo sessions, the list of open Sessions, and Close all sessions. It is where Sessions are switched, so there is no session sidebar.
+The selected Session's menu for opening more files or a folder, loading Demo Sessions, switching among open Sessions, and closing Sessions. It is hidden when no Session is selected because the empty state provides its own import and Demo Session actions. It is where Sessions are switched, so there is no session sidebar.
 _Avoid_: session list, sidebar, session picker
 
 **Cell Share**:

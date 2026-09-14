@@ -233,9 +233,9 @@ const App = () => {
         isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
       }`}
     >
-      {/* Outside the blur: the file dropdown is how someone with no transcript
-          reaches the Demo Sessions, so it stays sharp and reachable on the
-          landing page. */}
+      {/* Outside the blur: the wordmark stays sharp on the landing page, and
+          the selected Session's identity and file dropdown stay sharp once a
+          transcript is open. */}
       <MenuBar {...menuBarProps} />
 
       <div className="relative min-h-0">
