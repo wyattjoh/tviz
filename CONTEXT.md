@@ -93,7 +93,7 @@ A Cell blanked because its Category — or, for a Messages Cell, its Message Kin
 _Avoid_: removed cell, filtered-out cell, empty cell
 
 **Colour by Kind**:
-The legend switch that repaints Messages Cells with their Message Kind accents instead of the Messages Category accent. Other Categories are unaffected.
+The legend mode that distinguishes Messages as separately coloured and filterable Message Kinds instead of one Category accent. When it is off, Messages is presented and filtered only as one Category; other Categories are unaffected.
 _Avoid_: group by kind, kind mode
 
 **Inspector**:

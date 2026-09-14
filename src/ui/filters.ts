@@ -71,9 +71,14 @@ export const toggleMessageKind = (filters: GridFilters, kind: MessageKind): Grid
 
 /**
  * Switches Messages Cells between the Category accent and the Kind accents.
+ *
+ * Turning Kind colours off also clears the Kind filters: their controls leave
+ * the legend in Category mode, so keeping one active would blank Cells with no
+ * visible way to explain or reverse it.
  */
 export const withColourByKind = (filters: GridFilters, colourByKind: boolean): GridFilters => ({
   ...filters,
+  hiddenKinds: colourByKind ? filters.hiddenKinds : new Set<MessageKind>(),
   colourByKind,
 });
 

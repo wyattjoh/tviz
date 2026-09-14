@@ -14,7 +14,14 @@ import {
   type MessageKind,
 } from "../domain/context.ts";
 import { ContextLegend } from "./ContextLegend.tsx";
-import { ALL_SHOWN, type GridFilters, toggleCategory, toggleMessageKind } from "./filters.ts";
+import {
+  ALL_SHOWN,
+  type GridFilters,
+  toggleCategory,
+  toggleMessageKind,
+  withColourByKind,
+} from "./filters.ts";
+import { CATEGORY_FILL_CLASS, MESSAGE_KIND_FILL_CLASS } from "./theme.ts";
 
 const snapshot: ContextSnapshot = {
   index: 0,
@@ -55,6 +62,12 @@ const renderLegend = (
 
 const row = (name: RegExp): HTMLElement => screen.getByRole("button", { name });
 
+const swatchClass = (name: RegExp): string =>
+  row(name).querySelector("span[aria-hidden='true']")?.getAttribute("class") ?? "";
+
+const labelClass = (name: RegExp): string =>
+  row(name).querySelectorAll("span")[1]?.getAttribute("class") ?? "";
+
 /**
  * The row around a button — where the pointer handlers live, so that a
  * disabled row still describes itself.
@@ -78,30 +91,66 @@ describe("ContextLegend", () => {
     expect(screen.getByText("150.0k")).toBeDefined();
   });
 
-  it("expands Messages into its Message Kinds, which sum to the Category", () => {
+  it("expands Messages into coloured Message Kinds without giving Messages a colour", () => {
     render(renderLegend());
 
     for (const kind of MESSAGE_KIND_ORDER) {
-      expect(row(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)).textContent).toBeDefined();
+      const kindName = new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`);
+      expect(row(kindName).textContent).toBeDefined();
+      expect(swatchClass(kindName)).toContain(MESSAGE_KIND_FILL_CLASS[kind]);
     }
     expect(row(/^Tool result/).textContent).toContain("7.0k");
     expect(row(/^Messages/).textContent).toContain("18.0k");
+    expect(swatchClass(/^Messages/)).not.toContain(CATEGORY_FILL_CLASS.messages);
   });
 
-  it("explains that System is derived rather than logged, but only on hover", () => {
+  it("shows Messages as one coloured row when colour-by-Kind is off", () => {
+    render(renderLegend(withColourByKind(ALL_SHOWN, false)));
+
+    for (const kind of MESSAGE_KIND_ORDER) {
+      expect(
+        screen.queryByRole("button", { name: new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`) }),
+      ).toBeNull();
+    }
+    expect(swatchClass(/^Messages/)).toContain(CATEGORY_FILL_CLASS.messages);
+  });
+
+  it("gives filter rows phone-sized targets without enlarging the desktop rail", () => {
+    render(renderLegend());
+
+    expect(row(/^System/).className).toContain("min-h-11");
+    expect(row(/^System/).className).toContain("touch-manipulation");
+    expect(row(/^System/).className).toContain("md:min-h-0");
+    expect(row(/^System/).className).toContain("text-base");
+    expect(swatchClass(/^System/)).toContain("h-4");
+    expect(row(/^Tool result/).className).toContain("min-h-11");
+    expect(row(/^Tool result/).className).toContain("text-sm");
+    expect(row(/^Tool result/).className).toContain("md:text-[11px]");
+    expect(swatchClass(/^Tool result/)).toContain("h-4");
+  });
+
+  it("lets Category names use the available row width instead of truncating them", () => {
+    render(renderLegend());
+
+    expect(labelClass(/^Custom agents/)).toContain("flex-1");
+    expect(labelClass(/^Custom agents/)).not.toContain("truncate");
+    expect(labelClass(/^Memory files/)).not.toContain("truncate");
+  });
+
+  it("explains that System is derived, but only for a hover-capable pointer", () => {
     render(renderLegend());
     // Nothing is described until a row is pointed at: the rail is a column of
     // numbers, and six standing descriptions is what pushed them off-screen.
     expect(screen.queryByRole("tooltip")).toBeNull();
 
-    fireEvent.mouseOver(rowItem(/^System/));
+    fireEvent.pointerEnter(rowItem(/^System/), { pointerType: "mouse" });
 
     expect(screen.getByRole("tooltip").textContent).toContain(
       "system prompt, built-in tool schemas and root CLAUDE.md",
     );
     expect(screen.getByRole("tooltip").textContent).toContain("derived remainder");
 
-    fireEvent.mouseOut(rowItem(/^System/));
+    fireEvent.pointerLeave(rowItem(/^System/), { pointerType: "mouse" });
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
@@ -109,46 +158,78 @@ describe("ContextLegend", () => {
     render(renderLegend());
 
     for (const category of CATEGORY_ORDER) {
-      fireEvent.mouseOver(rowItem(new RegExp(`^${CATEGORY_LABELS[category]}`)));
+      fireEvent.pointerEnter(rowItem(new RegExp(`^${CATEGORY_LABELS[category]}`)), {
+        pointerType: "mouse",
+      });
       expect
         .soft(screen.getByRole("tooltip").textContent)
         .toContain(CATEGORY_DESCRIPTIONS[category]);
     }
     for (const kind of MESSAGE_KIND_ORDER) {
-      fireEvent.mouseOver(rowItem(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)));
+      fireEvent.pointerEnter(rowItem(new RegExp(`^${MESSAGE_KIND_LABELS[kind]}`)), {
+        pointerType: "mouse",
+      });
       expect
         .soft(screen.getByRole("tooltip").textContent)
         .toContain(MESSAGE_KIND_DESCRIPTIONS[kind]);
     }
 
     const freeRow = screen.getByText("Free space").closest("li") as HTMLElement;
-    fireEvent.mouseOver(freeRow);
+    fireEvent.pointerEnter(freeRow, { pointerType: "mouse" });
     expect(screen.getByRole("tooltip").textContent).toContain(FREE_SPACE_DESCRIPTION);
   });
 
   it("describes a row on keyboard focus, and points the row at what describes it", () => {
     render(renderLegend());
+    const skills = row(/^Skills/);
+    // jsdom has no input-modality heuristic, so say this focus came from the
+    // keyboard — the condition browsers expose through `:focus-visible`.
+    const matches = skills.matches.bind(skills);
+    vi.spyOn(skills, "matches").mockImplementation((selector) =>
+      selector === ":focus-visible" ? true : matches(selector),
+    );
 
-    fireEvent.focus(row(/^Skills/));
+    fireEvent.focus(skills);
 
     const card = screen.getByRole("tooltip");
     expect(card.textContent).toContain(CATEGORY_DESCRIPTIONS.skills);
     // The card is the row's description rather than a floating aside, so a
     // screen reader reads it with the row instead of never reaching it.
-    expect(row(/^Skills/).getAttribute("aria-describedby")).toBe(card.getAttribute("id"));
+    expect(skills.getAttribute("aria-describedby")).toBe(card.getAttribute("id"));
 
-    fireEvent.blur(row(/^Skills/));
+    fireEvent.blur(skills);
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("does not turn a touch tap into a floating description", () => {
+    const onToggleCategory = vi.fn();
+    render(renderLegend(ALL_SHOWN, { onToggleCategory }));
+    const skills = row(/^Skills/);
+
+    fireEvent.pointerEnter(rowItem(/^Skills/), { pointerType: "touch" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    // Pointer-focused buttons are not `:focus-visible` in a browser. Stub that
+    // browser heuristic because jsdom treats every focused button as visible.
+    const matches = skills.matches.bind(skills);
+    vi.spyOn(skills, "matches").mockImplementation((selector) =>
+      selector === ":focus-visible" ? false : matches(selector),
+    );
+    fireEvent.focus(skills);
+    fireEvent.click(skills);
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(onToggleCategory).toHaveBeenCalledWith("skills");
   });
 
   it("describes only one row at a time, keeping the row the pointer moved onto", () => {
     render(renderLegend());
 
-    fireEvent.mouseOver(rowItem(/^Skills/));
-    fireEvent.mouseOver(rowItem(/^MCP/));
+    fireEvent.pointerEnter(rowItem(/^Skills/), { pointerType: "mouse" });
+    fireEvent.pointerEnter(rowItem(/^MCP/), { pointerType: "mouse" });
     // The pointer enters the next row before it leaves the last, so a stale
     // leave must not blank the card that just opened.
-    fireEvent.mouseOut(rowItem(/^Skills/));
+    fireEvent.pointerLeave(rowItem(/^Skills/), { pointerType: "mouse" });
 
     const cards = screen.getAllByRole("tooltip");
     expect(cards.length).toBe(1);
@@ -158,9 +239,9 @@ describe("ContextLegend", () => {
   it("still says what a Message Kind counts while its Category is hidden", () => {
     render(renderLegend(toggleCategory(ALL_SHOWN, "messages")));
 
-    // The row's own button is disabled and fires no mouse events, so the card
+    // The row's own button is disabled and fires no pointer events, so the card
     // has to hang off the row rather than the control.
-    fireEvent.mouseOver(rowItem(/^Tool result/));
+    fireEvent.pointerEnter(rowItem(/^Tool result/), { pointerType: "mouse" });
 
     const card = screen.getByRole("tooltip");
     expect(card.textContent).toContain(MESSAGE_KIND_DESCRIPTIONS.toolResult);

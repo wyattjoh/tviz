@@ -111,13 +111,15 @@ geometry cannot drift between the interface and the landing state that claims to
 
 ## Touch
 
-`html` carries `touch-action: manipulation` (`src/index.css`). That drops the
-double-tap-to-zoom gesture and with it the ~300ms delay a browser holds every tap for while
-it waits for a second one — felt on every Cell, since the grid is a field of small targets.
-Pinch-zoom and panning are untouched: do **not** reach for `user-scalable=no` on the
-viewport meta, which buys the same thing by taking zoom away from people who need it. The
-Scrubber's chart opts further out with `touch-none`, because dragging it must not scroll
-the page.
+`html` carries `touch-action: manipulation` (`src/index.css`) as the viewport baseline.
+That drops the double-tap-to-zoom gesture and with it the delay a browser may hold a tap for
+while it waits for a second one. **A nested scroll container is a gesture boundary:** a
+control inside one computes to `touch-action: auto` unless it carries `touch-manipulation`
+itself. Put that utility directly on rapid-tap controls inside `ScrollArea`; the legend rows
+do this so fast taps are clicks rather than candidates for double-tap handling. Pinch-zoom
+and panning remain available: do **not** reach for `user-scalable=no` on the viewport meta,
+which buys the same thing by taking zoom away from people who need it. The Scrubber's chart
+opts further out with `touch-none`, because dragging it must not scroll the page.
 
 ## The landing page
 
@@ -222,16 +224,20 @@ Messages before it asks about the Kind, and the legend disables the Kind rows wh
 Category is off. A row's `aria-pressed` and its filled swatch both promise "these Cells are
 drawn", so a Kind may not claim to be shown while every one of its Cells is blanked.
 
-A legend row says what it counts in a card that floats under it while it is hovered or
-focused — the one floating layer in the rail, and not a contradiction of the docked
-Inspector below: a Cell's contents are read and compared, while a row's description is a
-one-line reminder of what the bucket means and does not earn permanent rail height. The
-copy lives in `src/domain/context.ts` (`CATEGORY_DESCRIPTIONS`,
+A legend row says what it counts in a card that floats under it while it is hovered with a
+hover-capable pointer or receives keyboard-visible focus — the one floating layer in the
+rail, and not a contradiction of the docked Inspector below: a Cell's contents are read and
+compared, while a row's description is a one-line reminder of what the bucket means and
+does not earn permanent rail height. A touch tap only toggles the row; never turn the
+synthetic hover or pointer focus from that tap into a floating card over the phone controls.
+The copy lives in `src/domain/context.ts` (`CATEGORY_DESCRIPTIONS`,
 `MESSAGE_KIND_DESCRIPTIONS`, `FREE_SPACE_DESCRIPTION`) so the words the legend uses for a
 Category are the words `CONTEXT.md` defines it with. The card's pointer handlers hang off
-the row, not its button — a disabled Message Kind row fires no mouse events of its own and
+the row, not its button — a disabled Message Kind row fires no pointer events of its own and
 still has something to say — and it is `pointer-events-none` so it never swallows the hover
-of the row it covers.
+of the row it covers. Filter controls are at least 44px tall below `md`, with a 16px swatch
+and labels that take the available width and wrap rather than truncate; from `md` up they
+return to the compact desktop rail spacing.
 
 The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell Share** —
 the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
@@ -247,8 +253,10 @@ Scrubber rebuilds the layout. Grid Cells are buttons on a roving tabindex under 
 
 `ALL_SHOWN` opens with `colourByKind` **on**: "how much of this is tool output" is the
 question a Session is usually opened with, and it cannot be read off a grid where every
-Messages Cell is one blue. The legend checkbox turns it off; the Category accent is the
-fallback, not the default.
+Messages Cell is one blue. In that mode the Message Kind rows own the colour swatches and
+the Messages row has no swatch of its own. Turning the checkbox off folds those Kind rows
+away, restores the Messages Category swatch and clears hidden-Kind filters so no invisible
+control keeps Cells blanked. The Category accent is the fallback, not the default.
 
 The Scrubber is a stacked-area chart of Category totals over every API Call, dragged to
 scrub, with transport controls, a 0.5x-4x speed control and a range input for keyboard

@@ -1,7 +1,7 @@
 /**
  * Legend and filters for the grid: tokens and percent of the Context Window per
- * Category, with Messages expanded into its Message Kinds, ending with the
- * free-space line `/context` shows.
+ * Category, with Messages expanded into its Message Kinds while colour-by-Kind
+ * mode is active, ending with the free-space line `/context` shows.
  *
  * Every row is also its own filter. Toggling one blanks that Category's or that
  * Message Kind's Cells in place — it never re-flows the grid and it never
@@ -10,7 +10,9 @@
  * counted, so the percentages two Sessions are compared on stay stable.
  *
  * Every row also says what it counts, in a card that floats under it while it
- * is hovered or focused. The copy lives with the vocabulary in
+ * is hovered with a hover-capable pointer or receives keyboard-visible focus.
+ * Touch taps only toggle the row: they must not leave a description floating
+ * over the larger phone controls. The copy lives with the vocabulary in
  * `src/domain/context.ts`, not here, so the words the legend uses for a
  * Category are the words the domain uses for it.
  */
@@ -82,9 +84,12 @@ type SwatchProps = {
   readonly small: boolean;
 };
 
+const swatchSizeClass = (small: boolean): string =>
+  small ? "h-4 w-4 md:h-2 md:w-2" : "h-4 w-4 md:h-2.5 md:w-2.5";
+
 const Swatch = ({ fillClass, ringClass, hidden, small }: SwatchProps) => (
   <span
-    className={`inline-block shrink-0 rounded-[2px] ${small ? "h-2 w-2" : "h-2.5 w-2.5"} ${
+    className={`inline-block shrink-0 rounded-[2px] ${swatchSizeClass(small)} ${
       hidden ? `ring-1 ring-inset ${ringClass}` : fillClass
     }`}
     aria-hidden="true"
@@ -92,7 +97,7 @@ const Swatch = ({ fillClass, ringClass, hidden, small }: SwatchProps) => (
 );
 
 /**
- * What a row counts, revealed while that row is hovered or focused.
+ * What a row counts, revealed on hover-capable pointers or keyboard focus.
  *
  * The card floats over the rows below rather than pushing them down: the legend
  * is a column of numbers read against each other, and re-flowing it under the
@@ -155,6 +160,7 @@ type FilterRowProps = {
   readonly disabled: boolean;
   readonly disabledReason: string | undefined;
   readonly small: boolean;
+  readonly swatchVisible: boolean;
   readonly onToggle: () => void;
 };
 
@@ -172,18 +178,22 @@ const FilterRow = ({
   disabled,
   disabledReason,
   small,
+  swatchVisible,
   onToggle,
 }: FilterRowProps) => (
   // Laid out for the 340px rail: the description floats under its row rather
   // than sitting beside it, so the numbers stay in their columns.
   //
-  // The pointer handlers ride on the `li` rather than the button because a
-  // disabled button fires no mouse events of its own, and a Message Kind row
-  // whose Category is hidden still has something to say about what it counts.
+  // Pointer handlers ride on the `li` rather than the button because a disabled
+  // button fires no pointer events of its own, and a Message Kind row whose
+  // Category is hidden still has something to say about what it counts. Touch
+  // is excluded explicitly: a tap is the toggle gesture, not synthetic hover.
   <li
     className="relative"
-    onMouseEnter={() => onDescribe(true)}
-    onMouseLeave={() => onDescribe(false)}
+    onPointerEnter={(event) => {
+      if (event.pointerType !== "touch") onDescribe(true);
+    }}
+    onPointerLeave={() => onDescribe(false)}
   >
     <button
       type="button"
@@ -191,15 +201,21 @@ const FilterRow = ({
       aria-pressed={!hidden}
       disabled={disabled}
       aria-describedby={described ? descriptionId : undefined}
-      onFocus={() => onDescribe(true)}
+      onFocus={(event) => {
+        if (event.currentTarget.matches(":focus-visible")) onDescribe(true);
+      }}
       onBlur={() => onDescribe(false)}
-      className={`flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-ui-panel disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+      className={`flex min-h-11 w-full touch-manipulation cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-ui-panel active:bg-ui-panel disabled:cursor-not-allowed disabled:hover:bg-transparent md:min-h-0 md:items-baseline md:px-1 md:py-0.5 ${
         hidden ? "opacity-60" : ""
-      } ${small ? "text-[11px]" : "text-xs"}`}
+      } ${small ? "text-sm md:text-[11px]" : "text-base md:text-xs"}`}
     >
-      <Swatch fillClass={fillClass} ringClass={ringClass} hidden={hidden} small={small} />
+      {swatchVisible ? (
+        <Swatch fillClass={fillClass} ringClass={ringClass} hidden={hidden} small={small} />
+      ) : (
+        <span className={`shrink-0 ${swatchSizeClass(small)}`} aria-hidden="true" />
+      )}
       <span
-        className={`shrink-0 truncate ${small ? "w-[5.5rem]" : "w-24"} ${
+        className={`min-w-0 flex-1 leading-tight ${
           hidden ? "text-ui-text-muted line-through" : "text-ui-text-secondary"
         }`}
       >
@@ -250,7 +266,7 @@ export const ContextLegend = ({
 
   return (
     <div>
-      <ul className="space-y-0.5">
+      <ul className="space-y-1 md:space-y-0.5">
         {CATEGORY_ORDER.map((category) => (
           <Fragment key={category}>
             <FilterRow
@@ -267,13 +283,14 @@ export const ContextLegend = ({
               disabled={false}
               disabledReason={undefined}
               small={false}
+              swatchVisible={category !== "messages" || !filters.colourByKind}
               onToggle={() => onToggleCategory(category)}
             />
             {/* Messages is the one Category with an inside: its Kinds hang off
                 its row with toggles of their own. */}
-            {category === "messages" ? (
+            {category === "messages" && filters.colourByKind ? (
               <li>
-                <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-ui-border pl-2">
+                <ul className="mt-1 ml-3 space-y-1 border-l border-ui-border pl-2 md:mt-0.5 md:space-y-0.5">
                   {MESSAGE_KIND_ORDER.map((kind) => (
                     <FilterRow
                       key={kind}
@@ -290,6 +307,7 @@ export const ContextLegend = ({
                       disabled={messagesHidden}
                       disabledReason={messagesHidden ? MESSAGES_HIDDEN_HINT : undefined}
                       small
+                      swatchVisible
                       onToggle={() => onToggleMessageKind(kind)}
                     />
                   ))}
@@ -305,8 +323,10 @@ export const ContextLegend = ({
             description would add a tab stop that does nothing. */}
         <li
           className="relative"
-          onMouseEnter={() => describe("free")(true)}
-          onMouseLeave={() => describe("free")(false)}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== "touch") describe("free")(true);
+          }}
+          onPointerLeave={() => describe("free")(false)}
         >
           <div className="flex items-baseline gap-2 px-1 py-0.5 text-xs opacity-70">
             <span
@@ -332,7 +352,7 @@ export const ContextLegend = ({
         </li>
       </ul>
 
-      <label className="mt-2 flex items-center gap-2 px-1 text-[11px] text-ui-text-muted">
+      <label className="mt-2 flex min-h-11 items-center gap-2 px-2 text-sm text-ui-text-muted md:min-h-0 md:px-1 md:text-[11px]">
         <input
           type="checkbox"
           checked={filters.colourByKind}

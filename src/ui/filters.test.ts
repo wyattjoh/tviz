@@ -65,6 +65,14 @@ describe("GridFilters", () => {
     expect(withColourByKind(ALL_SHOWN, true).colourByKind).toBe(true);
     expect(withColourByKind(withColourByKind(ALL_SHOWN, true), false).colourByKind).toBe(false);
   });
+
+  it("clears hidden Kind filters when their rows leave the legend", () => {
+    const withHiddenKind = toggleMessageKind(ALL_SHOWN, "toolResult");
+    const byCategory = withColourByKind(withHiddenKind, false);
+
+    expect(byCategory.hiddenKinds.size).toBe(0);
+    expect(isCellHidden(cellOf("messages", "toolResult"), byCategory)).toBe(false);
+  });
 });
 
 describe("isCellHidden", () => {
