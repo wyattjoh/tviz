@@ -8,8 +8,9 @@
  * page's blurred preview fill the same one.
  *
  * **From `md` up** the body is a two-column grid: grid pane on the flexible
- * left, 340px rail on the right, with the Inspector and the Scrubber as
- * full-width rows spanning beneath both.
+ * left and a 340px sidebar on the right. Expandable Legend and Inspector
+ * sections occupy the top and bottom of the sidebar, while the Scrubber spans
+ * both columns.
  *
  * **Below `md` the grid pane is the whole body and never changes size.** The
  * same three regions become overlays floating on top of it, raised by a **tab
@@ -35,8 +36,8 @@
  * border is that edge. The rail drops its border from `md` up, where it is a
  * column beside the grid rather than a pane under it.
  *
- * Two pieces of state, both about the shell rather than a Session: which pane
- * the tab bar has raised, and whether the Inspector's desktop drawer is folded.
+ * Three pieces of state, all about the shell rather than a Session: which pane
+ * the tab bar has raised, and whether either desktop sidebar section is folded.
  * `revealInspector` raises the Inspector when a caller has put something in it
  * worth reading — pinning a Cell fills it, and a phone has no hover, so pin is
  * the only gesture that does.
@@ -58,7 +59,8 @@ export type WorkbenchProps = {
    */
   readonly rail: ReactNode;
   /**
-   * The Inspector, its own region rather than a panel inside the rail.
+   * The Inspector: a separate phone Info Pane that docks at the bottom of the
+   * desktop sidebar.
    */
   readonly inspector: ReactNode;
   /**
@@ -197,11 +199,14 @@ export const Workbench = ({
   // Stacking them would put two overlays over the same corner of the grid.
   // `undefined` is "all lowered", which is how a phone starts.
   const [openPane, setOpenPane] = useState<InfoPane | undefined>(undefined);
-  // Desktop only, and independent: from `md` up all three regions are laid out
-  // rather than raised, so the Inspector's own header is what collapses it.
+  // Desktop only, and independent: from `md` up the Legend and Inspector are
+  // sidebar sections with their own collapse controls.
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const railId = useId();
+  const legendBodyId = useId();
   const inspectorId = useId();
+  const inspectorBodyId = useId();
   const scrubberId = useId();
 
   const togglePane = (pane: InfoPane) =>
@@ -245,7 +250,8 @@ export const Workbench = ({
   return (
     // The one positioning context. Below `md` it is a single full-height
     // region and every panel floats inside it; from `md` up it is the
-    // two-column body with the Inspector and Scrubber spanning beneath.
+    // two-column body with the Inspector docked in the sidebar and the
+    // Scrubber spanning beneath both columns.
     // `grid-cols-[minmax(0,1fr)]` rather than an implicit column: an implicit
     // track is `auto`, which floors at its items' min-content and would let one
     // unbreakable string widen the page.
@@ -254,7 +260,7 @@ export const Workbench = ({
       // The `md:` reset is written out rather than built from
       // `OBSCURED_BOTTOM`: Tailwind scans source text for class names, so a
       // template literal produces a class it never generates.
-      className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1fr)_auto_auto] md:[--tviz-obscured-bottom:0px]"
+      className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1fr)_auto] md:[--tviz-obscured-bottom:0px]"
     >
       <main
         aria-label="Context grid"
@@ -270,67 +276,97 @@ export const Workbench = ({
         </div>
       </main>
 
-      {/* The scroll lives on the inner element, not on the `<aside>`. The
-            fade sits *above* the pane's top edge, so an `overflow` on the same
-            element that carries it clips it away — which is why this one pane
-            went without a fade while the other two, which have no overflow, had
-            theirs. */}
-      <aside
-        id={railId}
-        aria-label="Legend and Context Window"
-        ref={railRef}
-        style={{
-          display: openPane === "legend" ? "flex" : undefined,
-          flexDirection: "column",
-        }}
-        className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-11 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:col-start-2 md:row-start-1 md:flex md:max-h-none md:border-t-0`}
-      >
-        <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
-        <ScrollArea
-          className="flex min-h-0 flex-1 flex-col"
-          innerClassName="flex flex-col gap-2 p-2 md:gap-3 md:p-3"
+      {/* Below `md`, `contents` leaves the rail and Inspector as sibling Info
+            Panes positioned against the Workbench. From `md` up it becomes the
+            fixed-width sidebar that stacks the scrollable rail over the
+            Inspector. The same elements serve both layouts. */}
+      <div className="contents md:col-start-2 md:row-start-1 md:flex md:min-h-0 md:min-w-0 md:flex-col">
+        {/* The scroll lives on the inner element, not on the `<aside>`. The
+              fade sits *above* the pane's top edge, so an `overflow` on the same
+              element that carries it clips it away. */}
+        <aside
+          id={railId}
+          aria-label="Legend and Context Window"
+          ref={railRef}
+          style={{
+            display: openPane === "legend" ? "flex" : undefined,
+            flexDirection: "column",
+          }}
+          className={`${openPane === "legend" ? "" : "hidden"} absolute inset-x-0 z-30 min-h-0 min-w-0 bottom-11 max-h-[35vh] border-t border-ui-border bg-ui-sunken md:static md:bottom-auto md:z-auto md:flex md:max-h-none md:border-t-0 ${legendCollapsed ? "md:shrink-0" : "md:flex-1"}`}
         >
-          {rail}
-        </ScrollArea>
-      </aside>
+          {/* Mobile uses the Legend tab instead; this header only controls the
+                top-level desktop sidebar section. */}
+          <button
+            type="button"
+            onClick={() => setLegendCollapsed((wasCollapsed) => !wasCollapsed)}
+            aria-expanded={!legendCollapsed}
+            aria-controls={legendBodyId}
+            className="hidden w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase hover:text-ui-text md:flex"
+          >
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 transition-transform ${
+                legendCollapsed ? "-rotate-90" : ""
+              }`}
+              aria-hidden="true"
+            />
+            Legend
+          </button>
+          <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
+          <div
+            id={legendBodyId}
+            className={`flex min-h-0 flex-1 ${legendCollapsed ? "md:hidden" : ""}`}
+          >
+            <ScrollArea
+              className="flex min-h-0 flex-1 flex-col"
+              innerClassName="flex flex-col gap-2 p-2 md:gap-3 md:p-3 md:pt-0"
+            >
+              {rail}
+            </ScrollArea>
+          </div>
+        </aside>
 
-      {/* Its own region rather than a panel inside the rail: a full-width
-            band under the grid from `md` up, an overlay on a phone. */}
-      <section
-        id={inspectorId}
-        aria-label="Inspector"
-        ref={inspectorRef}
-        className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
-      >
-        {/* The desktop header is this section's own collapse control, and it
-              keeps a chevron: from `md` up this really is a drawer, and folding
-              it does give its height back to the grid. On a phone the tab bar
-              carries the state instead, so the header is `md:flex`. */}
-        <button
-          type="button"
-          onClick={() => setInspectorCollapsed((wasCollapsed) => !wasCollapsed)}
-          aria-expanded={!inspectorCollapsed}
-          aria-controls={inspectorId}
-          className="hidden w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase hover:text-ui-text md:flex"
+        {/* A separate overlay on a phone, then the expandable bottom section
+              of the desktop sidebar. */}
+        <section
+          id={inspectorId}
+          aria-label="Inspector"
+          ref={inspectorRef}
+          className={`${openPane === "inspector" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:mt-auto md:block md:shrink-0`}
         >
-          <ChevronDown
-            className={`h-3 w-3 shrink-0 transition-transform ${
-              inspectorCollapsed ? "-rotate-90" : ""
-            }`}
-            aria-hidden="true"
-          />
-          Inspector
-        </button>
-        {/* Collapsed is desktop-only: on a phone the section is raised or it
-              is not, so the body always shows when the tab is active. */}
-        <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
-        <div className={`p-3 md:pt-0 ${inspectorCollapsed ? "md:hidden" : ""}`}>{inspector}</div>
-      </section>
+          {/* The desktop header is this section's own collapse control. On a
+                phone the tab bar carries the state instead, so the header only
+                appears from `md` up. */}
+          <button
+            type="button"
+            onClick={() => setInspectorCollapsed((wasCollapsed) => !wasCollapsed)}
+            aria-expanded={!inspectorCollapsed}
+            aria-controls={inspectorBodyId}
+            className="hidden w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wide text-ui-text-muted uppercase hover:text-ui-text md:flex"
+          >
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 transition-transform ${
+                inspectorCollapsed ? "-rotate-90" : ""
+              }`}
+              aria-hidden="true"
+            />
+            Inspector
+          </button>
+          {/* Collapsed is desktop-only: on a phone the section is raised or it
+                is not, so the body always shows when the tab is active. */}
+          <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
+          <div
+            id={inspectorBodyId}
+            className={`p-3 md:pt-0 ${inspectorCollapsed ? "md:hidden" : ""}`}
+          >
+            {inspector}
+          </div>
+        </section>
+      </div>
 
       <div
         id={scrubberId}
         ref={scrubberRef}
-        className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-3 md:block`}
+        className={`${openPane === "scrubber" ? "" : "hidden"} absolute inset-x-0 bottom-11 z-30 border-t border-ui-border bg-ui-sunken md:static md:z-auto md:col-span-2 md:row-start-2 md:block`}
       >
         <ScrollFade shown={gridHasMoreBelow === true} className="md:hidden" />
         {scrubber}

@@ -57,9 +57,11 @@ The main view is the **Workbench** shell the throwaway UI prototype settled on (
 `wyattjoh/ui-prototype`; see its `src/prototype/README.md`): one top bar carrying the file
 dropdown and active Session details, then four slotted regions — grid pane, right rail,
 Inspector, and Scrubber inside the shell. From `md` up the body
-is `minmax(0,1fr)_340px`: the grid and settings rail share the first row, then the Inspector
-and Scrubber each span both columns below them. The grid pane is the scroll container, and
-both of its dimensions drive `ContextGrid`. Fill a region; do not restructure the shell.
+is `minmax(0,1fr)_340px`: the grid fills the left side, while the right sidebar stacks an
+expandable Legend section over the expandable Inspector. The Legend body owns the scrollable
+settings rail. The Scrubber spans both columns below them. The grid pane is the scroll
+container, and both of its dimensions drive
+`ContextGrid`. Fill a region; do not restructure the shell.
 
 **Below `md` the grid pane keeps the whole body and the rail, Inspector, and Scrubber become
 three mutually exclusive Info Panes floating over its bottom edge.** A phone-only tab bar
@@ -71,8 +73,9 @@ plus the measured open-pane height through `--tviz-obscured-bottom`, so the last
 scrolled clear without changing the pane size used by `cell-fit.ts`.
 
 The two layouts reuse the *same elements* — `absolute md:static` — rather than rendering a
-second shell. The same `<aside>` is the Legend pane on a phone and the right rail on desktop;
-the same Inspector and Scrubber are overlays below `md` and full-width rows from `md` up.
+second shell. The same `<aside>` is the Legend pane on a phone and the expandable upper
+section of the desktop sidebar; the same Inspector is a phone overlay and the expandable
+bottom section. The Scrubber is an overlay below `md` and a full-width row from `md` up.
 `LoadedSession` and `LandingPreview` therefore fill one geometry. `LoadedSession` owns its
 API Call index because the grid, legend and Scrubber read it; the top bar does not.
 
@@ -85,16 +88,17 @@ Five constraints:
 - **Lowered means `display: none`**, not a translate or zero height, so a hidden pane's
   controls leave the tab order on their own. From `md` up `md:flex`/`md:block` restores the
   same regions regardless of the phone tab state.
-- **`openPane` and the desktop Inspector fold are the only state the shell holds.** Both are
-  view state local to `Workbench`; a `RailPanel` likewise keeps its own fold. Nothing about
-  a Session is lifted into the shell.
+- **`openPane` and the two desktop sidebar folds are the only state the shell holds.** All
+  are view state local to `Workbench`; a `RailPanel` likewise keeps its own fold. Nothing
+  about a Session is lifted into the shell. Folding the desktop Legend never changes the
+  mobile Legend pane: breakpoint changes restore the same body under its phone tab.
 - **`revealInspector` only raises the Inspector on a false-to-true transition.** Pinning a
   Cell puts something worth reading there and a phone has no hover, so the pane opens on
   pin. The reader may lower it while the Cell remains pinned; re-rendering the same true
   value must not reopen it under them.
 - **The Inspector is a fixed `h-48` and scrolls through `ScrollArea`'s inner viewport.** Its
-  varying item count therefore changes neither the phone overlay nor the desktop row. The
-  wrapper positions the edge fades while the inner element owns `overflow-y-auto`; putting
+  varying item count therefore changes neither the phone overlay nor the desktop sidebar.
+  The wrapper positions the edge fades while the inner element owns `overflow-y-auto`; putting
   both jobs on one element clips the fades.
 
 The regions live in `src/ui/Workbench.tsx`: a slotted shell
@@ -236,7 +240,7 @@ of the row it covers. Every control in the phone Legend pane is at least 44px ta
 choices. Filter rows use a 16px swatch and labels that take the available width and wrap
 rather than truncate; from `md` up the controls return to the compact desktop rail spacing.
 
-The Inspector is docked in the rail, not a tooltip. It lists each item's **Cell Share** —
+The Inspector is docked in the desktop sidebar, not a tooltip. It lists each item's **Cell Share** —
 the tokens of *that* Cell the item covers, carried on `Cell.items` beside the whole item —
 never the item's own size: a 40k tool result crosses 40 Cells, and reporting its size in
 each would have a 1,000-token Cell list 40,000 tokens of items. A hovered Cell's list is

@@ -5,8 +5,8 @@
  * The loaded view fills `Workbench`, the shell the throwaway UI prototype
  * settled on (branch `wyattjoh/ui-prototype`, `src/prototype/README.md`): a
  * menu bar carrying the active Session details, the grid pane on the flexible
- * left, a fixed 340px right rail holding the legend and settings, and separate
- * Inspector and Scrubber rows below. The regions live in `src/ui/Workbench.tsx`
+ * left, a fixed 340px right sidebar with expandable Legend and Inspector
+ * sections, plus the Scrubber below. The regions live in `src/ui/Workbench.tsx`
  * so the filter and Inspector work fills a region instead of re-laying out the
  * app — and so the landing page's preview is the same shell rather than a
  * drawing of it.
@@ -400,9 +400,10 @@ const LoadedSession = ({
       }
       gridHasMoreBelow={gridHasMoreBelow}
       inspector={
-        /* Its own region now, not a panel in the rail — so a pinned Cell no
-           longer displaces the legend, and the filters stay reachable while
-           reading one. Escape and clicking the Cell again still unpin. */
+        /* The same region is a phone Info Pane and the expandable bottom of the
+           desktop sidebar. The rail scrolls independently above it, so filters
+           stay reachable while reading a pinned Cell. Escape and clicking the
+           Cell again still unpin. */
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <Inspector

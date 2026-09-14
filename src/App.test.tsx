@@ -169,8 +169,12 @@ describe("App", () => {
     expect(grid.parentElement?.className).toContain("overflow-x-hidden");
     expect(grid.parentElement?.className).toContain("overflow-y-auto");
 
-    // 3 — the fixed 340px right rail holds the legend and settings.
+    // 3 — the fixed 340px right sidebar holds expandable Legend and Inspector
+    // sections, with the Legend's rail scrolling independently.
     const rail = screen.getByRole("complementary", { name: "Legend and Context Window" });
+    const sidebar = rail.parentElement;
+    if (sidebar === null) throw new Error("the rail has no desktop sidebar around it");
+    expect(sidebar.contains(screen.getByRole("button", { name: "Legend" }))).toBe(true);
     expect(rail.contains(screen.getByText("Free space"))).toBe(true);
     expect(rail.contains(screen.getByText(/45\.0k \/ 200\.0k tokens/))).toBe(true);
     expect(rail.contains(screen.getByRole("button", { name: "Context Window override" }))).toBe(
@@ -178,12 +182,13 @@ describe("App", () => {
     );
     expect(pane.parentElement?.className).toContain("grid-cols-[minmax(0,1fr)_340px]");
 
-    // 5 — the Inspector is its own full-width region, not a rail panel.
+    // 4 — the Inspector docks at the bottom of that sidebar on desktop while
+    // remaining a separate Info Pane on mobile.
     const inspector = screen.getByRole("region", { name: "Inspector" });
     expect(inspector.contains(screen.getByText("Hover a Cell."))).toBe(true);
-    expect(rail.contains(inspector)).toBe(false);
+    expect(sidebar.contains(inspector)).toBe(true);
 
-    // 6 — the Scrubber is the final full-width row.
+    // 5 — the Scrubber is the final full-width row.
     const scrubber = screen.getByRole("region", { name: "Scrubber" });
     expect(scrubber.contains(screen.getByLabelText("API call"))).toBe(true);
   });
@@ -646,13 +651,13 @@ describe("App", () => {
       expect(panel.textContent).toContain("pinned");
     });
 
-    it("collapses the desktop Inspector drawer to its heading and opens it again", async () => {
+    it("collapses the desktop Inspector section to its heading and opens it again", async () => {
       const panel = await open();
       const toggle = screen.getByRole("button", { name: /^Inspector$/i });
       const body = Array.from(panel.children).find((child) =>
         (child as HTMLElement).className.includes("p-3"),
       );
-      if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no drawer body");
+      if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no section body");
 
       fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("false");

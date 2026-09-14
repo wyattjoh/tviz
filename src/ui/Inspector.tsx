@@ -5,11 +5,11 @@
  * "what is actually in there", and a tooltip that vanishes when the pointer
  * moves cannot be read, compared or clicked through. Hovering a Cell fills the
  * region; clicking one pins it so the list survives the pointer leaving the
- * grid. The rail remains available beside it, and on a phone the Workbench
- * raises this region as an Info Pane.
+ * grid. The rail remains available above it in the desktop sidebar, and on a
+ * phone the Workbench raises this region as an Info Pane.
  *
  * The panel is a fixed height at every width and scrolls within it, so changing
- * the Cell cannot resize either the desktop row or the phone overlay.
+ * the Cell cannot resize either the desktop sidebar or the phone overlay.
  */
 import { CATEGORY_LABELS, MESSAGE_KIND_LABELS } from "../domain/context.ts";
 import type { GridFilters } from "./filters.ts";
@@ -82,8 +82,8 @@ const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
 /**
  * The Inspector's fixed height.
  *
- * Fixed, not `auto`: the Inspector is a desktop row and a phone overlay, and
- * neither should change size as the reader moves between Cells. Roughly eight
+ * Fixed, not `auto`: the Inspector is a desktop sidebar section and a phone
+ * overlay, and neither should change size as the reader moves between Cells. Roughly eight
  * rows fit at this type size; anything longer scrolls inside the panel rather
  * than moving anything outside it (ADR-0006).
  */

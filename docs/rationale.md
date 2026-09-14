@@ -91,8 +91,11 @@ load a grouped layout hides.
 **A docked inspector, not a tooltip.** Hovering a cell answers "what is actually in
 there", and the answer is a list with a token count per item. A tooltip that vanishes when
 the pointer moves can't be read down, compared with the next cell, or kept while you
-scrub. So the inspector is its own region below the desktop grid and one of three floating
-Info Panes on a phone. Every Legend-pane control, each Info Pane tab, and the Scrubber's
+scrub. So the inspector is an expandable section at the bottom of the desktop sidebar and
+one of three floating Info Panes on a phone. The settings rail is itself an expandable
+Legend section above it and scrolls internally when open, keeping those controls available
+without spending the whole window's width on inspection. Every Legend-pane control, each
+Info Pane tab, and the Scrubber's
 controls use 44px mobile tap targets while the desktop chrome stays compact. The Scrubber
 keeps transport on the left, the concise `call x/y` position between the controls, and its
 speed choices behind an icon-labelled dropdown on the right. This reduces clutter without

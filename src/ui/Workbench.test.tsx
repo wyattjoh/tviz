@@ -28,6 +28,12 @@ const rail = (): HTMLElement =>
 
 const inspector = (): HTMLElement => screen.getByRole("region", { name: "Inspector" });
 
+const desktopSidebar = (): HTMLElement => {
+  const sidebar = rail().parentElement;
+  if (sidebar === null) throw new Error("the rail has no desktop sidebar around it");
+  return sidebar;
+};
+
 const tab = (name: "Legend" | "Inspector" | "Scrubber"): HTMLElement =>
   screen.getByRole("tab", { name });
 
@@ -38,11 +44,18 @@ const controlledPanel = (name: "Legend" | "Inspector" | "Scrubber"): HTMLElement
   return panel;
 };
 
+const legendBody = (): HTMLElement => {
+  const id = screen.getByRole("button", { name: "Legend" }).getAttribute("aria-controls");
+  const body = id === null ? null : document.getElementById(id);
+  if (body === null) throw new Error("the Legend has no section body");
+  return body;
+};
+
 const inspectorBody = (): HTMLElement => {
   const body = Array.from(inspector().children).find((child) =>
     (child as HTMLElement).className.includes("p-3"),
   );
-  if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no drawer body");
+  if (!(body instanceof HTMLElement)) throw new Error("the Inspector has no section body");
   return body;
 };
 
@@ -56,19 +69,24 @@ describe("the Workbench shell", () => {
     expect(screen.getByText("scrubber")).toBeDefined();
   });
 
-  it("keeps one full-height grid below md and lays the other regions around it from md up", () => {
+  it("keeps one full-height grid below md and docks the Inspector in the desktop sidebar", () => {
     shell();
 
     expect(body().className).toContain("grid-cols-[minmax(0,1fr)]");
     expect(body().className).toContain("md:grid-cols-[minmax(0,1fr)_340px]");
-    expect(body().className).toContain("md:grid-rows-[minmax(0,1fr)_auto_auto]");
+    expect(body().className).toContain("md:grid-rows-[minmax(0,1fr)_auto]");
 
+    expect(desktopSidebar().className).toContain("contents");
+    expect(desktopSidebar().className).toContain("md:col-start-2");
+    expect(desktopSidebar().className).toContain("md:flex-col");
+    expect(desktopSidebar().contains(rail())).toBe(true);
+    expect(desktopSidebar().contains(inspector())).toBe(true);
     expect(rail().className).toContain("absolute");
     expect(rail().className).toContain("md:static");
-    expect(rail().className).toContain("md:col-start-2");
-    expect(inspector().className).toContain("md:col-span-2");
-    expect(inspector().className).toContain("md:row-start-2");
-    expect(controlledPanel("Scrubber").className).toContain("md:row-start-3");
+    expect(rail().className).toContain("md:flex-1");
+    expect(inspector().className).toContain("md:mt-auto");
+    expect(inspector().className).toContain("md:shrink-0");
+    expect(controlledPanel("Scrubber").className).toContain("md:row-start-2");
   });
 
   it("floors the grid and rail at zero width so their contents cannot widen the page", () => {
@@ -203,7 +221,30 @@ describe("RailPanel", () => {
   });
 });
 
-describe("the desktop Inspector drawer", () => {
+describe("the desktop Legend section", () => {
+  it("wraps every rail panel and folds to its heading", () => {
+    shell();
+    const toggle = screen.getByRole("button", { name: "Legend" });
+
+    expect(toggle.className).toContain("hidden");
+    expect(toggle.className).toContain("md:flex");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(legendBody().textContent).toContain("legend");
+    expect(legendBody().className).not.toContain("md:hidden");
+    expect(rail().className).toContain("md:flex-1");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(legendBody().className).toContain("md:hidden");
+    expect(rail().className).toContain("md:shrink-0");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(legendBody().className).not.toContain("md:hidden");
+  });
+});
+
+describe("the desktop Inspector section", () => {
   it("folds to its heading and opens again", () => {
     shell();
     const toggle = screen.getByRole("button", { name: "Inspector" });
