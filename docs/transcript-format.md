@@ -64,19 +64,19 @@ it, so it is discarded rather than scaled into the new one.
 
 Also not recorded. What the id does give is the model's **native** window, which
 [Anthropic documents per model](https://platform.claude.com/docs/en/build-with-claude/context-windows)
-and which needs no beta header: `claude-opus-5`, `claude-sonnet-5`, `claude-fable-5`,
-`claude-fable-5-1`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6` and
-`claude-sonnet-4-6` are 1M; `claude-opus-4-5`, `claude-sonnet-4-5` and `claude-haiku-4-5`
-are 200k. It is not a version comparison — 4.5-generation Opus is 200k while 4.6 is 1M — so
-`window.ts` holds an explicit list. Claude Code shipped the same mistake and fixed it in
-2.1.117, where Opus 4.7 sessions were measured against 200k and autocompacted early.
+and which needs no beta header. tviz does **not** read it. A model id says what the model
+is capable of; the grid needs what the Session ran against, and Claude Code's 1M window is
+opt-in — so for most Sessions on a 1M-capable model those are different numbers (ADR-0009).
 
-`message.model` is canonicalised before it is written: the `[1m]` suffix appears in none of
-600 sampled sessions, so it is stripped for the lookup rather than relied on (and still read
-where it does appear, since it is the most direct evidence there is).
+What the id contributes is the `[1m]` suffix, which is not a capability but the recorded
+trace of the opt-in itself. It rarely survives: `message.model` is canonicalised before it
+is written, and the suffix appears in none of 600 sampled sessions. Where it does appear it
+is the most direct evidence there is.
 
-What the id **cannot** say is the session's effective window, which four unrecorded things
-can hold below the native one: missing usage credits, `CLAUDE_CODE_DISABLE_1M_CONTEXT`, a
-configured auto-compact window, and a Claude Code old enough to predate the model's 1M
-support. The peak is the correction in the other direction — any total past 200k proves the
-larger window — and the UI override covers the rest.
+That leaves the peak as the workhorse. Any Measured Total past 200k proves the larger
+window, because no session can hold more context than its window holds. Under 200k the
+transcript is simply silent — four unrecorded things can hold a session below its model's
+ceiling (missing usage credits, `CLAUDE_CODE_DISABLE_1M_CONTEXT`, a configured auto-compact
+window, a Claude Code predating the model's 1M support) and nothing distinguishes them from
+a session that never needed the room. tviz takes the smaller claim there and leaves the
+rest to the UI override.

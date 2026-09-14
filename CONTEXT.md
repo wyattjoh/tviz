@@ -29,8 +29,10 @@ _Avoid_: turn, step, round (ambiguous between user turns and model calls)
 ### Context accounting
 
 **Context Window**:
-The maximum number of input tokens the model accepts; the grid's denominator.
-_Avoid_: context limit, max tokens
+The maximum number of input tokens a Session ran against; the grid's denominator. A
+property of the Session, not of its model: a model capable of 1M usually runs against far
+less, because the larger window is opted into per session. No transcript records it.
+_Avoid_: context limit, max tokens, the model's context window
 
 **Context Snapshot**:
 The composition of the context by Category as of one API Call.

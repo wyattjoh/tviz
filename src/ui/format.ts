@@ -4,10 +4,21 @@
 
 /**
  * Formats a token count the way `/context` does: exact below 1k, one decimal
- * above.
+ * above, rolling up to `M` rather than printing a four-digit `k`.
+ *
+ * The roll-up is decided on the *rounded* thousands, not on the raw count. A
+ * Context Window of 1,000,000 is the common case and reads as `1000.0k`
+ * without it — neither of the two windows the grid offers, which is enough to
+ * make a correct denominator look like a wrong one. Testing `tokens` against a
+ * million directly would only move that seam: 999,990 still rounds to
+ * `1000.0k`.
  */
-export const formatTokens = (tokens: number): string =>
-  tokens < 1_000 ? String(Math.round(tokens)) : `${(tokens / 1_000).toFixed(1)}k`;
+export const formatTokens = (tokens: number): string => {
+  if (tokens < 1_000) return String(Math.round(tokens));
+  const thousands = tokens / 1_000;
+  if (Number(thousands.toFixed(1)) >= 1_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  return `${thousands.toFixed(1)}k`;
+};
 
 /**
  * Formats a share of the Context Window as a percentage.

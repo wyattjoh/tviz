@@ -69,11 +69,15 @@ because a 13 MB in-memory string is fast enough that streaming is not worth it.
 - **System is a remainder** (ADR-0001), not a sum: first call's Measured Tokens minus the
   Estimated Tokens of every logged part. Derived once, on the first call, and never
   re-derived — only the value *drawn* on a call too small to hold it is clamped.
-- **Context Window size is not recorded; the model id gives the ceiling, not the Session.**
-  `window.ts` holds an explicit list of the ids whose *native* window is 1M, because the
-  window does not follow the version number — `claude-opus-4-5` is 200k and
-  `claude-opus-4-6` is 1M. Keep it matched to Anthropic's context-windows documentation, and
-  never infer it from a regex over the family. A Session can still run below its model's
-  ceiling (no usage credits, `CLAUDE_CODE_DISABLE_1M_CONTEXT`, a configured auto-compact
-  window, a Claude Code predating the model's 1M support), which is what the peak bump and
-  the UI override exist for. Note that a peak *under* 200k proves nothing either way.
+- **Context Window size is not recorded, and the model id does not supply it** (ADR-0009).
+  The id says what the model is *capable* of; the grid needs what the Session *had*, and
+  Claude Code's 1M window is opt-in, so those differ for most Sessions on a recent model.
+  Only two things raise the window above 200k, and both are properties of the Session: a
+  Measured Total past 200k, which proves it, and the `[1m]`/`[2m]` suffix on the model id,
+  which is not a capability but the recorded trace of the opt-in. Everything else is 200k,
+  the smaller claim. A peak *under* 200k proves nothing either way, so a Session that really
+  did run at 1M and stayed small is drawn against 200k and corrected by the UI override.
+  **Do not reintroduce a native-ceiling table.** One existed, was accurate against
+  Anthropic's documentation, and was still the wrong question — it drew every short Session
+  on a 1M-capable model as a nearly empty 1M grid, and it was a standing obligation to keep
+  matched to a moving list.

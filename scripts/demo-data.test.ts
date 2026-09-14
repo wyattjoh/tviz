@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { decodeDemoManifest, type DemoManifest } from "../src/demo/manifest.ts";
-import { CATEGORY_ORDER, type Session } from "../src/domain/context.ts";
+import { CATEGORY_ORDER, peakMeasuredTotal, type Session } from "../src/domain/context.ts";
 import { parseTranscript } from "../src/parser/parse-transcript.ts";
 import {
   BUILTIN_TOOL_NAMES,
@@ -168,11 +168,13 @@ describe("bundled Demo Sessions", () => {
   });
 
   describe("the descriptions someone reads", () => {
-    it("small: almost two thirds of what it reached is System", () => {
+    it("small: five API Calls reach 45k of a 200k window, most of it System", () => {
       const session = sessionFor("small");
       const call = lastCall(session);
 
-      expect(session.windowSize).toBe(1_000_000);
+      // 200k, not 1M: the model id is 1M-capable but the Session never shows a
+      // window that large, and ADR-0009 takes the smaller claim.
+      expect(session.windowSize).toBe(200_000);
       expect(call.measuredTotal).toBeLessThan(50_000);
       expect(call.byCategory.system / call.measuredTotal).toBeGreaterThan(0.6);
       expect(call.byCategory.system / call.measuredTotal).toBeLessThan(0.7);
@@ -187,18 +189,21 @@ describe("bundled Demo Sessions", () => {
       expect(withEveryCategory).toEqual(["medium"]);
     });
 
-    it("medium: sixty-odd API Calls reach a tenth of a 1M window", () => {
+    it("medium: sixty-odd API Calls fill half a 200k window", () => {
       const session = sessionFor("medium");
 
-      expect(session.windowSize).toBe(1_000_000);
-      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.08);
-      expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.12);
+      expect(session.windowSize).toBe(200_000);
+      expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.45);
+      expect(lastCall(session).measuredTotal / session.windowSize).toBeLessThan(0.55);
     });
 
-    it("large: four drops on the way through half a 1M window", () => {
+    it("large: four drops on the way through half a 1M window it proves for itself", () => {
       const session = sessionFor("large");
 
+      // The only Demo Session whose window is evidence rather than a default:
+      // it passes 200k, which no Session can do inside a 200k window.
       expect(session.windowSize).toBe(1_000_000);
+      expect(peakMeasuredTotal(session.calls)).toBeGreaterThan(200_000);
       expect(lastCall(session).measuredTotal / session.windowSize).toBeGreaterThan(0.3);
       expect(session.calls.filter((call) => call.reset)).toHaveLength(4);
     });

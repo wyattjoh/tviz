@@ -1,15 +1,25 @@
 /**
  * Context Window inference. Transcripts never record the window size, so it is
- * derived from the model id and corrected by what the Session actually reached.
+ * derived from what the Session demonstrably reached and from the one marker
+ * Claude Code writes when a larger window was asked for (ADR-0009).
+ *
+ * What this deliberately does **not** read is the model id's native ceiling. A
+ * model id says what the model is capable of, not what the Session ran with:
+ * Claude Code's 1M window is opt-in, so the great majority of Sessions on a
+ * 1M-capable model still ran against 200k, and several unrecorded things hold
+ * one there — missing usage credits, `CLAUDE_CODE_DISABLE_1M_CONTEXT`, a
+ * configured auto-compact window, or a Claude Code predating the model's 1M
+ * support. Inferring from the ceiling drew every short Session on a recent
+ * model as a nearly empty 1M grid.
  */
 
 /**
- * Context Window for a model whose native window is the smaller one.
+ * Context Window assumed when nothing shows the Session had more.
  */
 export const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 /**
- * Context Window for a model whose native window is 1M.
+ * Context Window for a Session shown to have exceeded the default.
  */
 export const LARGE_CONTEXT_WINDOW = 1_000_000;
 
@@ -23,95 +33,57 @@ export const CONTEXT_WINDOW_CHOICES: readonly number[] = [
 
 /**
  * The suffix Claude Code appends to a model id to select a larger window than
- * the model's native one — `claude-sonnet-4-5[1m]`.
+ * the default — `claude-sonnet-4-5[1m]`.
  *
- * It does not normally survive into the transcript: Claude Code canonicalises
- * the id before recording it, and the suffix appears in none of 600 sampled
- * Sessions. Where it *does* appear it is the most direct evidence there is, so
- * it is read before the table rather than only stripped for lookup.
+ * It rarely survives into the transcript: Claude Code canonicalises the id
+ * before recording it, and the suffix appears in none of 600 sampled Sessions.
+ * Where it *does* appear it is the most direct evidence there is — a statement
+ * that this Session asked for the larger window — so it is read rather than
+ * stripped.
+ *
+ * `[2m]` is matched too and also yields {@link LARGE_CONTEXT_WINDOW}: the grid
+ * offers two denominators, so a Session declaring more than 1M is drawn against
+ * 1M and left to the UI override.
  */
 const WINDOW_SUFFIX = /\[([12])m\]$/;
 
 /**
- * Trailing release stamps Claude Code appends to a model id: `-20251101`,
- * `@20251101`, and a Bedrock `-v1` / `-v1:0` revision.
- */
-const RELEASE_STAMP = /(?:[-@]\d{8})?(?:-v\d+(?::\d+)?)?$/;
-
-/**
- * The routing prefix a hosted provider puts in front of the id, as in
- * `us.anthropic.claude-opus-5` or `anthropic.claude-opus-5`.
- */
-const PROVIDER_PREFIX = /^(?:[a-z0-9-]+\.)*(?=claude-)/;
-
-/**
- * Model ids whose **native** Context Window is 1M, with no beta header needed.
+ * True when the model id itself declares that this Session asked for a window
+ * larger than the default.
  *
- * Per Anthropic's context-windows documentation, this is a property of the
- * model, not of the request. It is emphatically not a property of the family
- * *number*: `claude-opus-4-5` is a 200k model while `claude-opus-4-6` is a 1M
- * one, so this is an explicit list rather than a version comparison. Claude Code
- * shipped the same mistake and fixed it in 2.1.117, where Opus 4.7 sessions were
- * being measured against 200k and autocompacting early.
- *
- * A model this list has never heard of falls to 200k, which is the smaller claim
- * — and the peak in {@link inferContextWindow} corrects it upwards if the
- * Session proves otherwise.
+ * This is a statement about the *Session*, not about the model: it is the
+ * recorded trace of an opt-in, which is why it is the only thing the model id
+ * contributes to {@link inferContextWindow}.
  */
-const LARGE_WINDOW_MODELS: ReadonlySet<string> = new Set([
-  "claude-fable-5",
-  "claude-fable-5-1",
-  "claude-mythos-5",
-  "claude-mythos-5-1",
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-opus-5",
-  "claude-sonnet-4-6",
-  "claude-sonnet-5",
-]);
+export const declaresLargeWindow = (model: string): boolean =>
+  WINDOW_SUFFIX.test(model.toLowerCase());
 
 /**
- * Strips the parts of a model id that name a deployment or a release rather
- * than a model, leaving an id the table can be looked up by exactly.
+ * Infers the Context Window for a Session from its own evidence.
  *
- * Exactly, and not by prefix: `claude-opus-4` is a prefix of `claude-opus-4-8`
- * and `claude-sonnet-4-5` of `claude-sonnet-4-5-20250929`, so a longest-prefix
- * rule would quietly misfile ids as new models ship.
- */
-const canonicalModelId = (model: string): string =>
-  model
-    .toLowerCase()
-    .replace(PROVIDER_PREFIX, "")
-    .replace(WINDOW_SUFFIX, "")
-    .replace(RELEASE_STAMP, "");
-
-/**
- * True when the Session's Context Window is 1M: either the id asked for it, or
- * the model's native window already is.
- */
-export const isLargeWindowModel = (model: string): boolean => {
-  const id = model.toLowerCase();
-  if (WINDOW_SUFFIX.test(id)) return true;
-  return LARGE_WINDOW_MODELS.has(canonicalModelId(id));
-};
-
-/**
- * Infers the Context Window for a Session.
+ * Two things can raise it above the default, and both are properties of the
+ * Session rather than of the model:
  *
- * Starts from the model's native window and bumps to 1M whenever the Session
- * demonstrably exceeded the smaller one — which is the correction for the
- * Sessions a 1M model ran *smaller* than its ceiling, since several things the
- * transcript does not record can hold one down: missing usage credits,
- * `CLAUDE_CODE_DISABLE_1M_CONTEXT`, a configured auto-compact window, or simply
- * a Claude Code old enough to predate the model's 1M support. Those leave the
- * grid reading fuller than it was, which is what the UI override is for.
+ * - a Measured Total past {@link DEFAULT_CONTEXT_WINDOW}, which *proves* the
+ *   larger window — no Session can hold more context than its window; and
+ * - the `[1m]` marker on the model id, which records the opt-in directly.
+ *
+ * Absent either, the answer is the smaller claim. A peak under 200k proves
+ * nothing in either direction, so a Session that genuinely ran at 1M and stayed
+ * small is drawn against 200k — under-stating headroom rather than inventing
+ * it, and one click of the Context Window override away. That is the same
+ * preference for the honest reading that makes System a remainder (ADR-0001)
+ * and scales estimates to what was measured (ADR-0003).
+ *
+ * @param model - Model id of the Session's first API Call, when it recorded one
+ * @param peakMeasuredTotal - The largest Measured Tokens any API Call reached
+ * @returns The Context Window to use as the grid's denominator
  */
 export const inferContextWindow = (
   model: string | undefined,
   peakMeasuredTotal: number,
 ): number => {
   if (peakMeasuredTotal > DEFAULT_CONTEXT_WINDOW) return LARGE_CONTEXT_WINDOW;
-  if (model !== undefined && isLargeWindowModel(model)) return LARGE_CONTEXT_WINDOW;
+  if (model !== undefined && declaresLargeWindow(model)) return LARGE_CONTEXT_WINDOW;
   return DEFAULT_CONTEXT_WINDOW;
 };

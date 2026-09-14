@@ -22,7 +22,7 @@ describe("ContextWindowPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/45\.0k \/ 1000\.0k tokens/)).toBeDefined();
+    expect(screen.getByText(/45\.0k \/ 1\.0M tokens/)).toBeDefined();
     expect(screen.getByText(/4\.5% full/)).toBeDefined();
   });
 
@@ -50,7 +50,7 @@ describe("ContextWindowPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/window 1000\.0k \(override\)/)).toBeDefined();
+    expect(screen.getByText(/window 1\.0M \(override\)/)).toBeDefined();
   });
 });
 
@@ -80,7 +80,7 @@ describe("ContextWindowMenu", () => {
     render(<ContextWindowMenu windowChoice="auto" onWindowChoiceChange={onWindowChoiceChange} />);
     openMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
+    fireEvent.click(screen.getByRole("button", { name: "1.0M" }));
 
     expect(onWindowChoiceChange).toHaveBeenCalledWith(1_000_000);
     expect(choices()).toBeNull();

@@ -505,39 +505,42 @@ describe("parseTranscript", () => {
       expect(session.windowSize).toBe(DEFAULT_CONTEXT_WINDOW);
     });
 
-    it("reads the native window off the model id", () => {
-      // The window is a property of the model, not of the family number:
-      // `claude-opus-4-5` is 200k and `claude-opus-4-6` is 1M.
-      const windows: Readonly<Record<string, number>> = {
-        "claude-opus-5": LARGE_CONTEXT_WINDOW,
-        "claude-sonnet-5": LARGE_CONTEXT_WINDOW,
-        "claude-fable-5-1": LARGE_CONTEXT_WINDOW,
-        "claude-opus-4-8": LARGE_CONTEXT_WINDOW,
-        "claude-opus-4-6": LARGE_CONTEXT_WINDOW,
-        "claude-sonnet-4-6": LARGE_CONTEXT_WINDOW,
-        "claude-opus-4-5-20251101": DEFAULT_CONTEXT_WINDOW,
-        "claude-sonnet-4-5-20250929": DEFAULT_CONTEXT_WINDOW,
-        "claude-haiku-4-5-20251001": DEFAULT_CONTEXT_WINDOW,
-        "claude-something-nobody-has-shipped": DEFAULT_CONTEXT_WINDOW,
-      };
+    // ADR-0009. The id says what the model is capable of; Claude Code's 1M
+    // window is opt-in, so a 1M-capable model is not evidence this Session had
+    // one. Inferring from the ceiling drew every short Session on a recent
+    // model as a nearly empty 1M grid.
+    it("does not read a capable model id as a large-window Session", () => {
+      const capable = [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-fable-5-1",
+        "claude-opus-4-8",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "claude-opus-4-5-20251101",
+        "claude-haiku-4-5-20251001",
+        "claude-something-nobody-has-shipped",
+        "us.anthropic.claude-opus-5",
+        "anthropic.claude-opus-5-20260401",
+      ];
 
-      for (const [model, windowSize] of Object.entries(windows)) {
+      for (const model of capable) {
         Fixture.resetFixtureSequence();
         const session = parseSession([
           Fixture.assistantMessage({ id: "m1", model, usage: { cacheRead: 10_000 } }),
         ]);
-        expect.soft(session.windowSize, model).toBe(windowSize);
+        expect.soft(session.windowSize, model).toBe(DEFAULT_CONTEXT_WINDOW);
       }
     });
 
-    it("reads through the release stamp and the [1m] suffix Claude Code strips", () => {
+    // The opt-in marker is the one thing the id contributes, and it survives
+    // whatever routing prefix or release stamp sits around it.
+    it("reads the [1m] marker through a prefix or a release stamp", () => {
       for (const model of [
-        "claude-opus-5-20260401",
         "claude-opus-5[1m]",
-        "claude-opus-5-v2",
-        "claude-opus-5-v1:0",
-        "us.anthropic.claude-opus-5",
-        "anthropic.claude-opus-5-20260401",
+        "claude-sonnet-4-5-20250929[1m]",
+        "us.anthropic.claude-opus-5[1m]",
+        "claude-opus-5[2m]",
       ]) {
         Fixture.resetFixtureSequence();
         const session = parseSession([

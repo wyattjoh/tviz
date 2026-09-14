@@ -896,14 +896,14 @@ describe("App", () => {
       );
 
       openWindowMenu();
-      fireEvent.click(screen.getByRole("button", { name: "1000.0k" }));
+      fireEvent.click(screen.getByRole("button", { name: "1.0M" }));
 
       expect(contextGrid().getAttribute("aria-label")).toBe(
-        "Context grid: 45.0k of 1000.0k tokens used",
+        "Context grid: 45.0k of 1.0M tokens used",
       );
       // Picking a window closes the menu, the way the File menu's rows do.
       expect(screen.queryByRole("group", { name: "Context Window" })).toBeNull();
-      expect(screen.getByText(/45\.0k \/ 1000\.0k tokens/)).toBeDefined();
+      expect(screen.getByText(/45\.0k \/ 1\.0M tokens/)).toBeDefined();
       // The legend's free-space line is the overridden window minus the total.
       expect(screen.getByText("955.0k")).toBeDefined();
 
@@ -1090,7 +1090,7 @@ describe("App demo mode", () => {
     expect(selected).toHaveLength(1);
     expect(selected[0]?.textContent).toContain("Medium session");
     expect(contextGrid().getAttribute("aria-label")).toBe(
-      "Context grid: 60.0k of 1000.0k tokens used",
+      "Context grid: 60.0k of 200.0k tokens used",
     );
   });
 
@@ -1128,7 +1128,7 @@ describe("App demo mode", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Large session \(demo\)/ }));
 
     expect(contextGrid().getAttribute("aria-label")).toBe(
-      "Context grid: 290.0k of 1000.0k tokens used",
+      "Context grid: 290.0k of 1.0M tokens used",
     );
   });
 
