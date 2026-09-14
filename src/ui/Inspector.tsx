@@ -64,7 +64,12 @@ type ItemRowProps = {
 
 const ItemRow = ({ label, tokens, itemTokens }: ItemRowProps) => (
   <li className="flex items-baseline gap-2 rounded bg-ui-canvas px-2 py-1 text-[11px]">
-    <span className="truncate text-ui-text-secondary">{label}</span>
+    {/* `min-w-0` is what makes `truncate` work at all here: a flex item's
+        default `min-width: auto` floors it at min-content, and `truncate`
+        sets `white-space: nowrap`, so the floor is the whole label. An MCP
+        tool name then pushes the row wider than the rail instead of
+        ellipsing inside it. */}
+    <span className="min-w-0 truncate text-ui-text-secondary">{label}</span>
     <span className="ml-auto shrink-0 text-ui-text-faint tabular-nums">{formatTokens(tokens)}</span>
     {itemTokens > tokens ? (
       <span className="shrink-0 text-[10px] text-ui-text-faint tabular-nums">

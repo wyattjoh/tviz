@@ -38,8 +38,13 @@ export const SessionHeader = ({ session, snapshot, onClose }: SessionHeaderProps
     aria-label="Session"
     className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ui-border bg-ui-sunken px-4 py-2"
   >
-    <span className="text-ui-focus underline underline-offset-4">{session.fileName}</span>
-    <span className="truncate text-xs text-ui-text-faint">{session.id}</span>
+    {/* Both of these shrink rather than widen the strip: a flex item floors
+        at min-content unless told otherwise, which on a phone is the
+        difference between a wrapped strip and a horizontally scrolling page. */}
+    <span className="min-w-0 truncate text-ui-focus underline underline-offset-4">
+      {session.fileName}
+    </span>
+    <span className="min-w-0 truncate text-xs text-ui-text-faint">{session.id}</span>
     <span className="rounded bg-ui-panel px-2 py-0.5 text-xs text-ui-text-secondary">
       {session.model ?? "unknown model"}
     </span>

@@ -227,7 +227,10 @@ const App = () => {
   return (
     <div
       {...dropTargetProps}
-      className={`grid h-full min-h-full grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px] ${
+      // `grid-cols-[minmax(0,1fr)]` rather than an implicit column: an
+      // implicit track is `auto`, which floors at its items' min-content and
+      // widens the page instead of letting them shrink.
+      className={`grid h-full min-h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] bg-ui-canvas font-mono text-[13px] ${
         isDropOver ? "outline outline-2 -outline-offset-2 outline-dashed outline-ui-focus" : ""
       }`}
     >
